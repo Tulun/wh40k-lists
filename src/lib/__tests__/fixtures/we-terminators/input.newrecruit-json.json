@@ -1,0 +1,212 @@
+{
+  "id": "fixture-we-terminators",
+  "name": "Terminator Loadout Decomposition",
+  "generatedBy": "https://newrecruit.eu",
+  "gameSystemId": "fixture",
+  "gameSystemName": "Warhammer 40,000",
+  "roster": {
+    "name": "Terminator Loadout Decomposition",
+    "xmlns": "http://www.battlescribe.net/schema/rosterSchema",
+    "costs": [{ "name": "pts", "typeId": "pts-type", "value": 725 }],
+    "costLimits": [{ "name": "pts", "typeId": "pts-type", "value": 2000 }],
+    "forces": [
+      {
+        "id": "force-1",
+        "name": "Army Roster",
+        "catalogueName": "Chaos - World Eaters",
+        "selections": [
+          {
+            "id": "cfg-battle-size",
+            "name": "Battle Size",
+            "type": "upgrade",
+            "number": 1,
+            "categories": [{ "name": "Configuration", "primary": true }],
+            "selections": [
+              {
+                "id": "battle-size-strike-force",
+                "name": "Strike Force (2000 Point limit)",
+                "type": "upgrade",
+                "number": 1
+              }
+            ]
+          },
+          {
+            "id": "cfg-detachment",
+            "name": "Detachment",
+            "type": "upgrade",
+            "number": 1,
+            "categories": [{ "name": "Configuration", "primary": true }],
+            "selections": [
+              {
+                "id": "detachment-berzerker-warband",
+                "name": "Berzerker Warband",
+                "type": "upgrade",
+                "number": 1,
+                "group": "Detachment"
+              }
+            ]
+          },
+          {
+            "id": "unit-daemon-prince",
+            "name": "Daemon Prince of Khorne",
+            "type": "unit",
+            "number": 1,
+            "categories": [
+              { "name": "Faction: World Eaters", "primary": false },
+              { "name": "Character", "primary": false },
+              { "name": "Monster", "primary": false },
+              { "name": "Battleline", "primary": true }
+            ],
+            "costs": [{ "name": "pts", "typeId": "pts-type", "value": 200 }],
+            "selections": [
+              {
+                "id": "dp-warlord",
+                "name": "Warlord",
+                "type": "upgrade",
+                "number": 1
+              },
+              {
+                "id": "model-daemon-prince",
+                "name": "Daemon Prince of Khorne",
+                "type": "model",
+                "number": 1,
+                "selections": [
+                  {
+                    "id": "w-infernal-cannon",
+                    "name": "Infernal cannon",
+                    "type": "upgrade",
+                    "number": 1,
+                    "categories": [{ "name": "Ranged Weapon", "primary": false }]
+                  },
+                  {
+                    "id": "w-hellforged-weapons",
+                    "name": "Hellforged weapons",
+                    "type": "upgrade",
+                    "number": 1,
+                    "categories": [{ "name": "Melee Weapon", "primary": false }]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "unit-chaos-terminators-10",
+            "name": "Chaos Terminators",
+            "type": "unit",
+            "number": 1,
+            "categories": [
+              { "name": "Faction: World Eaters", "primary": false },
+              { "name": "Infantry", "primary": false },
+              { "name": "Terminator", "primary": false },
+              { "name": "Battleline", "primary": true }
+            ],
+            "costs": [{ "name": "pts", "typeId": "pts-type", "value": 350 }],
+            "selections": [
+              {
+                "id": "model-chaos-terminators-10",
+                "name": "Chaos Terminator",
+                "type": "model",
+                "number": 10,
+                "selections": [
+                  {
+                    "id": "w10-chainfist",
+                    "name": "Chainfist",
+                    "type": "upgrade",
+                    "number": 2,
+                    "categories": [{ "name": "Melee Weapon", "primary": false }]
+                  },
+                  {
+                    "id": "w10-combi-weapon",
+                    "name": "Combi-weapon",
+                    "type": "upgrade",
+                    "number": 6,
+                    "categories": [{ "name": "Ranged Weapon", "primary": false }]
+                  },
+                  {
+                    "id": "w10-power-fist",
+                    "name": "Power fist",
+                    "type": "upgrade",
+                    "number": 6,
+                    "categories": [{ "name": "Melee Weapon", "primary": false }]
+                  },
+                  {
+                    "id": "w10-paired-accursed-weapons",
+                    "name": "Paired accursed weapons",
+                    "type": "upgrade",
+                    "number": 2,
+                    "categories": [{ "name": "Melee Weapon", "primary": false }]
+                  },
+                  {
+                    "id": "w10-reaper-autocannon",
+                    "name": "Reaper autocannon",
+                    "type": "upgrade",
+                    "number": 2,
+                    "categories": [{ "name": "Ranged Weapon", "primary": false }]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "unit-chaos-terminators-5",
+            "name": "Chaos Terminators",
+            "type": "unit",
+            "number": 1,
+            "categories": [
+              { "name": "Faction: World Eaters", "primary": false },
+              { "name": "Infantry", "primary": false },
+              { "name": "Terminator", "primary": false },
+              { "name": "Battleline", "primary": true }
+            ],
+            "costs": [{ "name": "pts", "typeId": "pts-type", "value": 175 }],
+            "selections": [
+              {
+                "id": "model-chaos-terminators-5",
+                "name": "Chaos Terminator",
+                "type": "model",
+                "number": 5,
+                "selections": [
+                  {
+                    "id": "w5-chainfist",
+                    "name": "Chainfist",
+                    "type": "upgrade",
+                    "number": 1,
+                    "categories": [{ "name": "Melee Weapon", "primary": false }]
+                  },
+                  {
+                    "id": "w5-combi-weapon",
+                    "name": "Combi-weapon",
+                    "type": "upgrade",
+                    "number": 3,
+                    "categories": [{ "name": "Ranged Weapon", "primary": false }]
+                  },
+                  {
+                    "id": "w5-power-fist",
+                    "name": "Power fist",
+                    "type": "upgrade",
+                    "number": 3,
+                    "categories": [{ "name": "Melee Weapon", "primary": false }]
+                  },
+                  {
+                    "id": "w5-paired-accursed-weapons",
+                    "name": "Paired accursed weapons",
+                    "type": "upgrade",
+                    "number": 1,
+                    "categories": [{ "name": "Melee Weapon", "primary": false }]
+                  },
+                  {
+                    "id": "w5-reaper-autocannon",
+                    "name": "Reaper autocannon",
+                    "type": "upgrade",
+                    "number": 1,
+                    "categories": [{ "name": "Ranged Weapon", "primary": false }]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

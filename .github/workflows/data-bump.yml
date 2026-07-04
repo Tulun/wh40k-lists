@@ -1,0 +1,42 @@
+name: Weekly dataset update
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Update 40kdc-data
+        id: update
+        run: |
+          before=$(node -p "require('./package-lock.json').packages['node_modules/@alpaca-software/40kdc-data'].version")
+          npm install @alpaca-software/40kdc-data@latest
+          after=$(node -p "require('./package-lock.json').packages['node_modules/@alpaca-software/40kdc-data'].version")
+          echo "before=$before after=$after"
+          if [ "$before" != "$after" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "version=$after" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Test against the new dataset
+        if: steps.update.outputs.changed == 'true'
+        run: npm test && npm run build
+      - name: Commit and push
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore: bump 40kdc-data to v${{ steps.update.outputs.version }}"
+          git push

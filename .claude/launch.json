@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["/Users/jasonkiraly/Desktop/projects/claude/40k-app/node_modules/vite/bin/vite.js", "/Users/jasonkiraly/Desktop/projects/claude/40k-app"],
+      "port": 5173
+    }
+  ]
+}

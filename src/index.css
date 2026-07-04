@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@theme {
+  --color-surface: #0c0a09;
+  --color-panel: #1c1917;
+  --color-edge: #292524;
+  --color-ink: #e7e5e4;
+  --color-ink-dim: #a8a29e;
+  --color-ink-faint: #78716c;
+  --color-accent: #f59e0b;
+  --color-accent-dim: #b45309;
+  --color-mine: #38bdf8;
+  --color-opponent: #f87171;
+}
+
+html {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  overscroll-behavior-y: none;
+}
+
+/* iOS momentum + safe areas for standalone PWA */
+#root {
+  min-height: 100dvh;
+  padding-bottom: env(safe-area-inset-bottom);
+}

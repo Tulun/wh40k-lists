@@ -1,0 +1,398 @@
+{
+  "name": "Terminator Loadout Decomposition",
+  "source": {
+    "format": "newrecruit-json",
+    "generated_by": "https://newrecruit.eu"
+  },
+  "faction_id": "world-eaters",
+  "detachments": [
+    {
+      "ref": {
+        "id": "berzerker-warband",
+        "raw_name": "Berzerker Warband",
+        "resolved": true,
+        "candidates": []
+      },
+      "dp_cost": 3
+    }
+  ],
+  "battle_size": "strike-force",
+  "force_disposition": null,
+  "points": {
+    "declared_limit": 2000,
+    "detachment_cap": 3,
+    "total_reported": 725,
+    "total_computed": 725
+  },
+  "units": [
+    {
+      "ref": {
+        "id": "daemon-prince-of-khorne",
+        "raw_name": "Daemon Prince of Khorne",
+        "resolved": true,
+        "candidates": []
+      },
+      "model_count": 1,
+      "points": 200,
+      "is_warlord": true,
+      "enhancement": null,
+      "enhancement_points": null,
+      "wargear": [
+        {
+          "ref": {
+            "id": "infernal-cannon",
+            "raw_name": "Infernal cannon",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 1
+        },
+        {
+          "ref": {
+            "id": "hellforged-weapons",
+            "raw_name": "Hellforged weapons",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 1
+        }
+      ],
+      "leader_attachment": null
+    },
+    {
+      "ref": {
+        "id": "chaos-terminators",
+        "raw_name": "Chaos Terminators",
+        "resolved": true,
+        "candidates": []
+      },
+      "model_count": 10,
+      "points": 350,
+      "is_warlord": false,
+      "enhancement": null,
+      "enhancement_points": null,
+      "wargear": [
+        {
+          "ref": {
+            "id": "chainfist",
+            "raw_name": "Chainfist",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 2
+        },
+        {
+          "ref": {
+            "id": "combi-weapon",
+            "raw_name": "Combi-weapon",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 6
+        },
+        {
+          "ref": {
+            "id": "power-fist",
+            "raw_name": "Power fist",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 6
+        },
+        {
+          "ref": {
+            "id": "paired-accursed-weapons",
+            "raw_name": "Paired accursed weapons",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 2
+        },
+        {
+          "ref": {
+            "id": "reaper-autocannon-chaos-terminators",
+            "raw_name": "Reaper autocannon",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 2
+        }
+      ],
+      "loadout_groups": [
+        {
+          "model_name": "World Eaters Terminator Champion",
+          "count": 1,
+          "wargear": [
+            {
+              "ref": {
+                "id": "chainfist",
+                "raw_name": "Chainfist",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            },
+            {
+              "ref": {
+                "id": "combi-weapon",
+                "raw_name": "Combi-weapon",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            }
+          ]
+        },
+        {
+          "model_name": "World Eaters Terminator",
+          "count": 4,
+          "wargear": [
+            {
+              "ref": {
+                "id": "combi-weapon",
+                "raw_name": "Combi-weapon",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            },
+            {
+              "ref": {
+                "id": "power-fist",
+                "raw_name": "Power fist",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            }
+          ]
+        },
+        {
+          "model_name": "World Eaters Terminator",
+          "count": 2,
+          "wargear": [
+            {
+              "ref": {
+                "id": "paired-accursed-weapons",
+                "raw_name": "Paired accursed weapons",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            }
+          ]
+        },
+        {
+          "model_name": "World Eaters Terminator",
+          "count": 2,
+          "wargear": [
+            {
+              "ref": {
+                "id": "power-fist",
+                "raw_name": "Power fist",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            },
+            {
+              "ref": {
+                "id": "reaper-autocannon-chaos-terminators",
+                "raw_name": "Reaper autocannon",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            }
+          ]
+        },
+        {
+          "model_name": "World Eaters Terminator",
+          "count": 1,
+          "wargear": [
+            {
+              "ref": {
+                "id": "chainfist",
+                "raw_name": "Chainfist",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            },
+            {
+              "ref": {
+                "id": "combi-weapon",
+                "raw_name": "Combi-weapon",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            }
+          ]
+        }
+      ],
+      "leader_attachment": null
+    },
+    {
+      "ref": {
+        "id": "chaos-terminators",
+        "raw_name": "Chaos Terminators",
+        "resolved": true,
+        "candidates": []
+      },
+      "model_count": 5,
+      "points": 175,
+      "is_warlord": false,
+      "enhancement": null,
+      "enhancement_points": null,
+      "wargear": [
+        {
+          "ref": {
+            "id": "chainfist",
+            "raw_name": "Chainfist",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 1
+        },
+        {
+          "ref": {
+            "id": "combi-weapon",
+            "raw_name": "Combi-weapon",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 3
+        },
+        {
+          "ref": {
+            "id": "power-fist",
+            "raw_name": "Power fist",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 3
+        },
+        {
+          "ref": {
+            "id": "paired-accursed-weapons",
+            "raw_name": "Paired accursed weapons",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 1
+        },
+        {
+          "ref": {
+            "id": "reaper-autocannon-chaos-terminators",
+            "raw_name": "Reaper autocannon",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 1
+        }
+      ],
+      "loadout_groups": [
+        {
+          "model_name": "World Eaters Terminator Champion",
+          "count": 1,
+          "wargear": [
+            {
+              "ref": {
+                "id": "chainfist",
+                "raw_name": "Chainfist",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            },
+            {
+              "ref": {
+                "id": "combi-weapon",
+                "raw_name": "Combi-weapon",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            }
+          ]
+        },
+        {
+          "model_name": "World Eaters Terminator",
+          "count": 2,
+          "wargear": [
+            {
+              "ref": {
+                "id": "combi-weapon",
+                "raw_name": "Combi-weapon",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            },
+            {
+              "ref": {
+                "id": "power-fist",
+                "raw_name": "Power fist",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            }
+          ]
+        },
+        {
+          "model_name": "World Eaters Terminator",
+          "count": 1,
+          "wargear": [
+            {
+              "ref": {
+                "id": "paired-accursed-weapons",
+                "raw_name": "Paired accursed weapons",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            }
+          ]
+        },
+        {
+          "model_name": "World Eaters Terminator",
+          "count": 1,
+          "wargear": [
+            {
+              "ref": {
+                "id": "power-fist",
+                "raw_name": "Power fist",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            },
+            {
+              "ref": {
+                "id": "reaper-autocannon-chaos-terminators",
+                "raw_name": "Reaper autocannon",
+                "resolved": true,
+                "candidates": []
+              },
+              "count": 1
+            }
+          ]
+        }
+      ],
+      "leader_attachment": null
+    }
+  ],
+  "game_version": {
+    "edition": "11th",
+    "dataslate": "pre-launch-provisional"
+  },
+  "diagnostics": {
+    "resolved_units": 3,
+    "unresolved_units": 0,
+    "resolved_weapons": 12,
+    "unresolved_weapons": 0,
+    "warnings": []
+  }
+}

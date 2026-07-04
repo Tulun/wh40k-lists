@@ -1,0 +1,13 @@
++++++++++++++++++++++++++++++++++++++++++++++++
++ FACTION KEYWORD: Aeldari
++ DETACHMENT: Aspect Host
++ TOTAL ARMY POINTS: 105pts
++
++ NUMBER OF UNITS: 1
++++++++++++++++++++++++++++++++++++++++++++++++
+
+CHARACTERS
+
+Jain Zar (105 pts)
+• 1x Silent Death
+1x The Blade of Destruction
