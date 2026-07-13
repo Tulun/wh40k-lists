@@ -11,7 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@alpaca-software/40kdc-data": "^1.0.20",
+    "@alpaca-software/40kdc-data": "^1.0.26",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.0",
