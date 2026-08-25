@@ -21,6 +21,11 @@ const ROLE_HINT_LABEL: Record<string, string> = {
   bodyguard: "Has character attached",
 };
 
+/** Dataslates like "pre-launch-provisional" mean 10e-ported, unverified data. */
+export function isProvisional(dataslate: string | undefined): boolean {
+  return dataslate?.includes("provisional") ?? false;
+}
+
 export default function UnitDetailScreen() {
   const { entryKey } = useParams();
   const list = useActiveList();
@@ -138,7 +143,12 @@ export default function UnitDetailScreen() {
         <Section title="Abilities" open>
           <div className="space-y-2">
             {textAbilities.map((a) => (
-              <AbilityBlock key={a.id} name={a.name} text={a.describe()} />
+              <AbilityBlock
+                key={a.id}
+                name={a.name}
+                text={a.describe()}
+                provisional={isProvisional(a.raw.game_version?.dataslate)}
+              />
             ))}
           </div>
         </Section>

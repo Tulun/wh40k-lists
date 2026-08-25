@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import type { ResolvedRef } from "@alpaca-software/40kdc-data";
 import AbilityBlock from "../components/AbilityBlock";
 import KeywordChips from "../components/KeywordChips";
+import { isProvisional } from "./UnitDetailScreen";
 import StatLine from "../components/StatLine";
 import WeaponTable from "../components/WeaponTable";
 import { useDataset } from "../hooks/useDataset";
@@ -89,7 +90,12 @@ export default function DatasheetScreen() {
           <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">Abilities</summary>
           <div className="space-y-2 px-2 pb-2">
             {textAbilities.map((a) => (
-              <AbilityBlock key={a.id} name={a.name} text={a.describe()} />
+              <AbilityBlock
+                key={a.id}
+                name={a.name}
+                text={a.describe()}
+                provisional={isProvisional(a.raw.game_version?.dataslate)}
+              />
             ))}
           </div>
         </details>
