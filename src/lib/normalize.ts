@@ -86,6 +86,46 @@ function resolveWargearRef(ref: ResolvedRef, data: Data40k, factionId: string | 
   return { ...ref, id: match.id, resolved: true, candidates: [] };
 }
 
+/** Bounded Levenshtein — enough to catch one-or-two-character name drift. */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+      rowMin = Math.min(rowMin, cur[j]);
+    }
+    if (rowMin > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/**
+ * Match a raw weapon name against the unit's own weapon list, tolerating
+ * small spelling drift between the export and the dataset ("Macro-scalpel"
+ * vs the dataset's "maco-scalpel"). Only a unique match resolves.
+ */
+function fuzzyResolveUnitWeapon(
+  ref: ResolvedRef,
+  weaponNames: { id: string; name: string }[],
+  normalizeName: (s: string) => string,
+): ResolvedRef {
+  const target = normalizeName(ref.raw_name);
+  const tolerance = target.length >= 8 ? 2 : 1;
+  const matches = weaponNames.filter(
+    (w) => editDistance(normalizeName(w.name), target, tolerance) <= tolerance,
+  );
+  if (matches.length !== 1) return ref;
+  return { ...ref, id: matches[0].id, resolved: true, candidates: [] };
+}
+
 export interface NormalizedImport {
   roster: Roster;
   roleHints: RoleHints;
@@ -98,18 +138,51 @@ export function normalizeImportedRoster(roster: Roster, data: Data40k): Normaliz
   const attachmentSeeds: Record<string, number> = {};
   const partnerByIndex: { index: number; role: RoleHint; partner: string }[] = [];
 
+  const nn = data.normalizeName;
   const units = roster.units.map((unit, index) => {
+    const view = unit.ref.resolved
+      ? data.resolveRosterUnit(unit, data.dataset, roster.faction_id)
+      : undefined;
+    // Model-group headers ("Klaivex", "Kabalite Warrior") sometimes arrive as
+    // wargear lines; the unit's profile names and its own name identify them.
+    const modelNames = new Set<string>();
+    if (view) {
+      modelNames.add(nn(view.name));
+      modelNames.add(nn(view.name).replace(/e?s$/, ""));
+      for (const p of view.raw.profiles) if (p.name) modelNames.add(nn(p.name));
+      for (const model of data.dataset.unitCompositionOf(view.raw)?.models ?? []) {
+        modelNames.add(nn(model.name));
+      }
+    }
+    modelNames.add(nn(unit.ref.raw_name));
+    modelNames.add(nn(unit.ref.raw_name).replace(/e?s$/, ""));
+    const unitWeapons = view ? view.weapons.map((w) => ({ id: w.id, name: w.name })) : [];
+
+    let isWarlord = unit.is_warlord;
     const wargear: typeof unit.wargear = [];
     for (const item of unit.wargear) {
-      const marker = !item.ref.resolved && attachmentMarker(item.ref.raw_name);
-      if (marker) {
-        roleHints[String(index)] = marker.role;
-        if (marker.partner) partnerByIndex.push({ index, role: marker.role, partner: marker.partner });
+      if (!item.ref.resolved) {
+        const marker = attachmentMarker(item.ref.raw_name);
+        if (marker) {
+          roleHints[String(index)] = marker.role;
+          if (marker.partner)
+            partnerByIndex.push({ index, role: marker.role, partner: marker.partner });
+          continue;
+        }
+        const raw = nn(item.ref.raw_name);
+        if (raw === "warlord") {
+          isWarlord = true;
+          continue;
+        }
+        if (modelNames.has(raw) || modelNames.has(raw.replace(/e?s$/, ""))) continue;
+        let ref = resolveWargearRef(item.ref, data, roster.faction_id);
+        if (!ref.resolved) ref = fuzzyResolveUnitWeapon(ref, unitWeapons, nn);
+        wargear.push({ ...item, ref });
         continue;
       }
-      wargear.push({ ...item, ref: resolveWargearRef(item.ref, data, roster.faction_id) });
+      wargear.push(item);
     }
-    return { ...unit, wargear };
+    return { ...unit, is_warlord: isWarlord, wargear };
   });
 
   // Markers that named their partner unit ("Leader (Beast Snagga Boyz)")

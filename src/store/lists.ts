@@ -81,6 +81,15 @@ export const useLists = create<ListsStore>()(
   ),
 );
 
+// Multi-tab sync: zustand persist writes the WHOLE state on every change, so a
+// tab holding stale state would silently clobber a list imported in another
+// tab. Re-read storage whenever any other tab writes it.
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === STORAGE_KEY) void useLists.persist.rehydrate();
+  });
+}
+
 /** The list in the currently active slot, if any. */
 export function useActiveList(): SavedList | null {
   return useLists((s) => {

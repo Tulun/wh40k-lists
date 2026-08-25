@@ -111,6 +111,73 @@ describe("normalizeImportedRoster", () => {
     expect(attachmentSeeds).toEqual({ "0": 1 });
   });
 
+  it("strips model-group lines, captures Warlord, and fuzzy-matches unit weapons", () => {
+    const r = roster({
+      faction_id: "drukhari",
+      units: [
+        unit({
+          ref: { ...resolved("incubi"), raw_name: "Incubi" },
+          model_count: 5,
+          wargear: [
+            { ref: unresolved("Klaivex"), count: 1 }, // model-group header, not wargear
+            { ref: unresolved("Incubi"), count: 4 }, // ditto
+            { ref: resolved("klaive"), count: 4 },
+          ],
+        }),
+        unit({
+          ref: { ...resolved("talos"), raw_name: "Talos" },
+          wargear: [
+            { ref: unresolved("Warlord"), count: 1 }, // annotation, not wargear
+            { ref: unresolved("Macro-scalpel"), count: 2 }, // dataset spells it "maco-scalpel"
+          ],
+        }),
+      ],
+    });
+
+    const { roster: out } = normalizeImportedRoster(r, data40k);
+
+    const incubi = out.units[0];
+    expect(incubi.wargear.map((w) => w.ref.raw_name)).toEqual(["klaive"]);
+
+    const talos = out.units[1];
+    expect(talos.is_warlord).toBe(true);
+    expect(talos.wargear).toHaveLength(1);
+    expect(talos.wargear[0].ref.id).toBe("maco-scalpel");
+    expect(talos.wargear[0].ref.resolved).toBe(true);
+    expect(talos.wargear[0].ref.raw_name).toBe("Macro-scalpel"); // source name kept
+  });
+
+  it("does not fuzzy-match a weapon the unit cannot carry", () => {
+    const r = roster({
+      faction_id: "drukhari",
+      units: [
+        unit({
+          ref: { ...resolved("wyches"), raw_name: "Wyches" },
+          wargear: [{ ref: unresolved("Macro-scalpel"), count: 1 }], // Talos gear, not Wych gear
+        }),
+      ],
+    });
+    const { roster: out } = normalizeImportedRoster(r, data40k);
+    expect(out.units[0].wargear[0].ref.resolved).toBe(false);
+  });
+
+  it("strips sergeant-model names from the unit composition (Hekatrix on Wyches)", () => {
+    const r = roster({
+      faction_id: "drukhari",
+      units: [
+        unit({
+          ref: { ...resolved("wyches"), raw_name: "Wyches" },
+          wargear: [
+            { ref: unresolved("Hekatrix"), count: 1 },
+            { ref: resolved("hekatarii-blade"), count: 10 },
+          ],
+        }),
+      ],
+    });
+    const { roster: out } = normalizeImportedRoster(r, data40k);
+    expect(out.units[0].wargear.map((w) => w.ref.raw_name)).toEqual(["hekatarii-blade"]);
+  });
+
   it("infers anonymous-marker attachments from dataset leader eligibility", () => {
     // Mozrog can only lead Squighog Boyz — one eligible squad forces the pair.
     const r = roster({
