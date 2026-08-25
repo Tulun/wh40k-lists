@@ -147,6 +147,9 @@ export function extractAttachedGroups(rawText: string): string[][] {
     for (let j = i + 1; j < lines.length; j++) {
       const l = lines[j];
       if (!l) continue;
+      // Wargear/marker bullets ("• Attached as: Leader (Character)") never
+      // end a group — only a new group header or section does.
+      if (l.startsWith("•") || l.startsWith("◦")) continue;
       if (/\battached\b/i.test(l) && !UNIT_HEADER.test(l)) break;
       if (ALL_CAPS_SECTION.test(l) && !UNIT_HEADER.test(l)) break;
       const m = UNIT_HEADER.exec(l);
@@ -155,6 +158,62 @@ export function extractAttachedGroups(rawText: string): string[][] {
     if (names.length >= 2) groups.push(names);
   }
   return groups;
+}
+
+const GROUP_BULLET = /^•\s*(\d+)x\s+(.+?)\s*$/i;
+const CHILD_BULLET = /^◦\s*(\d+)x\s+(.+?)\s*$/i;
+
+interface RawLoadoutGroup {
+  model_name: string;
+  count: number;
+  wargear: { name: string; count: number }[];
+}
+
+/**
+ * The GW app nests per-model loadouts under `◦` children, which the upstream
+ * parser doesn't treat as model groups — so `loadout_groups` (and with it the
+ * "carried by the Nob" tags) get lost. Rebuild them from the raw text:
+ * `• Nx Model` followed by `◦ Mx gear` children. Returned per unit-header
+ * occurrence, in source order.
+ */
+export function extractLoadoutGroups(rawText: string): Map<string, RawLoadoutGroup[][]> {
+  const byName = new Map<string, RawLoadoutGroup[][]>();
+  let current: RawLoadoutGroup[] | null = null;
+  let group: RawLoadoutGroup | null = null;
+  for (const raw of rawText.split(/\r?\n/)) {
+    const line = raw.trim();
+    const header = UNIT_HEADER.exec(line);
+    if (header && !line.startsWith("•") && !line.startsWith("◦")) {
+      current = [];
+      group = null;
+      const name = header[1].trim();
+      if (!byName.has(name)) byName.set(name, []);
+      byName.get(name)!.push(current);
+      continue;
+    }
+    if (!current) continue;
+    const top = GROUP_BULLET.exec(line);
+    if (top) {
+      group = { model_name: top[2], count: Number(top[1]), wargear: [] };
+      current.push(group);
+      continue;
+    }
+    const child = CHILD_BULLET.exec(line);
+    if (child && group) {
+      group.wargear.push({ name: child[2], count: Number(child[1]) });
+    } else if (line && !line.startsWith("•") && !line.startsWith("◦")) {
+      group = null; // non-bullet line ends the unit block's bullets
+    }
+  }
+  // Only keep model groups that actually had children; bare `• Nx Thing`
+  // lines are plain wargear, not models.
+  for (const [name, occurrences] of byName) {
+    byName.set(
+      name,
+      occurrences.map((groups) => groups.filter((g) => g.wargear.length > 0)),
+    );
+  }
+  return byName;
 }
 
 export interface NormalizedImport {
@@ -174,6 +233,8 @@ export function normalizeImportedRoster(
   const partnerByIndex: { index: number; role: RoleHint; partner: string }[] = [];
 
   const nn = data.normalizeName;
+  const loadoutsByName = rawText ? extractLoadoutGroups(rawText) : new Map<string, RawLoadoutGroup[][]>();
+  const occurrenceByName = new Map<string, number>();
   const units = roster.units.map((unit, index) => {
     const view = unit.ref.resolved
       ? data.resolveRosterUnit(unit, data.dataset, roster.faction_id)
@@ -217,7 +278,31 @@ export function normalizeImportedRoster(
       }
       wargear.push(item);
     }
-    return { ...unit, is_warlord: isWarlord, wargear };
+
+    // Rebuild per-model loadout groups from the raw text's ◦ nesting when the
+    // parser didn't provide them (keeps "carried by the Nob" tags working).
+    const occurrence = occurrenceByName.get(unit.ref.raw_name) ?? 0;
+    occurrenceByName.set(unit.ref.raw_name, occurrence + 1);
+    let loadoutGroups = unit.loadout_groups;
+    if (!loadoutGroups?.length) {
+      const rawGroups = loadoutsByName.get(unit.ref.raw_name)?.[occurrence];
+      if (rawGroups?.length) {
+        loadoutGroups = rawGroups.map((g) => ({
+          model_name: g.model_name,
+          count: g.count,
+          wargear: g.wargear.map((w) => {
+            const match = wargear.find((item) => nn(item.ref.raw_name) === nn(w.name));
+            // ◦ counts are group totals; RosterLoadoutGroup counts are per model.
+            const perModel = g.count > 0 && w.count % g.count === 0 ? w.count / g.count : w.count;
+            return {
+              ref: match?.ref ?? { id: null, raw_name: w.name, resolved: false, candidates: [] },
+              count: perModel,
+            };
+          }),
+        }));
+      }
+    }
+    return { ...unit, is_warlord: isWarlord, wargear, loadout_groups: loadoutGroups };
   });
 
   // Markers that named their partner unit ("Leader (Beast Snagga Boyz)")

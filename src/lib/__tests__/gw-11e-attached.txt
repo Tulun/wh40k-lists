@@ -1,0 +1,177 @@
+Orks — FKREW take and hold (1,995 Points)
+
+Orks
+Freebooter Krew and More Dakka! (3 Detachment Points)
+Force Dispositions: Purge the Foe, Take and Hold
+Strike Force (2,000 Points)
+
+ATTACHED UNITS
+
+Attached unit 1
+
+Beastboss on Squigosaur (105 Points)
+  • Attached as: Leader (Character)
+  • Warlord
+  • 1x Beastchoppa
+  • 1x Slugga
+  • 1x Squigosaur’s jaws
+  • Enhancements: Da Kaptin
+
+Squighog Boyz (270 Points)
+  • Attached as: Bodyguard ()
+  • 2x Bomb Squig
+  • 6x Squighog Boy
+     ◦ 6x Saddlegit weapons
+     ◦ 6x Squig jaws
+     ◦ 6x Stikka
+  • 2x Nob on Smasha Squig
+     ◦ 2x Big choppa
+     ◦ 2x Slugga
+     ◦ 2x Squig jaws
+
+Attached unit 2
+
+Beastboss (80 Points)
+  • Attached as: Leader (Character)
+  • 1x Beast Snagga klaw
+  • 1x Beastchoppa
+  • 1x Shoota
+
+Beast Snagga Boyz (90 Points)
+  • Attached as: Bodyguard (Battleline)
+  • 9x Beast Snagga Boy
+     ◦ 9x Choppa
+     ◦ 9x Slugga
+  • 1x Beast Snagga Nob
+     ◦ 1x Power snappa
+     ◦ 1x Slugga
+
+Attached unit 3
+
+Bigboss (55 Points)
+  • Attached as: Leader (Character)
+  • 1x Slugga
+  • 1x Two‑handed big choppa
+
+Breaka Boyz (125 Points)
+  • Attached as: Bodyguard ()
+  • 1x Boss Nob
+     ◦ 1x Choppa
+     ◦ 1x Rokkit pistol
+     ◦ 1x Smash hammer
+  • 5x Breaka Boy
+     ◦ 4x Smash hammer
+     ◦ 1x Tankhammer
+
+Attached unit 4
+
+Bannernob (70 Points)
+  • Attached as: Support (Character)
+  • 1x Choppa
+  • 1x Shoota
+  • Enhancements: Git-Spotter Squig
+
+Flash Gitz (150 Points)
+  • Attached as: Bodyguard ()
+  • 1x Ammo Runt
+  • 1x Kaptin
+     ◦ 1x Choppa
+     ◦ 1x Snazzgun
+  • 9x Flash Git
+     ◦ 9x Choppa
+     ◦ 9x Snazzgun
+
+Attached unit 5
+
+Big Mek with Shokk Attack Gun (70 Points)
+  • Attached as: Leader (Character)
+  • 1x Close combat weapon
+  • 1x Shokk attack gun
+
+Tankbustas (125 Points)
+  • Attached as: Bodyguard ()
+  • 1x Boss Nob
+     ◦ 1x Choppa
+     ◦ 2x Rokkit pistol
+  • 5x Tankbusta
+     ◦ 5x Close combat weapon
+     ◦ 5x Rokkit launcha
+
+CHARACTERS
+
+Wazdakka Gutsmek (175 Points)
+  • 1x Fixit’s wrench
+  • 1x Grabba dragga
+  • 1x Psyko‑gatler
+  • 1x Speeding bulk and flaming exhaust
+
+BATTLELINE
+
+Boyz (75 Points)
+  • 9x Boy
+     ◦ 9x Choppa
+     ◦ 9x Slugga
+  • 1x Boss Nob
+     ◦ 1x Power klaw
+     ◦ 1x Slugga
+
+DEDICATED TRANSPORTS
+
+Trukk (65 Points)
+  • 1x Big shoota
+  • 1x Spiked wheels
+  • 1x Wreckin’ ball
+
+Trukk (65 Points)
+  • 1x Big shoota
+  • 1x Spiked wheels
+  • 1x Wreckin’ ball
+
+OTHER DATASHEETS
+
+Big Mek Dakkarig (100 Points)
+  • 1x Blitzkannon
+  • 1x Rokkit launcha
+  • 1x Stompy feet
+
+Big Mek Dakkarig (100 Points)
+  • 1x Blitzkannon
+  • 1x Rokkit launcha
+  • 1x Stompy feet
+
+Gretchin (45 Points)
+  • 10x Gretchin
+     ◦ 10x Close combat weapon
+     ◦ 10x Grot blasta
+  • 1x Runtherd
+     ◦ 1x Runtherd tools
+     ◦ 1x Slugga
+
+Gretchin (45 Points)
+  • 10x Gretchin
+     ◦ 10x Close combat weapon
+     ◦ 10x Grot blasta
+  • 1x Runtherd
+     ◦ 1x Runtherd tools
+     ◦ 1x Slugga
+
+Kommandos (120 Points)
+  • 1x Bomb Squig
+  • 1x Distraction Grot
+  • 9x Kommando
+     ◦ 1x Breacha ram
+     ◦ 8x Choppa
+     ◦ 8x Slugga
+  • 1x Boss Nob
+     ◦ 1x Power klaw
+     ◦ 1x Slugga
+
+Stormboyz (65 Points)
+  • 4x Stormboy
+     ◦ 4x Choppa
+     ◦ 4x Slugga
+  • 1x Boss Nob
+     ◦ 1x Power klaw
+     ◦ 1x Slugga
+
+Exported with App Version: v2.0.5 (2), Data Version: v886
