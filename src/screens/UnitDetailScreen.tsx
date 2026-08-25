@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { Enhancement } from "@alpaca-software/40kdc-data";
 import AbilityBlock from "../components/AbilityBlock";
@@ -12,7 +12,7 @@ import type { Data40k } from "../lib/data";
 import { dedupeRoster, type DisplayEntry } from "../lib/dedupe";
 import { byId } from "../lib/lookup";
 import { armyStratagems, sortStratagems, stratagemsForUnit } from "../lib/stratagems";
-import { useActiveList } from "../store/lists";
+import { useActiveList, useLists } from "../store/lists";
 import type { SavedList } from "../store/schema";
 
 const ROLE_HINT_LABEL: Record<string, string> = {
@@ -162,6 +162,7 @@ export default function UnitDetailScreen() {
             enhancement={enhancement}
             factionId={roster.faction_id}
             points={entry.instances[0].enhancementPoints}
+            listId={list.id}
           />
         </Section>
       )}
@@ -230,20 +231,30 @@ function EnhancementCard({
   enhancement,
   factionId,
   points,
+  listId,
 }: {
   data: Data40k;
   rawName: string;
   enhancement: Enhancement | undefined;
   factionId: string | null;
   points: number | null;
+  listId: string;
 }) {
   const ability = byId(data.abilities, enhancement?.ability_id, factionId);
   const cost = enhancement?.cost ?? points;
+  const name = enhancement?.name ?? rawName;
+  const noteKey = enhancement?.id ?? `raw:${rawName}`;
+  const note = useLists((s) => s.lists[listId]?.notes[noteKey] ?? "");
+  const setNote = useLists((s) => s.setNote);
+  const [editing, setEditing] = useState(false);
+  const lookupUrl = `https://www.google.com/search?q=${encodeURIComponent(
+    `40k enhancement "${name}"`,
+  )}`;
   return (
     <div className="rounded-md border border-accent/40 bg-accent/5 px-2.5 py-2">
       <div className="flex items-baseline gap-2">
         <span className="flex-1 text-xs font-bold uppercase tracking-wide text-accent">
-          ✦ {enhancement?.name ?? rawName}
+          ✦ {name}
         </span>
         {cost != null && <span className="text-xs text-ink-dim">{cost} pts</span>}
       </div>
@@ -251,9 +262,40 @@ function EnhancementCard({
         <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">{ability.describe()}</p>
       ) : (
         <p className="mt-1 text-xs italic text-ink-faint">
-          No effect data yet — check the card or add a note on the stratagem screen.
+          Effect not in the dataset yet —{" "}
+          <a
+            href={lookupUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="not-italic text-accent underline"
+          >
+            look it up ↗
+          </a>
         </p>
       )}
+      <div className="mt-1.5">
+        {editing ? (
+          <textarea
+            autoFocus
+            defaultValue={note}
+            rows={2}
+            placeholder="Your note (what this does)…"
+            className="w-full rounded border border-edge bg-surface p-1.5 text-sm"
+            onBlur={(e) => {
+              setNote(listId, noteKey, e.target.value);
+              setEditing(false);
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-left text-xs text-ink-faint underline decoration-dotted"
+          >
+            {note ? <span className="text-ink-dim">📝 {note}</span> : "+ add note"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
