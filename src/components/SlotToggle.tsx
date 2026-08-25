@@ -1,3 +1,4 @@
+import { useLocation, useNavigate } from "react-router-dom";
 import { useLists } from "../store/lists";
 import type { Slot } from "../store/schema";
 
@@ -11,6 +12,15 @@ export default function SlotToggle() {
   const setActiveSlot = useLists((s) => s.setActiveSlot);
   const slots = useLists((s) => s.slots);
   const lists = useLists((s) => s.lists);
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  function pick(slot: Slot) {
+    setActiveSlot(slot);
+    // Switching armies means "show me that army" — jump to its glance view
+    // unless the user is mid-import (leaving would lose the pasted text).
+    if (pathname !== "/" && pathname !== "/import") navigate("/");
+  }
 
   return (
     <div className="mx-auto flex w-fit rounded-lg border border-edge bg-panel p-0.5">
@@ -22,7 +32,7 @@ export default function SlotToggle() {
           <button
             key={slot}
             type="button"
-            onClick={() => setActiveSlot(slot)}
+            onClick={() => pick(slot)}
             className={`min-w-24 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
               isActive ? activeClass : "text-ink-faint"
             }`}

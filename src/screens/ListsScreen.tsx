@@ -1,10 +1,11 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useLists } from "../store/lists";
-import type { Slot } from "../store/schema";
+import type { SavedList, Slot } from "../store/schema";
 
 export default function ListsScreen() {
   const lists = useLists((s) => s.lists);
   const slots = useLists((s) => s.slots);
+  const activeSlot = useLists((s) => s.activeSlot);
   const assignSlot = useLists((s) => s.assignSlot);
   const setActiveSlot = useLists((s) => s.setActiveSlot);
   const deleteList = useLists((s) => s.deleteList);
@@ -19,6 +20,13 @@ export default function ListsScreen() {
     assignSlot(slot, id);
     setActiveSlot(slot);
     navigate("/");
+  }
+
+  /** Tap the card → view that army. Uses its slot if it has one. */
+  function open(list: SavedList) {
+    const slot =
+      slots.mine === list.id ? "mine" : slots.opponent === list.id ? "opponent" : activeSlot;
+    use(slot, list.id);
   }
 
   return (
@@ -40,22 +48,34 @@ export default function ListsScreen() {
             <div className="flex items-baseline gap-2">
               <button
                 type="button"
-                className="min-w-0 flex-1 truncate text-left text-sm font-semibold"
+                className="min-w-0 flex-1 truncate text-left text-sm font-semibold active:text-accent"
+                onClick={() => open(list)}
+              >
+                {list.name}
+              </button>
+              <button
+                type="button"
+                aria-label="Rename list"
+                className="shrink-0 px-1 text-xs text-ink-faint"
                 onClick={() => {
                   const name = prompt("Rename list", list.name);
                   if (name?.trim()) renameList(list.id, name.trim());
                 }}
               >
-                {list.name}
+                ✏️
               </button>
-              <span className="text-xs text-ink-faint">
+              <span className="shrink-0 text-xs text-ink-faint">
                 {list.roster.points.total_computed} pts
               </span>
             </div>
-            <div className="mt-0.5 text-[11px] text-ink-faint">
+            <button
+              type="button"
+              onClick={() => open(list)}
+              className="mt-0.5 block w-full text-left text-[11px] text-ink-faint"
+            >
               {new Date(list.importedAt).toLocaleDateString()} · {list.dataVersion.edition} ed /{" "}
               {list.dataVersion.dataslate}
-            </div>
+            </button>
             <div className="mt-2 flex gap-2">
               <button
                 type="button"
