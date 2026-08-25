@@ -9,15 +9,17 @@ interface Props {
   onPick: (rawName: string, id: string | null) => void;
 }
 
-function searchCollection(data: Data40k, kind: UnresolvedRef["kind"], query: string) {
+function searchCollection(
+  data: Data40k,
+  kind: UnresolvedRef["kind"],
+  query: string,
+): { id: string; name: string }[] {
+  if (kind === "weapon") {
+    // Non-weapon wargear (grots, runts, icons…) lives in a separate collection.
+    return [...data.weapons.findAll(query), ...data.wargear.findAll(query)].slice(0, 5);
+  }
   const collection =
-    kind === "unit"
-      ? data.units
-      : kind === "weapon"
-        ? data.weapons
-        : kind === "enhancement"
-          ? data.enhancements
-          : data.detachments;
+    kind === "unit" ? data.units : kind === "enhancement" ? data.enhancements : data.detachments;
   return collection.findAll(query).slice(0, 5);
 }
 

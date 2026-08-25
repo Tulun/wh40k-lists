@@ -15,7 +15,6 @@ interface Row {
   merged: MergedWeapon;
   name: string;
   profiles: ProfileRow[];
-  unresolved: boolean;
 }
 
 interface ProfileRow {
@@ -30,12 +29,25 @@ interface ProfileRow {
   melee: boolean;
 }
 
-function buildRows(data: Data40k, weapons: MergedWeapon[], factionId: string | null): Row[] {
+interface OtherGear {
+  merged: MergedWeapon;
+  name: string;
+}
+
+function buildRows(
+  data: Data40k,
+  weapons: MergedWeapon[],
+  factionId: string | null,
+): { rows: Row[]; other: OtherGear[] } {
   const rows: Row[] = [];
+  const other: OtherGear[] = [];
   for (const merged of weapons) {
     const view = byId(data.weapons, merged.ref.id, factionId);
     if (!view) {
-      rows.push({ merged, name: merged.ref.raw_name, profiles: [], unresolved: true });
+      // Not a weapon: either a `wargear` collection item (grots, runts…) or
+      // an unmatched line kept as text. Both render as plain gear, not stats.
+      const gear = byId(data.wargear, merged.ref.id, factionId);
+      other.push({ merged, name: gear?.name ?? merged.ref.raw_name });
       continue;
     }
     const raw = view.raw;
@@ -57,88 +69,104 @@ function buildRows(data: Data40k, weapons: MergedWeapon[], factionId: string | n
         melee,
       };
     });
-    rows.push({ merged, name: view.name, profiles, unresolved: false });
+    rows.push({ merged, name: view.name, profiles });
   }
   // Ranged before melee, then by name; multi-profile weapons sort by first profile.
-  return rows.sort((a, b) => {
+  rows.sort((a, b) => {
     const am = a.profiles[0]?.melee ? 1 : 0;
     const bm = b.profiles[0]?.melee ? 1 : 0;
     if (am !== bm) return am - bm;
     return a.name.localeCompare(b.name);
   });
+  return { rows, other };
 }
 
 const HEAD = ["Range", "A", "Skill", "S", "AP", "D"];
 
 export default function WeaponTable({ data, weapons, factionId, showInstances }: Props) {
-  const rows = buildRows(data, weapons, factionId);
-  if (rows.length === 0) return null;
+  const { rows, other } = buildRows(data, weapons, factionId);
+  if (rows.length === 0 && other.length === 0) return null;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="text-[10px] uppercase text-ink-faint">
-            <th className="py-1 pr-2 text-left font-semibold">Weapon</th>
-            {HEAD.map((h) => (
-              <th key={h} className="px-1.5 py-1 text-center font-semibold">
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const tag = showInstances ? instanceTag(row.merged) : null;
-            if (row.unresolved) {
-              return (
-                <tr key={row.merged.ref.raw_name} className="border-t border-edge">
-                  <td className="py-1.5 pr-2" colSpan={HEAD.length + 1}>
-                    <span className="text-ink-dim">{row.name}</span>
-                    <Count merged={row.merged} tag={tag} />
-                  </td>
-                </tr>
-              );
-            }
-            return row.profiles.map((p, i) => (
-              <tr
-                key={`${row.merged.ref.id}-${i}`}
-                className={i === 0 ? "border-t border-edge" : ""}
-              >
-                <td className="max-w-40 py-1.5 pr-2 align-top">
-                  {i === 0 ? (
-                    <>
-                      <span className="font-medium">{row.name}</span>
-                      <Count merged={row.merged} tag={tag} />
-                    </>
-                  ) : null}
-                  {p.name && (
-                    <span className="block text-xs italic text-ink-dim">↳ {p.name}</span>
-                  )}
-                  {p.keywords.length > 0 && (
-                    <span className="mt-0.5 flex flex-wrap gap-1">
-                      {p.keywords.map((k) => (
-                        <span
-                          key={k}
-                          className="rounded bg-panel px-1 py-px text-[10px] uppercase tracking-wide text-accent"
-                        >
-                          {k}
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                </td>
-                <td className="px-1.5 py-1.5 text-center tabular-nums">{p.range}</td>
-                <td className="px-1.5 py-1.5 text-center tabular-nums">{p.A}</td>
-                <td className="px-1.5 py-1.5 text-center tabular-nums">{p.skill}</td>
-                <td className="px-1.5 py-1.5 text-center tabular-nums">{p.S}</td>
-                <td className="px-1.5 py-1.5 text-center tabular-nums">{p.AP}</td>
-                <td className="px-1.5 py-1.5 text-center tabular-nums">{p.D}</td>
+    <div>
+      {rows.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="text-[10px] uppercase text-ink-faint">
+                <th className="py-1 pr-2 text-left font-semibold">Weapon</th>
+                {HEAD.map((h) => (
+                  <th key={h} className="px-1.5 py-1 text-center font-semibold">
+                    {h}
+                  </th>
+                ))}
               </tr>
-            ));
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {rows.map((row) =>
+                row.profiles.map((p, i) => (
+                  <tr
+                    key={`${row.merged.ref.id ?? row.merged.ref.raw_name}-${i}`}
+                    className={i === 0 ? "border-t border-edge" : ""}
+                  >
+                    <td className="max-w-40 py-1.5 pr-2 align-top">
+                      {i === 0 ? (
+                        <>
+                          <span className="font-medium">{row.name}</span>
+                          <Count
+                            merged={row.merged}
+                            tag={showInstances ? instanceTag(row.merged) : null}
+                          />
+                        </>
+                      ) : null}
+                      {p.name && (
+                        <span className="block text-xs italic text-ink-dim">↳ {p.name}</span>
+                      )}
+                      {p.keywords.length > 0 && (
+                        <span className="mt-0.5 flex flex-wrap gap-1">
+                          {p.keywords.map((k) => (
+                            <span
+                              key={k}
+                              className="rounded bg-panel px-1 py-px text-[10px] uppercase tracking-wide text-accent"
+                            >
+                              {k}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-1.5 py-1.5 text-center tabular-nums">{p.range}</td>
+                    <td className="px-1.5 py-1.5 text-center tabular-nums">{p.A}</td>
+                    <td className="px-1.5 py-1.5 text-center tabular-nums">{p.skill}</td>
+                    <td className="px-1.5 py-1.5 text-center tabular-nums">{p.S}</td>
+                    <td className="px-1.5 py-1.5 text-center tabular-nums">{p.AP}</td>
+                    <td className="px-1.5 py-1.5 text-center tabular-nums">{p.D}</td>
+                  </tr>
+                )),
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {other.length > 0 && (
+        <div className="mt-2">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+            Other wargear
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {other.map(({ merged, name }) => (
+              <span
+                key={merged.ref.id ?? merged.ref.raw_name}
+                className="rounded-full border border-edge bg-panel px-2.5 py-1 text-xs capitalize text-ink-dim"
+              >
+                {name}
+                <Count merged={merged} tag={showInstances ? instanceTag(merged) : null} />
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

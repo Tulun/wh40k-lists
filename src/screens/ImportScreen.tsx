@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { ImportResult, Roster } from "@alpaca-software/40kdc-data";
 import CandidatePicker from "../components/CandidatePicker";
 import { load40k, type Data40k } from "../lib/data";
+import { normalizeImportedRoster, type RoleHints } from "../lib/normalize";
 import { applyOverrides, collectUnresolved, type Overrides } from "../lib/overrides";
 import { useLists } from "../store/lists";
 import type { Slot } from "../store/schema";
@@ -12,6 +13,8 @@ declare const __DATA_PKG_VERSION__: string;
 interface Review {
   data: Data40k;
   roster: Roster;
+  roleHints: RoleHints;
+  attachmentSeeds: Record<string, number>;
   rawText: string;
   format: string;
 }
@@ -54,7 +57,8 @@ export default function ImportScreen() {
         );
         return;
       }
-      setReview({ data, roster: result.roster, rawText: text, format: result.format });
+      const { roster, roleHints, attachmentSeeds } = normalizeImportedRoster(result.roster, data);
+      setReview({ data, roster, roleHints, attachmentSeeds, rawText: text, format: result.format });
       setName(result.roster.name !== "Imported roster" ? result.roster.name : "");
       setOverrides({});
     } finally {
@@ -74,6 +78,8 @@ export default function ImportScreen() {
       roster: patched,
       overrides,
       notes: {},
+      roleHints: review.roleHints,
+      attachments: review.attachmentSeeds,
       importedAt: new Date().toISOString(),
       dataVersion: {
         edition: patched.game_version.edition,
@@ -94,6 +100,10 @@ export default function ImportScreen() {
   if (review && patched) {
     const d = patched.diagnostics;
     const rows = [...unresolved, ...overriddenRows];
+    // Unmatched weapon/wargear lines are usually harmless flavor items; keep
+    // them out of the way. Units/detachments/enhancements need real decisions.
+    const mainRows = rows.filter((u) => u.kind !== "weapon");
+    const gearRows = rows.filter((u) => u.kind === "weapon");
     return (
       <div className="space-y-3">
         <h1 className="text-lg font-bold">Review import</h1>
@@ -121,12 +131,12 @@ export default function ImportScreen() {
           )}
         </div>
 
-        {rows.length > 0 && (
+        {mainRows.length > 0 && (
           <div className="space-y-2">
             <h2 className="text-sm font-semibold text-ink-dim">
-              Needs your call ({rows.length})
+              Needs your call ({mainRows.length})
             </h2>
-            {rows.map((u) => (
+            {mainRows.map((u) => (
               <CandidatePicker
                 key={`${u.kind}:${u.ref.raw_name}`}
                 data={review.data}
@@ -143,6 +153,32 @@ export default function ImportScreen() {
               />
             ))}
           </div>
+        )}
+
+        {gearRows.length > 0 && (
+          <details className="rounded-md border border-edge">
+            <summary className="cursor-pointer px-3 py-2 text-sm text-ink-dim">
+              Unmatched wargear ({gearRows.length}) — kept as text
+            </summary>
+            <div className="space-y-2 px-2 pb-2">
+              {gearRows.map((u) => (
+                <CandidatePicker
+                  key={`${u.kind}:${u.ref.raw_name}`}
+                  data={review.data}
+                  unresolved={u}
+                  pickedId={overrides[u.ref.raw_name] ?? null}
+                  onPick={(rawName, id) =>
+                    setOverrides((o) => {
+                      const next = { ...o };
+                      if (id) next[rawName] = id;
+                      else delete next[rawName];
+                      return next;
+                    })
+                  }
+                />
+              ))}
+            </div>
+          </details>
         )}
 
         <input

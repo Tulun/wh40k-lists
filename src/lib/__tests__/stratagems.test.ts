@@ -32,9 +32,19 @@ describe("armyStratagems", () => {
       strat({ id: "b", detachment_id: "kult-of-speed" }),
       strat({ id: "c", detachment_id: "war-horde" }),
     ];
-    const { core, detachment } = armyStratagems(all, "kult-of-speed");
+    const { core, detachment } = armyStratagems(all, ["kult-of-speed"]);
     expect(core.map((s) => s.id)).toEqual(["a"]);
     expect(detachment.map((s) => s.id)).toEqual(["b"]);
+  });
+
+  it("merges pools across multiple detachments", () => {
+    const all = [
+      strat({ id: "b", detachment_id: "freebooter-krew" }),
+      strat({ id: "c", detachment_id: "more-dakka" }),
+      strat({ id: "d", detachment_id: "war-horde" }),
+    ];
+    const { detachment } = armyStratagems(all, ["freebooter-krew", "more-dakka"]);
+    expect(detachment.map((s) => s.id).sort()).toEqual(["b", "c"]);
   });
 });
 
@@ -99,9 +109,9 @@ describe("detachment granted keywords", () => {
     const pool = [
       strat({ id: "s", target_restrictions: { required_keywords: ["Battleline"] } }),
     ];
-    expect(stratagemsForUnit(warDog, pool, detachment)).toHaveLength(1);
-    expect(stratagemsForUnit(orkBoyz, pool, detachment)).toHaveLength(1); // Boyz are Battleline already
+    expect(stratagemsForUnit(warDog, pool, [detachment])).toHaveLength(1);
+    expect(stratagemsForUnit(orkBoyz, pool, [detachment])).toHaveLength(1); // Boyz are Battleline already
     const rhino = { keywords: ["Vehicle"], faction_keywords: ["Chaos Knights"] };
-    expect(stratagemsForUnit(rhino, pool, detachment)).toHaveLength(0);
+    expect(stratagemsForUnit(rhino, pool, [detachment])).toHaveLength(0);
   });
 });

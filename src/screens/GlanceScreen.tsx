@@ -146,16 +146,6 @@ function enhancementName(
 
 function ArmyHeader({ data, roster }: { data: Data40k | null; roster: import("@alpaca-software/40kdc-data").Roster }) {
   const faction = data && roster.faction_id ? data.factions.getAny(roster.faction_id) : undefined;
-  const detachment = roster.detachments[0];
-  const detachmentEntity = data
-    ? byId(data.detachments, detachment?.ref.id, roster.faction_id)
-    : undefined;
-  const ruleIds =
-    detachmentEntity?.detachment_rule_ids?.length
-      ? detachmentEntity.detachment_rule_ids
-      : detachmentEntity?.detachment_rule_id
-        ? [detachmentEntity.detachment_rule_id]
-        : [];
 
   return (
     <div className="rounded-md border border-edge bg-panel/50 px-3 py-2">
@@ -168,24 +158,41 @@ function ArmyHeader({ data, roster }: { data: Data40k | null; roster: import("@a
           {roster.points.declared_limit ? `/${roster.points.declared_limit}` : ""} pts
         </span>
       </div>
-      {detachment && (
-        <div className="text-xs text-ink-dim">
-          {detachmentEntity?.name ?? detachment.ref.raw_name}
-        </div>
-      )}
-      {data &&
-        ruleIds.map((id) => {
-          const ability = byId(data.abilities, id, roster.faction_id);
-          if (!ability) return null;
-          return (
-            <details key={id} className="mt-1.5">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-accent">
-                {ability.name}
-              </summary>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">{ability.describe()}</p>
-            </details>
-          );
-        })}
+      {roster.detachments.map((detachment, i) => {
+        const entity = data
+          ? byId(data.detachments, detachment.ref.id, roster.faction_id)
+          : undefined;
+        const ruleIds = entity?.detachment_rule_ids?.length
+          ? entity.detachment_rule_ids
+          : entity?.detachment_rule_id
+            ? [entity.detachment_rule_id]
+            : [];
+        return (
+          <div key={detachment.ref.id ?? `${detachment.ref.raw_name}-${i}`}>
+            <div className="mt-0.5 text-xs text-ink-dim">
+              {entity?.name ?? detachment.ref.raw_name}
+              {detachment.dp_cost != null && (
+                <span className="text-ink-faint"> · {detachment.dp_cost} DP</span>
+              )}
+            </div>
+            {data &&
+              ruleIds.map((id) => {
+                const ability = byId(data.abilities, id, roster.faction_id);
+                if (!ability) return null;
+                return (
+                  <details key={id} className="mt-1">
+                    <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-accent">
+                      {ability.name}
+                    </summary>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">
+                      {ability.describe()}
+                    </p>
+                  </details>
+                );
+              })}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -200,8 +207,8 @@ function StratagemSection({
   listId: string;
 }) {
   if (!data) return null;
-  const detachmentId = data.primaryDetachmentId(roster);
-  const { detachment, core } = armyStratagems(data.stratagems.all, detachmentId);
+  const detachmentIds = roster.detachments.map((d) => d.ref.id);
+  const { detachment, core } = armyStratagems(data.stratagems.all, detachmentIds);
 
   return (
     <details className="rounded-md border border-edge">

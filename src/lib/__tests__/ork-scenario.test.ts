@@ -126,7 +126,7 @@ describe("ork glance scenario", () => {
 
   it("links stratagems with authored target restrictions by keyword", () => {
     if (!result.ok) return;
-    const pool = armyStratagems(stratagems.all, "war-horde");
+    const pool = armyStratagems(stratagems.all, ["war-horde"]);
     expect(pool.detachment.length).toBeGreaterThan(0);
     expect(pool.core.length).toBeGreaterThan(0);
 

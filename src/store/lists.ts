@@ -16,6 +16,8 @@ interface ListsStore extends PersistedState {
   assignSlot(slot: Slot, listId: string | null): void;
   setActiveSlot(slot: Slot): void;
   setNote(listId: string, entityId: string, note: string): void;
+  /** Declare/clear which unit a character (by roster index) is attached to. */
+  setAttachment(listId: string, leaderIndex: number, bodyguardIndex: number | null): void;
 }
 
 export const useLists = create<ListsStore>()(
@@ -59,6 +61,16 @@ export const useLists = create<ListsStore>()(
           if (note.trim()) notes[entityId] = note;
           else delete notes[entityId];
           return { lists: { ...s.lists, [listId]: { ...list, notes } } };
+        }),
+
+      setAttachment: (listId, leaderIndex, bodyguardIndex) =>
+        set((s) => {
+          const list = s.lists[listId];
+          if (!list) return s;
+          const attachments = { ...list.attachments };
+          if (bodyguardIndex == null) delete attachments[String(leaderIndex)];
+          else attachments[String(leaderIndex)] = bodyguardIndex;
+          return { lists: { ...s.lists, [listId]: { ...list, attachments } } };
         }),
     }),
     {

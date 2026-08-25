@@ -6,11 +6,19 @@ import StatLine from "../components/StatLine";
 import StratagemCard from "../components/StratagemCard";
 import WeaponTable from "../components/WeaponTable";
 import { useDataset } from "../hooks/useDataset";
+import { effectiveAttachments, leadersAttachedTo } from "../lib/attachments";
 import type { Data40k } from "../lib/data";
 import { dedupeRoster, type DisplayEntry } from "../lib/dedupe";
 import { byId } from "../lib/lookup";
 import { armyStratagems, sortStratagems, stratagemsForUnit } from "../lib/stratagems";
-import { useActiveList } from "../store/lists";
+import { useActiveList, useLists } from "../store/lists";
+import type { SavedList } from "../store/schema";
+
+const ROLE_HINT_LABEL: Record<string, string> = {
+  leader: "Leader — attach declared at list build",
+  support: "Support — must be attached to a unit",
+  bodyguard: "Has a character attached",
+};
 
 export default function UnitDetailScreen() {
   const { entryKey } = useParams();
@@ -42,13 +50,15 @@ export default function UnitDetailScreen() {
   const rosterUnit = roster.units[entry.instances[0].rosterIndex];
   const unit = data.resolveRosterUnit(rosterUnit, data.dataset, roster.faction_id);
   const raw = unit?.raw;
-  const detachmentId = data.primaryDetachmentId(roster);
-  const detachmentEntity = byId(data.detachments, detachmentId, roster.faction_id);
+  const detachmentIds = roster.detachments.map((d) => d.ref.id);
+  const detachmentEntities = detachmentIds
+    .map((id) => byId(data.detachments, id, roster.faction_id))
+    .filter((d) => d != null);
 
-  const pools = armyStratagems(data.stratagems.all, detachmentId);
+  const pools = armyStratagems(data.stratagems.all, detachmentIds);
   const linkedStratagems = raw
     ? sortStratagems(
-        stratagemsForUnit(raw, [...pools.detachment, ...pools.core], detachmentEntity),
+        stratagemsForUnit(raw, [...pools.detachment, ...pools.core], detachmentEntities),
       )
     : [];
   // Most stratagems have no authored target data yet; surface the rest of the
@@ -77,6 +87,8 @@ export default function UnitDetailScreen() {
           and pick a match to see full stats.
         </p>
       )}
+
+      <RoleHintBadges list={list} entry={entry} />
 
       {raw && (
         <div className="space-y-2">
@@ -129,7 +141,7 @@ export default function UnitDetailScreen() {
         </Section>
       )}
 
-      <LeaderInfo data={data} entry={entry} factionId={roster.faction_id} />
+      <AttachmentBlock data={data} list={list} entry={entry} unitId={unit?.id ?? null} />
 
       {linkedStratagems.length > 0 && (
         <Section title={`Stratagems targeting this unit (${linkedStratagems.length})`}>
@@ -221,34 +233,154 @@ function EnhancementCard({
   );
 }
 
-function LeaderInfo({
+function RoleHintBadges({ list, entry }: { list: SavedList; entry: DisplayEntry }) {
+  const hints = [
+    ...new Set(
+      entry.instances
+        .map((inst) => list.roleHints[String(inst.rosterIndex)])
+        .filter((h) => h != null),
+    ),
+  ];
+  if (hints.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {hints.map((h) => (
+        <span
+          key={h}
+          className="rounded-full border border-mine/40 bg-mine/10 px-2.5 py-1 text-xs text-mine"
+        >
+          {ROLE_HINT_LABEL[h] ?? h}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Label a roster unit, disambiguating duplicates: "Boyz (2nd)" */
+function rosterUnitLabel(list: SavedList, index: number): string {
+  const units = list.roster.units;
+  const unit = units[index];
+  const sameBefore = units
+    .slice(0, index)
+    .filter((u) => u.ref.id === unit.ref.id && u.ref.raw_name === unit.ref.raw_name).length;
+  const total = units.filter(
+    (u) => u.ref.id === unit.ref.id && u.ref.raw_name === unit.ref.raw_name,
+  ).length;
+  const ord = ["1st", "2nd", "3rd"][sameBefore] ?? `${sameBefore + 1}th`;
+  return total > 1 ? `${unit.ref.raw_name} (${ord})` : unit.ref.raw_name;
+}
+
+/**
+ * Character side: pick which unit this character is attached to.
+ * Unit side: show attached characters and surface their buff abilities.
+ */
+function AttachmentBlock({
   data,
+  list,
   entry,
-  factionId,
+  unitId,
 }: {
   data: Data40k;
+  list: SavedList;
   entry: DisplayEntry;
-  factionId: string | null;
+  unitId: string | null;
 }) {
-  const attachments = entry.instances
-    .map((inst, i) => ({ inst, i }))
-    .filter(({ inst }) => inst.leaderAttachment);
-  if (attachments.length === 0) return null;
-  return (
-    <div className="space-y-1">
-      {attachments.map(({ inst, i }) => {
-        const att = inst.leaderAttachment!;
-        const bodyguardName =
-          byId(data.units, att.bodyguard_ref.id, factionId)?.name ?? att.bodyguard_ref.raw_name;
-        return (
-          <p key={i} className="text-xs text-ink-dim">
-            {entry.count > 1 ? `#${i + 1} ` : ""}
-            {att.role === "leader" ? "Leads" : "Supported by"}{" "}
-            <span className="font-medium text-ink">{bodyguardName}</span>
-            {att.provisional && " (inferred)"}
+  const setAttachment = useLists((s) => s.setAttachment);
+  const factionId = list.roster.faction_id;
+  const raw = byId(data.units, unitId, factionId)?.raw;
+  const hinted = entry.instances.some((inst) => {
+    const h = list.roleHints[String(inst.rosterIndex)];
+    return h === "leader" || h === "support";
+  });
+  const isCharacter = raw ? raw.role === "character" || raw.role === "epic-hero" : hinted;
+  const attachments = effectiveAttachments(list);
+
+  if (isCharacter) {
+    // Units this character may lead, present in the roster.
+    const eligibleIds = unitId
+      ? new Set(data.dataset.bodyguardsAttachableFrom(unitId).map((u) => u.id))
+      : null;
+    const selfIndices = new Set(entry.instances.map((i) => i.rosterIndex));
+    const options = list.roster.units
+      .map((u, index) => ({ u, index }))
+      .filter(({ u, index }) => {
+        if (selfIndices.has(index)) return false;
+        if (eligibleIds && eligibleIds.size > 0) return u.ref.id != null && eligibleIds.has(u.ref.id);
+        const role = byId(data.units, u.ref.id, factionId)?.raw.role;
+        return role !== "character" && role !== "epic-hero";
+      });
+
+    return (
+      <Section title="Attached to" open>
+        <div className="space-y-1.5">
+          {entry.instances.map((inst, i) => {
+            const current = attachments.get(inst.rosterIndex);
+            return (
+              <label key={i} className="flex items-center gap-2 text-sm">
+                {entry.count > 1 && <span className="text-xs text-ink-faint">#{i + 1}</span>}
+                <select
+                  value={current ?? ""}
+                  onChange={(e) =>
+                    setAttachment(
+                      list.id,
+                      inst.rosterIndex,
+                      e.target.value === "" ? null : Number(e.target.value),
+                    )
+                  }
+                  className="w-full rounded-md border border-edge bg-panel px-2 py-1.5 text-sm"
+                >
+                  <option value="">Not attached</option>
+                  {options.map(({ index }) => (
+                    <option key={index} value={index}>
+                      {rosterUnitLabel(list, index)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+          })}
+          <p className="text-[11px] text-ink-faint">
+            Declared when the list was built — set it here so the unit's sheet shows this
+            character's buffs.
           </p>
-        );
-      })}
-    </div>
+        </div>
+      </Section>
+    );
+  }
+
+  // Unit side: characters attached to any instance of this entry.
+  const leaders = leadersAttachedTo(
+    list,
+    entry.instances.map((i) => i.rosterIndex),
+  );
+  if (leaders.size === 0) return null;
+
+  return (
+    <Section title="Attached characters" open>
+      <div className="space-y-2">
+        {[...leaders.keys()].map((leaderIndex) => {
+          const leaderUnit = list.roster.units[leaderIndex];
+          const view = data.resolveRosterUnit(leaderUnit, data.dataset, factionId);
+          return (
+            <div key={leaderIndex} className="rounded-md border border-mine/40 bg-mine/5 px-2.5 py-2">
+              <div className="text-xs font-bold uppercase tracking-wide text-mine">
+                ⟠ {view?.name ?? leaderUnit.ref.raw_name}
+                {entry.count > 1 && (
+                  <span className="ml-1 font-normal text-ink-faint">
+                    → #{entry.instances.findIndex((i) => i.rosterIndex === leaders.get(leaderIndex)) + 1}
+                  </span>
+                )}
+              </div>
+              {view?.abilities.map((a) => (
+                <div key={a.id} className="mt-1.5">
+                  <div className="text-[11px] font-semibold uppercase text-ink-dim">{a.name}</div>
+                  <p className="whitespace-pre-wrap text-sm leading-snug">{a.describe()}</p>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </Section>
   );
 }

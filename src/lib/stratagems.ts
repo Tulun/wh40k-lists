@@ -2,9 +2,11 @@
  * Link stratagems to the army and to individual units.
  *
  * A stratagem is "for" a unit when the unit's keywords (datasheet + faction +
- * any construction keywords granted by the detachment) satisfy the stratagem's
- * target_restrictions. Untargeted stratagems (`target_restrictions: null`)
- * belong in the army-wide section, not on every unit.
+ * any construction keywords granted by the roster's detachments) satisfy the
+ * stratagem's target_restrictions. Untargeted stratagems
+ * (`target_restrictions: null`) belong in the army-wide section, not on every
+ * unit. 11e rosters can run several detachments at once, so everything here
+ * takes the full set.
  */
 import type { Detachment, Stratagem, Unit } from "@alpaca-software/40kdc-data";
 
@@ -15,11 +17,12 @@ export interface ArmyStratagems {
 
 export function armyStratagems(
   all: readonly Stratagem[],
-  detachmentId: string | null,
+  detachmentIds: readonly (string | null)[],
 ): ArmyStratagems {
+  const ids = new Set(detachmentIds.filter(Boolean));
   return {
     detachment: all.filter(
-      (s) => s.category === "detachment" && s.detachment_id === detachmentId,
+      (s) => s.category === "detachment" && s.detachment_id != null && ids.has(s.detachment_id),
     ),
     core: all.filter((s) => s.category === "core"),
   };
@@ -30,15 +33,17 @@ const lc = (k: string) => k.toLowerCase();
 /** Datasheet + faction keywords, plus detachment-granted construction keywords. */
 export function effectiveKeywords(
   unit: Pick<Unit, "keywords" | "faction_keywords">,
-  detachment?: Detachment | null,
+  detachments: readonly Detachment[] = [],
 ): Set<string> {
   const kw = new Set([
     ...(unit.keywords ?? []).map(lc),
     ...(unit.faction_keywords ?? []).map(lc),
   ]);
-  for (const grant of detachment?.granted_keywords ?? []) {
-    const to = (grant.to_keywords ?? []).map(lc);
-    if (to.some((k) => kw.has(k))) kw.add(lc(grant.keyword));
+  for (const detachment of detachments) {
+    for (const grant of detachment.granted_keywords ?? []) {
+      const to = (grant.to_keywords ?? []).map(lc);
+      if (to.some((k) => kw.has(k))) kw.add(lc(grant.keyword));
+    }
   }
   return kw;
 }
@@ -62,9 +67,9 @@ export function matchesTargetRestrictions(
 export function stratagemsForUnit(
   unit: Pick<Unit, "keywords" | "faction_keywords">,
   pool: readonly Stratagem[],
-  detachment?: Detachment | null,
+  detachments: readonly Detachment[] = [],
 ): Stratagem[] {
-  const kw = effectiveKeywords(unit, detachment);
+  const kw = effectiveKeywords(unit, detachments);
   return pool.filter((s) => matchesTargetRestrictions(s, kw));
 }
 
