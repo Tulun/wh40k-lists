@@ -44,15 +44,15 @@ export default function StatLine({ profile, showName }: { profile: Profile; show
   );
 }
 
-/** Compact inline stats for glance rows: T4 · 3+/4++ · W12 · OC3 */
-export function MicroStats({ profile }: { profile: Profile }) {
+/** Compact inline stats for glance rows: T4 · 3+/4++ · FNP 5+ · W12 · OC3 */
+export function MicroStats({ profile, fnp }: { profile: Profile; fnp?: string | null }) {
   const save =
     profile.invuln_sv != null
       ? `${profile.Sv}+/${profile.invuln_sv}++`
       : `${profile.Sv}+`;
   return (
     <span className="whitespace-nowrap text-xs tabular-nums text-ink-dim">
-      T{profile.T} · {save} · W{profile.W} · OC{profile.OC}
+      T{profile.T} · {save} · {fnp ? `${fnp} · ` : ""}W{profile.W} · OC{profile.OC}
     </span>
   );
 }

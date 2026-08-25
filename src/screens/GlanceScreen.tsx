@@ -6,6 +6,7 @@ import { MicroStats } from "../components/StatLine";
 import { useDataset } from "../hooks/useDataset";
 import type { Data40k } from "../lib/data";
 import { dedupeRoster, type DisplayEntry } from "../lib/dedupe";
+import { fnpFromAbilityNames } from "../lib/describe";
 import { byId } from "../lib/lookup";
 import { armyStratagems, sortStratagems } from "../lib/stratagems";
 import { useActiveList, useLists } from "../store/lists";
@@ -98,7 +99,9 @@ export default function GlanceScreen() {
 
       <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
         {filtered.map((entry) => {
-          const profile = resolveUnit(entry)?.raw.profiles[0];
+          const view = resolveUnit(entry);
+          const profile = view?.raw.profiles[0];
+          const fnp = view ? fnpFromAbilityNames(view.abilities.map((a) => a.name)) : null;
           return (
             <li key={entry.key}>
               <Link
@@ -119,7 +122,7 @@ export default function GlanceScreen() {
                   )}
                 </span>
                 {profile ? (
-                  <MicroStats profile={profile} />
+                  <MicroStats profile={profile} fnp={fnp} />
                 ) : (
                   <span className="text-xs text-ink-faint">{entry.totalPoints} pts</span>
                 )}

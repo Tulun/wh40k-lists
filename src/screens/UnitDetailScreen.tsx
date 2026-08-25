@@ -15,9 +15,9 @@ import { useActiveList, useLists } from "../store/lists";
 import type { SavedList } from "../store/schema";
 
 const ROLE_HINT_LABEL: Record<string, string> = {
-  leader: "Leader — attach declared at list build",
-  support: "Support — must be attached to a unit",
-  bodyguard: "Has a character attached",
+  leader: "Leader",
+  support: "Support — must attach",
+  bodyguard: "Has character attached",
 };
 
 export default function UnitDetailScreen() {
@@ -70,15 +70,29 @@ export default function UnitDetailScreen() {
 
   const enhancement = byId(data.enhancements, entry.enhancement?.id, roster.faction_id);
 
+  // Core abilities (Leader, Feel No Pain 5+, Deep Strike…) read fine as bare
+  // tags — only datasheet-specific abilities get their full text below.
+  const coreTags = unit ? unit.abilities.filter((a) => a.raw.ability_type === "core") : [];
+  const textAbilities = unit
+    ? unit.abilities.filter((a) => a.raw.ability_type !== "core")
+    : [];
+
   return (
     <div className="space-y-4">
-      <div className="flex items-baseline gap-2">
-        <h1 className="flex-1 text-lg font-bold leading-tight">
+      <div className="sticky top-12 z-10 -mx-3 flex items-center gap-1 border-b border-edge bg-surface/95 px-1 py-1.5 backdrop-blur">
+        <Link
+          to="/"
+          aria-label="Back to army"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-lg text-accent active:bg-panel"
+        >
+          ←
+        </Link>
+        <h1 className="min-w-0 flex-1 truncate text-base font-bold leading-tight">
           {entry.isWarlord && "⭐ "}
           {unit?.name ?? entry.name}
           {entry.count > 1 && <span className="ml-1.5 text-sm text-accent">×{entry.count}</span>}
         </h1>
-        <span className="text-sm text-ink-dim">{entry.totalPoints} pts</span>
+        <span className="shrink-0 pr-2 text-sm text-ink-dim">{entry.totalPoints} pts</span>
       </div>
 
       {!unit && (
@@ -88,8 +102,6 @@ export default function UnitDetailScreen() {
         </p>
       )}
 
-      <RoleHintBadges list={list} entry={entry} />
-
       {raw && (
         <div className="space-y-2">
           {raw.profiles.map((p, i) => (
@@ -97,6 +109,8 @@ export default function UnitDetailScreen() {
           ))}
         </div>
       )}
+
+      <TagRow list={list} entry={entry} coreTags={coreTags.map((a) => a.name)} keywords={raw?.keywords ?? []} />
 
       {entry.count > 1 && (
         <div className="flex flex-wrap gap-1.5">
@@ -119,10 +133,10 @@ export default function UnitDetailScreen() {
         />
       </Section>
 
-      {unit && unit.abilities.length > 0 && (
+      {textAbilities.length > 0 && (
         <Section title="Abilities" open>
           <div className="space-y-2">
-            {unit.abilities.map((a) => (
+            {textAbilities.map((a) => (
               <AbilityBlock key={a.id} name={a.name} text={a.describe()} />
             ))}
           </div>
@@ -233,23 +247,52 @@ function EnhancementCard({
   );
 }
 
-function RoleHintBadges({ list, entry }: { list: SavedList; entry: DisplayEntry }) {
+/**
+ * One glanceable chip row: core-ability tags (accent), role hints from the
+ * import (blue), then datasheet keywords (dim).
+ */
+function TagRow({
+  list,
+  entry,
+  coreTags,
+  keywords,
+}: {
+  list: SavedList;
+  entry: DisplayEntry;
+  coreTags: string[];
+  keywords: readonly string[];
+}) {
   const hints = [
     ...new Set(
       entry.instances
         .map((inst) => list.roleHints[String(inst.rosterIndex)])
         .filter((h) => h != null),
     ),
-  ];
-  if (hints.length === 0) return null;
+    // The core "Leader" tag already covers the leader hint.
+  ].filter((h) => !(h === "leader" && coreTags.includes("Leader")));
+
+  if (coreTags.length === 0 && hints.length === 0 && keywords.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5">
+      {coreTags.map((t) => (
+        <span
+          key={t}
+          className="rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent"
+        >
+          {t}
+        </span>
+      ))}
       {hints.map((h) => (
         <span
           key={h}
           className="rounded-full border border-mine/40 bg-mine/10 px-2.5 py-1 text-xs text-mine"
         >
           {ROLE_HINT_LABEL[h] ?? h}
+        </span>
+      ))}
+      {keywords.map((k) => (
+        <span key={k} className="rounded-full bg-panel px-2 py-0.5 text-[11px] text-ink-faint">
+          {k}
         </span>
       ))}
     </div>

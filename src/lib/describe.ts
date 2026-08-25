@@ -39,3 +39,12 @@ export function formatSave(sv: number | null | undefined, invuln = false): strin
   if (sv == null) return "—";
   return `${sv}+${invuln ? "+" : ""}`;
 }
+
+/** "Feel No Pain 5+" among ability names → "FNP 5+" for micro-statlines. */
+export function fnpFromAbilityNames(names: readonly string[]): string | null {
+  for (const name of names) {
+    const m = /^feel no pain (\d\+)/i.exec(name);
+    if (m) return `FNP ${m[1]}`;
+  }
+  return null;
+}
