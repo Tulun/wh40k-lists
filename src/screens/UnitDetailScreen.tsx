@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { Enhancement } from "@alpaca-software/40kdc-data";
 import AbilityBlock from "../components/AbilityBlock";
+import KeywordChips from "../components/KeywordChips";
 import StatLine from "../components/StatLine";
 import StratagemCard from "../components/StratagemCard";
 import WeaponTable from "../components/WeaponTable";
@@ -11,7 +12,7 @@ import type { Data40k } from "../lib/data";
 import { dedupeRoster, type DisplayEntry } from "../lib/dedupe";
 import { byId } from "../lib/lookup";
 import { armyStratagems, sortStratagems, stratagemsForUnit } from "../lib/stratagems";
-import { useActiveList, useLists } from "../store/lists";
+import { useActiveList } from "../store/lists";
 import type { SavedList } from "../store/schema";
 
 const ROLE_HINT_LABEL: Record<string, string> = {
@@ -248,32 +249,6 @@ function EnhancementCard({
 }
 
 /**
- * Rules-relevant keywords — unit types and the hooks stratagems/abilities key
- * off. These get full-strength chips; flavor keywords stay faint.
- */
-const IMPORTANT_KEYWORDS = new Set([
-  "infantry",
-  "mounted",
-  "vehicle",
-  "monster",
-  "beast",
-  "swarm",
-  "character",
-  "epic hero",
-  "battleline",
-  "grenades",
-  "fly",
-  "psyker",
-  "aircraft",
-  "titanic",
-  "walker",
-  "transport",
-  "dedicated transport",
-  "fortification",
-  "smoke",
-]);
-
-/**
  * One glanceable chip row: core-ability tags (accent), role hints from the
  * import (blue), important keywords (solid), then flavor keywords (faint).
  */
@@ -297,20 +272,8 @@ function TagRow({
     // The core "Leader" tag already covers the leader hint.
   ].filter((h) => !(h === "leader" && coreTags.includes("Leader")));
 
-  const important = keywords.filter((k) => IMPORTANT_KEYWORDS.has(k.toLowerCase()));
-  const flavor = keywords.filter((k) => !IMPORTANT_KEYWORDS.has(k.toLowerCase()));
-
-  if (coreTags.length === 0 && hints.length === 0 && keywords.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {coreTags.map((t) => (
-        <span
-          key={t}
-          className="rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent"
-        >
-          {t}
-        </span>
-      ))}
+    <KeywordChips coreTags={coreTags} keywords={keywords}>
       {hints.map((h) => (
         <span
           key={h}
@@ -319,20 +282,7 @@ function TagRow({
           {ROLE_HINT_LABEL[h] ?? h}
         </span>
       ))}
-      {important.map((k) => (
-        <span
-          key={k}
-          className="rounded-full border border-edge bg-panel px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-ink"
-        >
-          {k}
-        </span>
-      ))}
-      {flavor.map((k) => (
-        <span key={k} className="rounded-full bg-panel px-2 py-0.5 text-[11px] text-ink-faint">
-          {k}
-        </span>
-      ))}
-    </div>
+    </KeywordChips>
   );
 }
 
@@ -351,8 +301,11 @@ function rosterUnitLabel(list: SavedList, index: number): string {
 }
 
 /**
- * Character side: pick which unit this character is attached to.
- * Unit side: show attached characters and surface their buff abilities.
+ * Attachments come from the imported list — declared at list build, inferred
+ * where forced. Characters not pre-attached run solo (only Support markers
+ * genuinely require a unit, so those get a warning when unmatched).
+ * Character side: read-only "Leading …". Unit side: attached characters with
+ * their buff abilities.
  */
 function AttachmentBlock({
   data,
@@ -365,7 +318,6 @@ function AttachmentBlock({
   entry: DisplayEntry;
   unitId: string | null;
 }) {
-  const setAttachment = useLists((s) => s.setAttachment);
   const factionId = list.roster.faction_id;
   const raw = byId(data.units, unitId, factionId)?.raw;
   const hinted = entry.instances.some((inst) => {
@@ -376,55 +328,31 @@ function AttachmentBlock({
   const attachments = effectiveAttachments(list);
 
   if (isCharacter) {
-    // Units this character may lead, present in the roster.
-    const eligibleIds = unitId
-      ? new Set(data.dataset.bodyguardsAttachableFrom(unitId).map((u) => u.id))
-      : null;
-    const selfIndices = new Set(entry.instances.map((i) => i.rosterIndex));
-    const options = list.roster.units
-      .map((u, index) => ({ u, index }))
-      .filter(({ u, index }) => {
-        if (selfIndices.has(index)) return false;
-        if (eligibleIds && eligibleIds.size > 0) return u.ref.id != null && eligibleIds.has(u.ref.id);
-        const role = byId(data.units, u.ref.id, factionId)?.raw.role;
-        return role !== "character" && role !== "epic-hero";
-      });
+    const rows = entry.instances
+      .map((inst, i) => ({ inst, i, bodyguard: attachments.get(inst.rosterIndex) }))
+      .filter((r) => r.bodyguard !== undefined);
+    const unmatchedSupport = entry.instances.some(
+      (inst) =>
+        list.roleHints[String(inst.rosterIndex)] === "support" &&
+        attachments.get(inst.rosterIndex) === undefined,
+    );
 
+    if (rows.length === 0 && !unmatchedSupport) return null; // solo character
     return (
-      <Section title="Attached to" open>
-        <div className="space-y-1.5">
-          {entry.instances.map((inst, i) => {
-            const current = attachments.get(inst.rosterIndex);
-            return (
-              <label key={i} className="flex items-center gap-2 text-sm">
-                {entry.count > 1 && <span className="text-xs text-ink-faint">#{i + 1}</span>}
-                <select
-                  value={current ?? ""}
-                  onChange={(e) =>
-                    setAttachment(
-                      list.id,
-                      inst.rosterIndex,
-                      e.target.value === "" ? null : Number(e.target.value),
-                    )
-                  }
-                  className="w-full rounded-md border border-edge bg-panel px-2 py-1.5 text-sm"
-                >
-                  <option value="">Not attached</option>
-                  {options.map(({ index }) => (
-                    <option key={index} value={index}>
-                      {rosterUnitLabel(list, index)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            );
-          })}
-          <p className="text-[11px] text-ink-faint">
-            Declared when the list was built — set it here so the unit's sheet shows this
-            character's buffs.
+      <div className="space-y-1">
+        {rows.map(({ i, bodyguard }) => (
+          <p key={i} className="text-sm text-ink-dim">
+            {entry.count > 1 && <span className="text-xs text-ink-faint">#{i + 1} </span>}
+            ⟠ Leading{" "}
+            <span className="font-medium text-ink">{rosterUnitLabel(list, bodyguard!)}</span>
           </p>
-        </div>
-      </Section>
+        ))}
+        {unmatchedSupport && (
+          <p className="rounded-md border border-opponent/40 bg-opponent/10 p-2 text-xs text-opponent">
+            Support character — must be attached, but the list didn't say to which unit.
+          </p>
+        )}
+      </div>
     );
   }
 

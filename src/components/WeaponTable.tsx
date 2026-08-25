@@ -172,9 +172,12 @@ export default function WeaponTable({ data, weapons, factionId, showInstances }:
 }
 
 function Count({ merged, tag }: { merged: MergedWeapon; tag: string | null }) {
+  // totalCount 0 = "no count applies" (explorer datasheets), not "zero carried".
   return (
     <>
-      <span className="ml-1 text-xs text-ink-faint">×{merged.totalCount}</span>
+      {merged.totalCount > 0 && (
+        <span className="ml-1 text-xs text-ink-faint">×{merged.totalCount}</span>
+      )}
       {tag && (
         <span className="ml-1 rounded bg-accent/15 px-1 py-px text-[10px] text-accent">
           {tag}

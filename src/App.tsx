@@ -1,4 +1,5 @@
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
+import Sidebar from "./components/Sidebar";
 import SlotToggle from "./components/SlotToggle";
 import PoweredBy from "./components/PoweredBy";
 import { useActiveList } from "./store/lists";
@@ -12,9 +13,7 @@ export default function App() {
     <div className="mx-auto flex min-h-dvh max-w-3xl flex-col">
       <header className="sticky top-0 z-20 border-b border-edge bg-surface/95 backdrop-blur">
         <div className="flex h-12 items-center gap-2 px-3">
-          <Link to="/lists" className="shrink-0 text-sm font-bold tracking-wide text-accent">
-            40k
-          </Link>
+          <Sidebar />
           <div className="flex-1">
             <SlotToggle />
           </div>
