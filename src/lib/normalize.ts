@@ -126,9 +126,92 @@ export function normalizeImportedRoster(roster: Roster, data: Data40k): Normaliz
     else attachmentSeeds[String(index)] = partnerIndex;
   }
 
+  inferAttachments(roster, roleHints, attachmentSeeds, data);
+
   const detachments = roster.detachments.flatMap((d) =>
     splitDetachment(d, data, roster.faction_id),
   );
 
   return { roster: { ...roster, units, detachments }, roleHints, attachmentSeeds };
+}
+
+/**
+ * Attachments are declared at list build, so a fed list implies them even when
+ * the markers are anonymous ("Leader (Character)" / "Bodyguard ()"). Match
+ * leader-marked characters to bodyguard-marked units using the dataset's
+ * leader-eligibility links, pairing whenever a pairing is forced: a bodyguard
+ * with exactly one eligible leader, or a leader with exactly one eligible
+ * bodyguard. Repeats until nothing new is forced; genuine ambiguities stay
+ * unmatched for the picker.
+ */
+function inferAttachments(
+  roster: Roster,
+  roleHints: RoleHints,
+  seeds: Record<string, number>,
+  data: Data40k,
+): void {
+  const claimedBodyguards = new Set(Object.values(seeds));
+  const leaders = roster.units
+    .map((u, index) => ({ u, index }))
+    .filter(({ index }) => {
+      const hint = roleHints[String(index)];
+      return (hint === "leader" || hint === "support") && seeds[String(index)] === undefined;
+    })
+    .map(({ u, index }) => ({
+      index,
+      eligible: u.ref.id
+        ? new Set(data.dataset.bodyguardsAttachableFrom(u.ref.id).map((v) => v.id))
+        : new Set<string>(),
+    }));
+  const bodyguards = roster.units
+    .map((u, index) => ({ u, index }))
+    .filter(
+      ({ index }) => roleHints[String(index)] === "bodyguard" && !claimedBodyguards.has(index),
+    );
+
+  const canLead = (l: (typeof leaders)[number], bIndex: number) => {
+    const id = roster.units[bIndex].ref.id;
+    return id != null && l.eligible.has(id);
+  };
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const openLeaders = leaders.filter((l) => seeds[String(l.index)] === undefined);
+    const openBodyguards = bodyguards.filter(({ index }) => !claimedBodyguards.has(index));
+
+    // Collect this round's forced proposals from both sides, then apply only
+    // the conflict-free ones — two squads both needing the same character
+    // means the input is ambiguous, not that the first one wins.
+    const proposals: { leader: number; bodyguard: number }[] = [];
+    for (const b of openBodyguards) {
+      const options = openLeaders.filter((l) => canLead(l, b.index));
+      if (options.length === 1) proposals.push({ leader: options[0].index, bodyguard: b.index });
+    }
+    for (const l of openLeaders) {
+      const options = openBodyguards.filter((b) => canLead(l, b.index));
+      if (options.length === 1) proposals.push({ leader: l.index, bodyguard: options[0].index });
+    }
+
+    const leaderUses = new Map<number, Set<number>>();
+    const bodyguardUses = new Map<number, Set<number>>();
+    for (const p of proposals) {
+      (leaderUses.get(p.leader) ?? leaderUses.set(p.leader, new Set()).get(p.leader)!).add(
+        p.bodyguard,
+      );
+      (
+        bodyguardUses.get(p.bodyguard) ??
+        bodyguardUses.set(p.bodyguard, new Set()).get(p.bodyguard)!
+      ).add(p.leader);
+    }
+    for (const p of proposals) {
+      if (leaderUses.get(p.leader)!.size !== 1 || bodyguardUses.get(p.bodyguard)!.size !== 1) {
+        continue;
+      }
+      if (seeds[String(p.leader)] !== undefined || claimedBodyguards.has(p.bodyguard)) continue;
+      seeds[String(p.leader)] = p.bodyguard;
+      claimedBodyguards.add(p.bodyguard);
+      changed = true;
+    }
+  }
 }

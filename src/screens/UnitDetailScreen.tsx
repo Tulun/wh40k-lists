@@ -248,8 +248,34 @@ function EnhancementCard({
 }
 
 /**
+ * Rules-relevant keywords — unit types and the hooks stratagems/abilities key
+ * off. These get full-strength chips; flavor keywords stay faint.
+ */
+const IMPORTANT_KEYWORDS = new Set([
+  "infantry",
+  "mounted",
+  "vehicle",
+  "monster",
+  "beast",
+  "swarm",
+  "character",
+  "epic hero",
+  "battleline",
+  "grenades",
+  "fly",
+  "psyker",
+  "aircraft",
+  "titanic",
+  "walker",
+  "transport",
+  "dedicated transport",
+  "fortification",
+  "smoke",
+]);
+
+/**
  * One glanceable chip row: core-ability tags (accent), role hints from the
- * import (blue), then datasheet keywords (dim).
+ * import (blue), important keywords (solid), then flavor keywords (faint).
  */
 function TagRow({
   list,
@@ -271,6 +297,9 @@ function TagRow({
     // The core "Leader" tag already covers the leader hint.
   ].filter((h) => !(h === "leader" && coreTags.includes("Leader")));
 
+  const important = keywords.filter((k) => IMPORTANT_KEYWORDS.has(k.toLowerCase()));
+  const flavor = keywords.filter((k) => !IMPORTANT_KEYWORDS.has(k.toLowerCase()));
+
   if (coreTags.length === 0 && hints.length === 0 && keywords.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -290,7 +319,15 @@ function TagRow({
           {ROLE_HINT_LABEL[h] ?? h}
         </span>
       ))}
-      {keywords.map((k) => (
+      {important.map((k) => (
+        <span
+          key={k}
+          className="rounded-full border border-edge bg-panel px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-ink"
+        >
+          {k}
+        </span>
+      ))}
+      {flavor.map((k) => (
         <span key={k} className="rounded-full bg-panel px-2 py-0.5 text-[11px] text-ink-faint">
           {k}
         </span>

@@ -111,6 +111,47 @@ describe("normalizeImportedRoster", () => {
     expect(attachmentSeeds).toEqual({ "0": 1 });
   });
 
+  it("infers anonymous-marker attachments from dataset leader eligibility", () => {
+    // Mozrog can only lead Squighog Boyz — one eligible squad forces the pair.
+    const r = roster({
+      units: [
+        unit({
+          ref: { ...resolved("mozrog-skragbad"), raw_name: "Mozrog Skragbad" },
+          wargear: [{ ref: unresolved("Leader (Character)"), count: 1 }],
+        }),
+        unit({ ref: resolved("boyz"), wargear: [{ ref: unresolved("Bodyguard ()"), count: 1 }] }),
+        unit({
+          ref: { ...resolved("squighog-boyz"), raw_name: "Squighog Boyz" },
+          wargear: [{ ref: unresolved("Bodyguard ()"), count: 1 }],
+        }),
+      ],
+    });
+    const { attachmentSeeds } = normalizeImportedRoster(r, data40k);
+    expect(attachmentSeeds["0"]).toBe(2); // Mozrog → Squighog Boyz, not plain Boyz
+  });
+
+  it("leaves genuinely ambiguous attachments unmatched", () => {
+    // Two identical bodyguard-marked squads: no forced pairing.
+    const r = roster({
+      units: [
+        unit({
+          ref: { ...resolved("mozrog-skragbad"), raw_name: "Mozrog Skragbad" },
+          wargear: [{ ref: unresolved("Leader (Character)"), count: 1 }],
+        }),
+        unit({
+          ref: { ...resolved("squighog-boyz"), raw_name: "Squighog Boyz" },
+          wargear: [{ ref: unresolved("Bodyguard ()"), count: 1 }],
+        }),
+        unit({
+          ref: { ...resolved("squighog-boyz"), raw_name: "Squighog Boyz" },
+          wargear: [{ ref: unresolved("Bodyguard ()"), count: 1 }],
+        }),
+      ],
+    });
+    const { attachmentSeeds } = normalizeImportedRoster(r, data40k);
+    expect(attachmentSeeds).toEqual({});
+  });
+
   it("splits 11e dual-detachment headers and resolves both parts", () => {
     const r = roster({
       detachments: [
