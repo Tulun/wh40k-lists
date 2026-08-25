@@ -44,6 +44,7 @@ export default function DatasheetScreen() {
     totalCount: 0,
     perInstance: [],
     universal: true,
+    carrierModels: [],
   }));
   const leaders = data.dataset.leadersAttachableTo(unit.id);
   const bodyguards = data.dataset.bodyguardsAttachableFrom(unit.id);

@@ -178,6 +178,15 @@ function Count({ merged, tag }: { merged: MergedWeapon; tag: string | null }) {
       {merged.totalCount > 0 && (
         <span className="ml-1 text-xs text-ink-faint">×{merged.totalCount}</span>
       )}
+      {merged.carrierModels.map((m) => (
+        <span
+          key={m}
+          className="ml-1 rounded bg-mine/15 px-1 py-px text-[10px] text-mine"
+          title="Carried by this model"
+        >
+          {m}
+        </span>
+      ))}
       {tag && (
         <span className="ml-1 rounded bg-accent/15 px-1 py-px text-[10px] text-accent">
           {tag}

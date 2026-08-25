@@ -117,6 +117,40 @@ describe("dedupeRoster", () => {
     expect(dedupeRoster(r)).toHaveLength(1);
   });
 
+  it("tags weapons carried only by a specific model type", () => {
+    const gear = (id: string, count: number) => ({ ref: ref(id), count });
+    const groups = [
+      { model_name: "Squighog Boy", count: 4, wargear: [gear("stikka", 1), gear("squig-jaws", 1)] },
+      {
+        model_name: "Nob on Smasha Squig",
+        count: 1,
+        wargear: [gear("big-choppa", 1), gear("squig-jaws", 1)],
+      },
+    ];
+    const r = roster([
+      unit({
+        ref: ref("squighog-boyz"),
+        model_count: 5,
+        wargear: [gear("stikka", 4), gear("big-choppa", 1), gear("squig-jaws", 5)],
+        loadout_groups: groups,
+      }),
+      unit({
+        ref: ref("squighog-boyz"),
+        model_count: 5,
+        wargear: [gear("stikka", 4), gear("big-choppa", 1), gear("squig-jaws", 5)],
+        loadout_groups: groups,
+      }),
+    ]);
+
+    const [entry] = dedupeRoster(r);
+    const bigChoppa = entry.mergedWargear.find((w) => w.ref.id === "big-choppa")!;
+    expect(bigChoppa.carrierModels).toEqual(["Nob on Smasha Squig"]);
+    const stikka = entry.mergedWargear.find((w) => w.ref.id === "stikka")!;
+    expect(stikka.carrierModels).toEqual(["Squighog Boy"]);
+    const jaws = entry.mergedWargear.find((w) => w.ref.id === "squig-jaws")!;
+    expect(jaws.carrierModels).toEqual([]); // everyone carries it — no tag
+  });
+
   it("preserves warlord and leader attachment through the merge", () => {
     const r = roster([
       unit({ ref: ref("boyz") }),

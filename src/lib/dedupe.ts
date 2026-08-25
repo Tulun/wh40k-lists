@@ -33,6 +33,12 @@ export interface MergedWeapon {
   perInstance: number[];
   /** True when every instance carries the same non-zero count. */
   universal: boolean;
+  /**
+   * Model types that carry this weapon, when the import decomposed loadouts
+   * per model AND only some model types carry it ("Nob on Smasha Squig").
+   * Empty when carried squad-wide or when no loadout breakdown exists.
+   */
+  carrierModels: string[];
 }
 
 export interface DisplayEntry {
@@ -73,6 +79,8 @@ function wargearKey(ref: ResolvedRef): string {
 export function dedupeRoster(roster: Roster): DisplayEntry[] {
   const entries = new Map<string, DisplayEntry>();
   const gearByEntry = new Map<string, Map<string, MergedWeapon>>();
+  // Per entry: model name → weapon keys it carries, from loadout_groups.
+  const carriersByEntry = new Map<string, Map<string, Set<string>>>();
 
   roster.units.forEach((unit, rosterIndex) => {
     const key = unitKey(unit);
@@ -92,6 +100,7 @@ export function dedupeRoster(roster: Roster): DisplayEntry[] {
       };
       entries.set(key, entry);
       gearByEntry.set(key, new Map());
+      carriersByEntry.set(key, new Map());
     }
 
     const instanceIndex = entry.instances.length;
@@ -114,7 +123,7 @@ export function dedupeRoster(roster: Roster): DisplayEntry[] {
       const gKey = wargearKey(item.ref);
       let merged = gear.get(gKey);
       if (!merged) {
-        merged = { ref: item.ref, totalCount: 0, perInstance: [], universal: false };
+        merged = { ref: item.ref, totalCount: 0, perInstance: [], universal: false, carrierModels: [] };
         gear.set(gKey, merged);
       }
       // Pad up to the current instance, then add this instance's count.
@@ -123,15 +132,38 @@ export function dedupeRoster(roster: Roster): DisplayEntry[] {
       merged.perInstance[instanceIndex] += item.count;
       merged.totalCount += item.count;
     }
+
+    const carriers = carriersByEntry.get(key)!;
+    for (const group of unit.loadout_groups ?? []) {
+      if (!group.model_name) continue;
+      let carried = carriers.get(group.model_name);
+      if (!carried) {
+        carried = new Set();
+        carriers.set(group.model_name, carried);
+      }
+      for (const item of group.wargear) carried.add(wargearKey(item.ref));
+    }
   });
 
   for (const entry of entries.values()) {
     const gear = gearByEntry.get(entry.key)!;
-    for (const merged of gear.values()) {
+    const carriers = carriersByEntry.get(entry.key)!;
+    const modelTypeCount = carriers.size;
+    for (const [gKey, merged] of gear) {
       while (merged.perInstance.length < entry.count) merged.perInstance.push(0);
       merged.universal = merged.perInstance.every(
         (n) => n === merged.perInstance[0] && n > 0,
       );
+      // Tag the weapon with its carrier model(s) only when carried by a strict
+      // subset of the unit's model types ("Big choppa — Nob on Smasha Squig").
+      if (modelTypeCount > 1) {
+        const carrying = [...carriers.entries()]
+          .filter(([, keys]) => keys.has(gKey))
+          .map(([name]) => name);
+        if (carrying.length > 0 && carrying.length < modelTypeCount) {
+          merged.carrierModels = carrying.sort();
+        }
+      }
       entry.mergedWargear.push(merged);
     }
   }
