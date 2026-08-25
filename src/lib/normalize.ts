@@ -254,6 +254,14 @@ export function normalizeImportedRoster(
     modelNames.add(nn(unit.ref.raw_name).replace(/e?s$/, ""));
     const unitWeapons = view ? view.weapons.map((w) => ({ id: w.id, name: w.name })) : [];
 
+    // Since 40kdc-data 1.2.x the importer parses "Attached as:" lines itself
+    // into unit.leader_attachment. Adopt its role, but keep our own raw-text
+    // group pairing for the seeds — the upstream bodyguard guess is
+    // provisional and loses to the export's explicit group nesting.
+    if (unit.leader_attachment?.role) {
+      roleHints[String(index)] = unit.leader_attachment.role;
+    }
+
     let isWarlord = unit.is_warlord;
     const wargear: typeof unit.wargear = [];
     for (const item of unit.wargear) {
