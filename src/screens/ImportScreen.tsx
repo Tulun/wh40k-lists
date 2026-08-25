@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ImportResult, Roster } from "@alpaca-software/40kdc-data";
 import CandidatePicker from "../components/CandidatePicker";
-import { load40k, type Data40k } from "../lib/data";
+import { loadMergedData, type Data40k } from "../lib/data";
+import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
 import { normalizeImportedRoster, type RoleHints } from "../lib/normalize";
 import { applyOverrides, collectUnresolved, type Overrides } from "../lib/overrides";
 import { useLists } from "../store/lists";
@@ -49,7 +50,7 @@ export default function ImportScreen() {
     setBusy(true);
     setError(null);
     try {
-      const data = await load40k();
+      const data = await loadMergedData();
       const result: ImportResult = data.tryImportRoster(text);
       if (!result.ok) {
         setError(
@@ -191,13 +192,15 @@ export default function ImportScreen() {
           placeholder="List name"
           className="w-full rounded-md border border-edge bg-panel px-3 py-2 text-sm"
         />
-        <div className="grid grid-cols-3 gap-2">
+        <div className={`grid gap-2 ${OPPONENT_SLOT_ENABLED ? "grid-cols-3" : "grid-cols-2"}`}>
           <button type="button" onClick={() => save("mine")} className="rounded-md bg-mine/20 py-2.5 text-sm font-semibold text-mine">
             Save as mine
           </button>
-          <button type="button" onClick={() => save("opponent")} className="rounded-md bg-opponent/20 py-2.5 text-sm font-semibold text-opponent">
-            Save as opponent
-          </button>
+          {OPPONENT_SLOT_ENABLED && (
+            <button type="button" onClick={() => save("opponent")} className="rounded-md bg-opponent/20 py-2.5 text-sm font-semibold text-opponent">
+              Save as opponent
+            </button>
+          )}
           <button type="button" onClick={() => save(null)} className="rounded-md bg-panel py-2.5 text-sm font-semibold text-ink-dim">
             Just save
           </button>

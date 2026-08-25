@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
+import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
 import { useLists } from "../store/lists";
 import type { SavedList, Slot } from "../store/schema";
 
@@ -86,17 +87,19 @@ export default function ListsScreen() {
               >
                 {slots.mine === list.id ? "✓ Mine" : "Use as mine"}
               </button>
-              <button
-                type="button"
-                onClick={() => use("opponent", list.id)}
-                className={`flex-1 rounded-md py-1.5 text-xs font-semibold ${
-                  slots.opponent === list.id
-                    ? "bg-opponent/30 text-opponent"
-                    : "bg-panel text-ink-dim"
-                }`}
-              >
-                {slots.opponent === list.id ? "✓ Opponent" : "Use as opponent"}
-              </button>
+              {OPPONENT_SLOT_ENABLED && (
+                <button
+                  type="button"
+                  onClick={() => use("opponent", list.id)}
+                  className={`flex-1 rounded-md py-1.5 text-xs font-semibold ${
+                    slots.opponent === list.id
+                      ? "bg-opponent/30 text-opponent"
+                      : "bg-panel text-ink-dim"
+                  }`}
+                >
+                  {slots.opponent === list.id ? "✓ Opponent" : "Use as opponent"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

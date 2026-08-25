@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Stratagem } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "../lib/data";
-import { dekebabLabel } from "../lib/describe";
+import { abilityText, dekebabLabel } from "../lib/describe";
 import { byId } from "../lib/lookup";
 import { useLists } from "../store/lists";
 
@@ -27,7 +27,7 @@ export default function StratagemCard({ data, stratagem, factionId, listId }: Pr
   const [editing, setEditing] = useState(false);
 
   const ability = byId(data.abilities, stratagem.ability_id, factionId);
-  const text = ability?.describe() ?? null;
+  const text = ability ? abilityText(ability) : null;
   const tr = stratagem.target_restrictions;
   const lookupUrl = `https://www.google.com/search?q=${encodeURIComponent(
     `40k stratagem "${stratagem.name}"`,

@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { MicroStats } from "../components/StatLine";
 import { useDataset } from "../hooks/useDataset";
-import { fnpFromAbilityNames } from "../lib/describe";
+import { DISPOSITIONS } from "../lib/codex-model";
+import { abilityText, fnpFromAbilityNames } from "../lib/describe";
 import { byId } from "../lib/lookup";
+import { codexBadge, useCodex } from "../store/codex";
 
 const ROLE_ORDER: [string, string][] = [
   ["epic-hero", "Epic Heroes"],
@@ -18,6 +20,7 @@ const ROLE_ORDER: [string, string][] = [
 export default function FactionScreen() {
   const { factionId } = useParams();
   const data = useDataset();
+  const doc = useCodex((s) => s.doc);
   const [query, setQuery] = useState("");
 
   if (!data) {
@@ -51,15 +54,36 @@ export default function FactionScreen() {
   })).filter((g) => g.units.length > 0);
 
   const detachments = data.detachments.byFaction(factionId);
+  const armyRuleId = faction.raw.faction_rule_id;
+  const armyRule = armyRuleId ? byId(data.abilities, armyRuleId, factionId) : undefined;
 
   return (
     <div className="space-y-3">
       <div className="flex items-baseline gap-2">
         <h1 className="flex-1 text-lg font-bold">{faction.name}</h1>
+        {codexBadge(doc, factionId) && (
+          <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent">
+            {codexBadge(doc, factionId) === "replace" ? "Leaked codex" : "Edited"}
+          </span>
+        )}
+        <Link to={`/editor/${factionId}`} className="text-xs text-accent underline">
+          edit
+        </Link>
         <Link to="/explore" className="text-xs text-ink-faint underline">
           all factions
         </Link>
       </div>
+
+      {armyRule && (
+        <details className="rounded-md border border-edge">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">
+            Army rule <span className="text-xs font-normal text-ink-faint">· {armyRule.name}</span>
+          </summary>
+          <p className="mt-1 whitespace-pre-wrap px-3 pb-2 text-sm leading-snug">
+            {abilityText(armyRule)}
+          </p>
+        </details>
+      )}
 
       {detachments.length > 0 && (
         <details className="rounded-md border border-edge">
@@ -81,6 +105,13 @@ export default function FactionScreen() {
                       <span className="ml-1 text-xs text-ink-faint">· {d.detachment_points} DP</span>
                     )}
                   </div>
+                  {(d.force_dispositions?.length ?? 0) > 0 && (
+                    <div className="text-xs text-ink-faint">
+                      {d.force_dispositions!
+                        .map((id) => DISPOSITIONS.find((x) => x.id === id)?.label ?? id)
+                        .join(" · ")}
+                    </div>
+                  )}
                   {ruleIds.map((id) => {
                     const ability = byId(data.abilities, id, factionId);
                     if (!ability) return null;
@@ -90,7 +121,7 @@ export default function FactionScreen() {
                           {ability.name}
                         </summary>
                         <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">
-                          {ability.describe()}
+                          {abilityText(ability)}
                         </p>
                       </details>
                     );

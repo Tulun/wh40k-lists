@@ -7,6 +7,7 @@ import StatLine from "../components/StatLine";
 import WeaponTable from "../components/WeaponTable";
 import { useDataset } from "../hooks/useDataset";
 import type { MergedWeapon } from "../lib/dedupe";
+import { abilityText } from "../lib/describe";
 
 const ref = (id: string, name: string): ResolvedRef => ({
   id,
@@ -61,9 +62,16 @@ export default function DatasheetScreen() {
           ←
         </Link>
         <h1 className="min-w-0 flex-1 truncate text-base font-bold leading-tight">{unit.name}</h1>
-        <span className="shrink-0 pr-2 text-xs text-ink-dim">
+        <span className="shrink-0 text-xs text-ink-dim">
           {(raw.points ?? []).map((p) => `${p.models ?? "?"}× ${p.cost}pts`).join(" · ")}
         </span>
+        <Link
+          to={`/editor/${factionId}/datasheet/${unit.id}`}
+          aria-label="Edit this datasheet"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-sm text-accent active:bg-panel"
+        >
+          ✎
+        </Link>
       </div>
 
       <div className="space-y-2">
@@ -93,7 +101,7 @@ export default function DatasheetScreen() {
               <AbilityBlock
                 key={a.id}
                 name={a.name}
-                text={a.describe()}
+                text={abilityText(a)}
                 provisional={isProvisional(a.raw.game_version?.dataslate)}
               />
             ))}

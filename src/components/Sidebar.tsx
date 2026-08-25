@@ -7,6 +7,7 @@ const LINKS = [
   { to: "/lists", label: "Saved lists", icon: "☰" },
   { to: "/import", label: "Import a list", icon: "＋" },
   { to: "/explore", label: "Explore factions", icon: "🔍" },
+  { to: "/editor", label: "Codex editor", icon: "✎" },
 ];
 
 export default function Sidebar() {

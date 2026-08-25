@@ -1,0 +1,329 @@
+/**
+ * Compiles the human-shaped editable model (codex-model.ts) into the data
+ * package's normalized record shapes, ready for the merge layer.
+ *
+ * Ability prose: the package's ability DSL has no free-text node, so every
+ * compiled ability carries a placeholder structured effect plus the real
+ * (paraphrased) text in the non-schema `leak_text` field, which `abilityText`
+ * in describe.ts prefers at render time. The `leak-provisional` dataslate
+ * makes the existing ⚠ provisional badge fire on everything hand-authored.
+ *
+ * Only types are imported from the package; the caller supplies whatever
+ * runtime values are needed (the known weapon-keyword catalog ids).
+ */
+import type {
+  AbilityDSLEntry,
+  Detachment,
+  Enhancement,
+  Faction,
+  LeaderAttachment,
+  Stratagem,
+  Unit,
+  Weapon,
+  WeaponKeyword,
+} from "@alpaca-software/40kdc-data";
+import type {
+  EditableDatasheet,
+  EditableDetachment,
+  EditableWeapon,
+  PatchFaction,
+  ReplaceFaction,
+} from "./codex-model";
+import { slugify } from "./codex-model";
+
+export const CODEX_GAME_VERSION = { edition: "11th", dataslate: "leak-provisional" } as const;
+type GV = Unit["game_version"];
+const GV_REF = CODEX_GAME_VERSION as unknown as GV;
+
+export type CompiledAbility = AbilityDSLEntry & { leak_text: string };
+
+/** Everything one compiled faction (or patch set) contributes to the dataset. */
+export interface CompiledRecords {
+  factionId: string;
+  faction: Faction | null;
+  units: Unit[];
+  weapons: Weapon[];
+  abilities: CompiledAbility[];
+  detachments: Detachment[];
+  enhancements: Enhancement[];
+  stratagems: Stratagem[];
+  leaderAttachments: LeaderAttachment[];
+  /** Ad-hoc catalog entries for hand-typed weapon keywords unknown upstream. */
+  weaponKeywords: WeaponKeyword[];
+}
+
+/**
+ * Parse a display keyword string back into a catalog reference.
+ * "Sustained Hits 1" → sustained-hits {value: 1}
+ * "Anti-Vehicle 4+"  → anti {target_keyword: "Vehicle", threshold: 4}
+ * "Hazardous"        → hazardous
+ * "Melta 2"          → melta {value: 2}
+ */
+export function parseWeaponKeyword(display: string): {
+  keyword_id: string;
+  name: string;
+  parameters?: { value?: number | string; target_keyword?: string; threshold?: number };
+} {
+  const trimmed = display.trim();
+  const anti = /^anti[- ](.+?)\s+(\d)\+$/i.exec(trimmed);
+  if (anti) {
+    return {
+      keyword_id: "anti",
+      name: "Anti",
+      parameters: { target_keyword: anti[1], threshold: Number(anti[2]) },
+    };
+  }
+  const threshold = /^(.*\S)\s+(\d)\+$/.exec(trimmed);
+  if (threshold) {
+    return {
+      keyword_id: slugify(threshold[1]),
+      name: threshold[1],
+      parameters: { threshold: Number(threshold[2]) },
+    };
+  }
+  const value = /^(.*\S)\s+(\d+|D\d+(?:\+\d+)?)$/i.exec(trimmed);
+  if (value) {
+    const n = /^\d+$/.test(value[2]) ? Number(value[2]) : value[2];
+    return { keyword_id: slugify(value[1]), name: value[1], parameters: { value: n } };
+  }
+  return { keyword_id: slugify(trimmed), name: trimmed };
+}
+
+function abilityRecord(
+  abilityId: string,
+  name: string,
+  text: string,
+  abilityType: NonNullable<AbilityDSLEntry["ability_type"]>,
+  linkage: Partial<Pick<AbilityDSLEntry, "faction_id" | "detachment_id" | "unit_ids">> = {},
+): CompiledAbility {
+  return {
+    ability_id: abilityId,
+    name,
+    authored_by: "codex-editor",
+    ability_type: abilityType,
+    effect: { type: "rule-state", target: "self" } as AbilityDSLEntry["effect"],
+    scope: { range: "self", duration: "permanent" },
+    game_version: GV_REF,
+    leak_text: text,
+    ...linkage,
+  };
+}
+
+function compileWeapon(unitId: string, weapon: EditableWeapon, out: CompiledRecords): string {
+  const id = `${unitId}--${slugify(weapon.name)}`;
+  const knownNames = new Map<string, string>();
+  const profiles = weapon.profiles.map((p) => {
+    const stats: Record<string, number | string | null> = {
+      A: p.A,
+      S: p.S,
+      AP: p.AP,
+      D: p.D,
+    };
+    if (weapon.type === "melee") stats.WS = p.skill;
+    else stats.BS = p.skill;
+    return {
+      name: p.name ?? weapon.name,
+      range: weapon.type === "melee" ? ("Melee" as const) : p.range,
+      stats,
+      keywords: p.keywords
+        .filter((k) => k.trim())
+        .map((display) => {
+          const parsed = parseWeaponKeyword(display);
+          knownNames.set(parsed.keyword_id, parsed.name);
+          return { keyword_id: parsed.keyword_id, parameters: parsed.parameters };
+        }),
+    };
+  });
+  out.weapons.push({
+    id,
+    name: weapon.name,
+    type: weapon.type,
+    profiles: profiles as Weapon["profiles"],
+    game_version: GV_REF,
+  });
+  for (const [keywordId, name] of knownNames) {
+    out.weaponKeywords.push({ id: keywordId, name, game_version: GV_REF } as WeaponKeyword);
+  }
+  return id;
+}
+
+function compileDatasheet(factionId: string, sheet: EditableDatasheet, out: CompiledRecords): void {
+  const weaponIds = sheet.weapons.map((w) => compileWeapon(sheet.id, w, out));
+  const abilityIds = sheet.abilities.map((a) => {
+    const id = `${sheet.id}--${slugify(a.name)}`;
+    out.abilities.push(
+      abilityRecord(id, a.name, a.text, a.core ? "core" : "unit", { unit_ids: [sheet.id] }),
+    );
+    return id;
+  });
+  const models = sheet.points.map((p) => p.models);
+  out.units.push({
+    id: sheet.id,
+    name: sheet.name,
+    faction_id: factionId,
+    ...(sheet.role ? { role: sheet.role as Unit["role"] } : {}),
+    profiles: sheet.profiles.map((p) => ({
+      ...(p.name ? { name: p.name } : {}),
+      M: p.M,
+      T: p.T,
+      W: p.W,
+      Sv: p.Sv,
+      invuln_sv: p.invuln ?? null,
+      Ld: p.Ld,
+      OC: p.OC,
+    })) as Unit["profiles"],
+    points: sheet.points.map((p) => ({ models: p.models, cost: p.cost })),
+    keywords: sheet.keywords,
+    faction_keywords: sheet.factionKeywords,
+    ...(models.length > 0
+      ? { model_count: { min: Math.min(...models), max: Math.max(...models) } }
+      : {}),
+    weapon_ids: weaponIds,
+    ability_ids: abilityIds,
+    game_version: GV_REF,
+  });
+  if (sheet.leads.length > 0) {
+    out.leaderAttachments.push({
+      leader_id: sheet.id,
+      eligible_bodyguard_ids: sheet.leads as LeaderAttachment["eligible_bodyguard_ids"],
+      game_version: GV_REF,
+    });
+  }
+}
+
+function compileDetachment(factionId: string, det: EditableDetachment, out: CompiledRecords): void {
+  const ruleIds: string[] = [];
+  if (det.ruleName.trim() || det.ruleText.trim()) {
+    const ruleId = `${det.id}--rule`;
+    out.abilities.push(
+      abilityRecord(ruleId, det.ruleName.trim() || det.name, det.ruleText, "detachment", {
+        detachment_id: det.id,
+      }),
+    );
+    ruleIds.push(ruleId);
+  }
+  for (const enh of det.enhancements) {
+    const abilityId = `${enh.id}--rule`;
+    out.abilities.push(
+      abilityRecord(abilityId, enh.name, enh.text, "enhancement", { detachment_id: det.id }),
+    );
+    out.enhancements.push({
+      id: enh.id,
+      name: enh.name,
+      detachment_id: det.id,
+      cost: enh.cost,
+      ability_id: abilityId,
+      ...(enh.restrictions.length > 0 ? { keyword_restrictions: enh.restrictions } : {}),
+      game_version: GV_REF,
+    });
+  }
+  for (const strat of det.stratagems) {
+    const abilityId = `${strat.id}--rule`;
+    out.abilities.push(
+      abilityRecord(abilityId, strat.name, strat.text, "stratagem", { detachment_id: det.id }),
+    );
+    out.stratagems.push({
+      id: strat.id,
+      name: strat.name,
+      category: "detachment",
+      detachment_id: det.id,
+      cp_cost: strat.cpCost,
+      phases: strat.phases as Stratagem["phases"],
+      player_turn: strat.playerTurn,
+      timing: strat.timing,
+      ability_id: abilityId,
+      ...(strat.requiredKeywords.length > 0
+        ? { target_restrictions: { required_keywords: strat.requiredKeywords } }
+        : {}),
+      game_version: GV_REF,
+    });
+  }
+  out.detachments.push({
+    id: det.id,
+    name: det.name,
+    faction_id: factionId,
+    ...(ruleIds.length > 0 ? { detachment_rule_ids: ruleIds } : {}),
+    // Older docs predate these fields — tolerate their absence.
+    detachment_points: det.points ?? null,
+    ...(det.dispositions?.length
+      ? { force_dispositions: det.dispositions as Detachment["force_dispositions"] }
+      : {}),
+    enhancement_ids: det.enhancements.map((e) => e.id),
+    stratagem_ids: det.stratagems.map((s) => s.id),
+    game_version: GV_REF,
+  });
+}
+
+function emptyCompiled(factionId: string): CompiledRecords {
+  return {
+    factionId,
+    faction: null,
+    units: [],
+    weapons: [],
+    abilities: [],
+    detachments: [],
+    enhancements: [],
+    stratagems: [],
+    leaderAttachments: [],
+    weaponKeywords: [],
+  };
+}
+
+/**
+ * A "replace"-mode faction: the whole hand-authored codex. `fallbackName`
+ * (the upstream faction's display name) is used when the entry carries no
+ * real name of its own — entries created lazily by the store get the faction
+ * id as a placeholder.
+ */
+export function compileFaction(
+  factionId: string,
+  entry: ReplaceFaction,
+  fallbackName?: string,
+): CompiledRecords {
+  const out = emptyCompiled(factionId);
+  const name = entry.name && entry.name !== factionId ? entry.name : (fallbackName ?? entry.name);
+  const factionRuleId = entry.armyRule ? `${factionId}--army-rule` : null;
+  if (entry.armyRule && factionRuleId) {
+    out.abilities.push(
+      abilityRecord(factionRuleId, entry.armyRule.name, entry.armyRule.text, "faction", {
+        faction_id: factionId,
+      }),
+    );
+  }
+  out.faction = {
+    id: factionId,
+    name,
+    keywords: [name],
+    ...(factionRuleId ? { faction_rule_id: factionRuleId } : {}),
+    game_version: GV_REF,
+  };
+  for (const sheet of entry.datasheets) compileDatasheet(factionId, sheet, out);
+  for (const det of entry.detachments) compileDetachment(factionId, det, out);
+  return out;
+}
+
+/**
+ * A "patch"-mode faction: full replacement records for just the edited ids.
+ * Compiled exactly like replace-mode entities (weapons/abilities become new
+ * unit-scoped records) but keeping the upstream ids, so the merge can swap
+ * records in place and saved lists keep resolving.
+ */
+export function compilePatches(factionId: string, entry: PatchFaction): CompiledRecords {
+  const out = emptyCompiled(factionId);
+  for (const sheet of Object.values(entry.datasheets)) compileDatasheet(factionId, sheet, out);
+  for (const det of Object.values(entry.detachments)) compileDetachment(factionId, det, out);
+  return out;
+}
+
+/** Drop ad-hoc weapon-keyword records whose id already exists upstream. */
+export function dedupeWeaponKeywords(
+  compiled: CompiledRecords,
+  knownIds: ReadonlySet<string>,
+): void {
+  const seen = new Set<string>(knownIds);
+  compiled.weaponKeywords = compiled.weaponKeywords.filter((k) => {
+    if (seen.has(k.id)) return false;
+    seen.add(k.id);
+    return true;
+  });
+}

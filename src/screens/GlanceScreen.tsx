@@ -6,7 +6,7 @@ import { MicroStats } from "../components/StatLine";
 import { useDataset } from "../hooks/useDataset";
 import type { Data40k } from "../lib/data";
 import { dedupeRoster, type DisplayEntry } from "../lib/dedupe";
-import { fnpFromAbilityNames } from "../lib/describe";
+import { abilityText, fnpFromAbilityNames } from "../lib/describe";
 import { byId } from "../lib/lookup";
 import { armyStratagems, sortStratagems } from "../lib/stratagems";
 import { useActiveList, useLists } from "../store/lists";
@@ -188,7 +188,7 @@ function ArmyHeader({ data, roster }: { data: Data40k | null; roster: import("@a
                       {ability.name}
                     </summary>
                     <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">
-                      {ability.describe()}
+                      {abilityText(ability)}
                     </p>
                   </details>
                 );

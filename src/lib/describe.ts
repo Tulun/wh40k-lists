@@ -40,6 +40,15 @@ export function formatSave(sv: number | null | undefined, invuln = false): strin
   return `${sv}+${invuln ? "+" : ""}`;
 }
 
+/**
+ * Display text for an ability: overlay-authored `leak_text` prose wins over
+ * the DSL renderer (overlay records carry only a placeholder effect).
+ */
+export function abilityText(ability: { describe(): string; raw: unknown }): string {
+  const leak = (ability.raw as { leak_text?: unknown }).leak_text;
+  return typeof leak === "string" && leak.length > 0 ? leak : ability.describe();
+}
+
 /** "Feel No Pain 5+" among ability names → "FNP 5+" for micro-statlines. */
 export function fnpFromAbilityNames(names: readonly string[]): string | null {
   for (const name of names) {

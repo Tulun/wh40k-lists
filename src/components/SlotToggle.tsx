@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
 import { useLists } from "../store/lists";
 import type { Slot } from "../store/schema";
 
@@ -14,6 +16,13 @@ export default function SlotToggle() {
   const lists = useLists((s) => s.lists);
   const navigate = useNavigate();
   const { pathname } = useLocation();
+
+  // With the opponent slot hidden there's nothing to toggle; make sure a
+  // persisted "opponent" selection can't strand the user on an unreachable slot.
+  useEffect(() => {
+    if (!OPPONENT_SLOT_ENABLED && activeSlot !== "mine") setActiveSlot("mine");
+  }, [activeSlot, setActiveSlot]);
+  if (!OPPONENT_SLOT_ENABLED) return null;
 
   function pick(slot: Slot) {
     setActiveSlot(slot);

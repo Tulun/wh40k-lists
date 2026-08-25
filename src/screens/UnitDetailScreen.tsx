@@ -9,6 +9,7 @@ import WeaponTable from "../components/WeaponTable";
 import { useDataset } from "../hooks/useDataset";
 import { effectiveAttachments, leadersAttachedTo } from "../lib/attachments";
 import type { Data40k } from "../lib/data";
+import { abilityText } from "../lib/describe";
 import { dedupeRoster, type DisplayEntry } from "../lib/dedupe";
 import { byId } from "../lib/lookup";
 import { armyStratagems, sortStratagems, stratagemsForUnit } from "../lib/stratagems";
@@ -146,7 +147,7 @@ export default function UnitDetailScreen() {
               <AbilityBlock
                 key={a.id}
                 name={a.name}
-                text={a.describe()}
+                text={abilityText(a)}
                 provisional={isProvisional(a.raw.game_version?.dataslate)}
               />
             ))}
@@ -259,7 +260,7 @@ function EnhancementCard({
         {cost != null && <span className="text-xs text-ink-dim">{cost} pts</span>}
       </div>
       {ability ? (
-        <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">{ability.describe()}</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">{abilityText(ability)}</p>
       ) : (
         <p className="mt-1 text-xs italic text-ink-faint">
           Effect not in the dataset yet —{" "}
@@ -434,7 +435,7 @@ function AttachmentBlock({
               {view?.abilities.map((a) => (
                 <div key={a.id} className="mt-1.5">
                   <div className="text-[11px] font-semibold uppercase text-ink-dim">{a.name}</div>
-                  <p className="whitespace-pre-wrap text-sm leading-snug">{a.describe()}</p>
+                  <p className="whitespace-pre-wrap text-sm leading-snug">{abilityText(a)}</p>
                 </div>
               ))}
             </div>
