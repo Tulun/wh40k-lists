@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import * as data40k from "@alpaca-software/40kdc-data";
 import type { ResolvedRef, Roster, RosterUnit } from "@alpaca-software/40kdc-data";
-import { attachmentMarker, normalizeImportedRoster } from "../normalize";
+import {
+  attachmentMarker,
+  extractAttachedGroups,
+  normalizeImportedRoster,
+} from "../normalize";
 
 const resolved = (id: string): ResolvedRef => ({
   id,
@@ -240,6 +244,105 @@ describe("normalizeImportedRoster", () => {
     });
     const { roster: out } = normalizeImportedRoster(r, data40k);
     expect(out.detachments.map((d) => d.ref.id)).toEqual(["war-horde"]);
+  });
+
+  it("pairs GW-export 'Attached unit' groupings from the raw text", () => {
+    const rawText = `
+CHARACTERS
+
+Attached Unit 1
+Bannernob (60 pts)
+• 1x Choppa
+• 1x Shoota
+
+Boyz (75 pts)
+• 10x Choppa
+
+CHARACTERS
+
+Weirdboy (55 pts)
+• 1x Weirdboy staff
+`;
+    expect(extractAttachedGroups(rawText)).toEqual([["Bannernob", "Boyz"]]);
+
+    const r = roster({
+      units: [
+        unit({ ref: { ...resolved("bannernob"), raw_name: "Bannernob" } }),
+        unit({ ref: { ...resolved("boyz"), raw_name: "Boyz" }, model_count: 10 }),
+        unit({ ref: { ...resolved("weirdboy"), raw_name: "Weirdboy" } }),
+      ],
+    });
+    const { attachmentSeeds, roleHints } = normalizeImportedRoster(r, data40k, rawText);
+    expect(attachmentSeeds["0"]).toBe(1); // Bannernob → Boyz
+    expect(attachmentSeeds["2"]).toBeUndefined(); // Weirdboy stays solo
+    expect(roleHints["1"]).toBe("bodyguard");
+  });
+
+  it("pairs duplicate attached groups with distinct squads", () => {
+    const rawText = `
+Attached Unit 1
+Bannernob (60 pts)
+Boyz (75 pts)
+
+Attached Unit 2
+Bannernob (60 pts)
+Boyz (75 pts)
+`;
+    expect(extractAttachedGroups(rawText)).toEqual([
+      ["Bannernob", "Boyz"],
+      ["Bannernob", "Boyz"],
+    ]);
+    const r = roster({
+      units: [
+        unit({ ref: { ...resolved("bannernob"), raw_name: "Bannernob" } }),
+        unit({ ref: { ...resolved("boyz"), raw_name: "Boyz" }, model_count: 10 }),
+        unit({ ref: { ...resolved("bannernob"), raw_name: "Bannernob" } }),
+        unit({ ref: { ...resolved("boyz"), raw_name: "Boyz" }, model_count: 10 }),
+      ],
+    });
+    const { attachmentSeeds } = normalizeImportedRoster(r, data40k, rawText);
+    expect(attachmentSeeds).toEqual({ "0": 1, "2": 3 });
+  });
+
+  it("imports a full GW export with an attached grouping end to end", () => {
+    const text = `+++++++++++++++++++++++++++++++++++++++++++++++
++ FACTION KEYWORD: Xenos - Orks
++ DETACHMENT: War Horde
++ TOTAL ARMY POINTS: 265pts
++
++ NUMBER OF UNITS: 3
++++++++++++++++++++++++++++++++++++++++++++++++
+
+CHARACTERS
+
+Attached Unit 1
+Bannernob (60 pts)
+• 1x Choppa
+• 1x Shoota
+
+Boyz (75 pts)
+• 9x Boy
+    • 9x Choppa
+    • 9x Slugga
+• 1x Boss Nob
+    • 1x Power klaw
+    • 1x Slugga
+
+OTHER DATASHEETS
+
+Deff Dread (130 pts)
+• 2x Dread klaw
+• 2x Rokkit launcha
+• 1x Stompy feet
+`;
+    const result = data40k.tryImportRoster(text);
+    expect(result.ok, result.ok ? "" : result.message).toBe(true);
+    if (!result.ok) return;
+    const { attachmentSeeds } = normalizeImportedRoster(result.roster, data40k, text);
+    const bannernob = result.roster.units.findIndex((u) => u.ref.id === "bannernob");
+    const boyz = result.roster.units.findIndex((u) => u.ref.id === "boyz");
+    expect(bannernob).toBeGreaterThanOrEqual(0);
+    expect(attachmentSeeds[String(bannernob)]).toBe(boyz);
   });
 
   it("leaves unsplittable detachments untouched for the candidate picker", () => {

@@ -126,6 +126,37 @@ function fuzzyResolveUnitWeapon(
   return { ...ref, id: matches[0].id, resolved: true, candidates: [] };
 }
 
+const UNIT_HEADER = /^(.+?)\s*\((\d+)\s*(?:pts?|points)\)\s*$/i;
+const ALL_CAPS_SECTION = /^[A-Z][A-Z\s&'’!-]+$/;
+
+/**
+ * GW-app exports mark declared attachments by *grouping*: a header line
+ * mentioning "attached", then the character's block, then the unit's block.
+ * The 40kdc parser drops the header, so recover the pairing from the raw
+ * pasted text. Returns groups of unit-header names in source order.
+ */
+export function extractAttachedGroups(rawText: string): string[][] {
+  const lines = rawText.split(/\r?\n/).map((l) => l.trim());
+  const groups: string[][] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isGroupHeader =
+      /\battached\b/i.test(line) && !UNIT_HEADER.test(line) && !line.startsWith("•");
+    if (!isGroupHeader) continue;
+    const names: string[] = [];
+    for (let j = i + 1; j < lines.length; j++) {
+      const l = lines[j];
+      if (!l) continue;
+      if (/\battached\b/i.test(l) && !UNIT_HEADER.test(l)) break;
+      if (ALL_CAPS_SECTION.test(l) && !UNIT_HEADER.test(l)) break;
+      const m = UNIT_HEADER.exec(l);
+      if (m) names.push(m[1].trim());
+    }
+    if (names.length >= 2) groups.push(names);
+  }
+  return groups;
+}
+
 export interface NormalizedImport {
   roster: Roster;
   roleHints: RoleHints;
@@ -133,7 +164,11 @@ export interface NormalizedImport {
   attachmentSeeds: Record<string, number>;
 }
 
-export function normalizeImportedRoster(roster: Roster, data: Data40k): NormalizedImport {
+export function normalizeImportedRoster(
+  roster: Roster,
+  data: Data40k,
+  rawText?: string,
+): NormalizedImport {
   const roleHints: RoleHints = {};
   const attachmentSeeds: Record<string, number> = {};
   const partnerByIndex: { index: number; role: RoleHint; partner: string }[] = [];
@@ -199,6 +234,9 @@ export function normalizeImportedRoster(roster: Roster, data: Data40k): Normaliz
     else attachmentSeeds[String(index)] = partnerIndex;
   }
 
+  if (rawText) {
+    seedFromAttachedGroups(rawText, roster, roleHints, attachmentSeeds, data);
+  }
   inferAttachments(roster, roleHints, attachmentSeeds, data);
 
   const detachments = roster.detachments.flatMap((d) =>
@@ -206,6 +244,56 @@ export function normalizeImportedRoster(roster: Roster, data: Data40k): Normaliz
   );
 
   return { roster: { ...roster, units, detachments }, roleHints, attachmentSeeds };
+}
+
+/**
+ * Turn "Attached unit" groupings from the raw export into attachment seeds.
+ * Within a group, every leading character attaches to the first non-character
+ * unit that follows it — the grouping is explicit, so no eligibility check.
+ */
+function seedFromAttachedGroups(
+  rawText: string,
+  roster: Roster,
+  roleHints: RoleHints,
+  seeds: Record<string, number>,
+  data: Data40k,
+): void {
+  const groups = extractAttachedGroups(rawText);
+  if (groups.length === 0) return;
+  const nn = data.normalizeName;
+  const claimed = new Set(Object.values(seeds));
+
+  const isCharacter = (index: number) => {
+    const unit = roster.units[index];
+    const view = unit.ref.resolved
+      ? data.resolveRosterUnit(unit, data.dataset, roster.faction_id)
+      : undefined;
+    return view ? view.raw.role === "character" || view.raw.role === "epic-hero" : false;
+  };
+  // Match group names to roster indices, consuming each index once so two
+  // identical groups ("Bannernob + Boyz" twice) pair with distinct squads.
+  const used = new Set<number>();
+  const findIndex = (name: string) =>
+    roster.units.findIndex(
+      (u, i) => !used.has(i) && nn(u.ref.raw_name) === nn(name),
+    );
+
+  for (const names of groups) {
+    const indices = names
+      .map(findIndex)
+      .filter((i) => i !== -1)
+      .map((i) => (used.add(i), i));
+    const bodyguardIndex = indices.find((i) => !isCharacter(i));
+    if (bodyguardIndex === undefined) continue;
+    roleHints[String(bodyguardIndex)] ??= "bodyguard";
+    for (const index of indices) {
+      if (index === bodyguardIndex || !isCharacter(index)) continue;
+      if (seeds[String(index)] !== undefined) continue;
+      seeds[String(index)] = bodyguardIndex;
+      claimed.add(bodyguardIndex);
+      roleHints[String(index)] ??= "leader";
+    }
+  }
 }
 
 /**

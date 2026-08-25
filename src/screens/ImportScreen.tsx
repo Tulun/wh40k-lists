@@ -57,7 +57,11 @@ export default function ImportScreen() {
         );
         return;
       }
-      const { roster, roleHints, attachmentSeeds } = normalizeImportedRoster(result.roster, data);
+      const { roster, roleHints, attachmentSeeds } = normalizeImportedRoster(
+        result.roster,
+        data,
+        text,
+      );
       setReview({ data, roster, roleHints, attachmentSeeds, rawText: text, format: result.format });
       setName(result.roster.name !== "Imported roster" ? result.roster.name : "");
       setOverrides({});
