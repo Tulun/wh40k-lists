@@ -9,6 +9,7 @@ import * as data40k from "@alpaca-software/40kdc-data";
 import {
   addDetachment,
   addUnit,
+  applyWargearOption,
   duplicateUnit,
   enhancementChoices,
   nextSize,
@@ -20,6 +21,7 @@ import {
   setWeaponCount,
   sizeRange,
   wargearCounts,
+  wargearOptionStates,
   type ListContent,
 } from "../list-edit";
 import { normalizeImportedRoster } from "../normalize";
@@ -248,6 +250,48 @@ describe("enhancements", () => {
     const withEnh = setEnhancement(data40k, content, 1, found.enh.id);
     const choices = enhancementChoices(data40k, withEnh.roster, 0);
     expect(choices.find((c) => c.id === found.enh.id)?.takenBy).toBe(1);
+  });
+});
+
+describe("wargear options (swaps)", () => {
+  // Stock Boyz author a Boss Nob big-choppa → power-klaw swap; the fixture
+  // squad took it (klaw 1, big choppa 0).
+  const i = indexOf(base, "boyz");
+  const unit = data40k.units.getInFaction("boyz", "orks")!.raw;
+
+  function klawState(content: ListContent) {
+    const states = wargearOptionStates(data40k, content.roster.units[i], unit);
+    const s = states.find((st) =>
+      st.branches.some((b) => b.ids.includes("power-klaw")),
+    )!;
+    return { s, branch: s.branches.findIndex((b) => b.ids.includes("power-klaw")) };
+  }
+
+  it("reads the taken swap out of the imported loadout", () => {
+    const { s, branch } = klawState(base);
+    expect(s.branches[branch].applied).toBe(1);
+    expect(s.cap).toBeGreaterThanOrEqual(1);
+    expect(s.option.replaces).toContain("big-choppa");
+  });
+
+  it("un-taking the swap returns the replaced weapon", () => {
+    const { s, branch } = klawState(base);
+    const next = applyWargearOption(data40k, base, i, s.option.id, branch, -1);
+    const counts = wargearCounts(next.roster.units[i]);
+    expect(counts.get("power-klaw") ?? 0).toBe(0);
+    expect(counts.get("big-choppa")).toBe(1);
+    // …and taking it again swaps back.
+    const again = applyWargearOption(data40k, next, i, s.option.id, branch, 1);
+    const counts2 = wargearCounts(again.roster.units[i]);
+    expect(counts2.get("power-klaw")).toBe(1);
+    expect(counts2.get("big-choppa") ?? 0).toBe(0);
+  });
+
+  it("refuses a swap when the replaced weapon isn't there", () => {
+    const { s, branch } = klawState(base);
+    // Already swapped: big choppa count is 0, so taking it again must refuse.
+    const refused = applyWargearOption(data40k, base, i, s.option.id, branch, 1);
+    expect(refused).toBe(base);
   });
 });
 

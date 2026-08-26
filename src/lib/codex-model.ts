@@ -57,6 +57,23 @@ export interface EditableAbility {
   core?: boolean;
 }
 
+/**
+ * One "WARGEAR OPTIONS" bullet from the datasheet, by weapon NAME (resolved to
+ * the sheet's own weapon ids at compile time): "This model's Dual Big Shoota
+ * can be replaced with 1 Rokkit Launcha" → replaces ["Dual Big Shoota"],
+ * choices [["Rokkit Launcha"]]. Two-plus choices = "one of the following".
+ */
+export interface EditableWargearOption {
+  /** Weapon names removed from the model taking the option; empty = pure add-on. */
+  replaces: string[];
+  /** Alternatives — each branch lists the weapon name(s) added together. */
+  choices: string[][];
+  /** How often the option may be taken across the unit. */
+  limit: { kind: "any" } | { kind: "count"; n: number } | { kind: "per-models"; n: number };
+  /** Restrict to one model type by name ("Boss Nob"); undefined = any model. */
+  modelName?: string;
+}
+
 export interface EditableDatasheet {
   /** Slug id. In patch mode this is the upstream unit id — never change it. */
   id: string;
@@ -67,6 +84,8 @@ export interface EditableDatasheet {
   factionKeywords: string[];
   points: { models: number; cost: number }[];
   weapons: EditableWeapon[];
+  /** Wargear-option bullets; absent on docs saved before the field existed. */
+  wargearOptions?: EditableWargearOption[];
   abilities: EditableAbility[];
   /** Datasheet ids this character can lead. */
   leads: string[];
@@ -211,6 +230,7 @@ export function seedDatasheetFromUpstream(view: UnitView, leads: string[] = []):
         keywords: w.keywordsAt(i).map((k) => weaponKeywordLabel(k.keyword.name, k.parameters)),
       })),
     })),
+    wargearOptions: seedWargearOptions(view),
     abilities: view.abilities.map((a) => ({
       name: a.name,
       text: abilityText(a),
@@ -218,6 +238,38 @@ export function seedDatasheetFromUpstream(view: UnitView, leads: string[] = []):
     })),
     leads,
   };
+}
+
+/**
+ * Upstream wargear-option records → name-based editable options, so a patched
+ * sheet's recompiled weapon ids resolve again. Options referencing weapons the
+ * unit doesn't list (shared-chassis oddities) are dropped.
+ */
+function seedWargearOptions(view: UnitView): EditableWargearOption[] {
+  const nameById = new Map(view.weapons.map((w) => [w.raw.id, w.name]));
+  const named = (ids: readonly string[]): string[] | null => {
+    const names = ids.map((id) => nameById.get(id));
+    return names.every((n): n is string => !!n) ? names : null;
+  };
+  const out: EditableWargearOption[] = [];
+  for (const o of view.wargearOptions) {
+    const replaces = named(o.replaces ?? []);
+    const branches = (o.replacement_choice ?? (o.replacement ? [o.replacement] : []))
+      .map((b) => named(b));
+    if (!replaces || branches.some((b) => !b) || branches.length === 0) continue;
+    const mc = o.model_constraint;
+    out.push({
+      replaces,
+      choices: branches as string[][],
+      limit: mc?.any_number
+        ? { kind: "any" }
+        : mc?.per_n_models
+          ? { kind: "per-models", n: mc.per_n_models }
+          : { kind: "count", n: mc?.max_count ?? 1 },
+      modelName: mc?.model_name || undefined,
+    });
+  }
+  return out;
 }
 
 /** Editable copy of an upstream detachment (rule + its enhancements/stratagems). */

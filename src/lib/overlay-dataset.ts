@@ -146,7 +146,10 @@ export function buildMergedRaw(base: RawData, compiled: CompiledRecords): RawDat
       ...compiled.leaderAttachments,
     ],
     unitCompositions: base.unitCompositions.filter((c) => c.faction_id !== factionId),
-    wargearOptions: base.wargearOptions.filter((w) => w.faction_id !== factionId),
+    wargearOptions: [
+      ...base.wargearOptions.filter((w) => w.faction_id !== factionId),
+      ...compiled.wargearOptions,
+    ],
     targetProfiles: base.targetProfiles.filter((t) => t.faction_id !== factionId),
     phaseMappings: base.phaseMappings.filter(
       (p) => !abilityIdsGone.has(p.source_id) && !removedStratagemIds.has(p.source_id),
@@ -203,6 +206,14 @@ export function applyRecordPatches(base: RawData, compiled: CompiledRecords): Ra
     leaderAttachments: [
       ...base.leaderAttachments.filter((l) => !patchedLeaderIds.has(l.leader_id)),
       ...compiled.leaderAttachments,
+    ],
+    // A patched unit's weapons get fresh `${unitId}--` ids, so its upstream
+    // options would dangle — swap them for the recompiled (seeded) ones.
+    wargearOptions: [
+      ...base.wargearOptions.filter(
+        (w) => !(w.faction_id === factionId && patchedUnitIds.has(w.unit_id)),
+      ),
+      ...compiled.wargearOptions,
     ],
     phaseMappings: base.phaseMappings.filter((p) => !removedStratagemIds.has(p.source_id)),
   };

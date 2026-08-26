@@ -275,6 +275,57 @@ describe("buildMergedRaw (replace mode)", () => {
   });
 });
 
+describe("wargear options", () => {
+  const dread: EditableDatasheet = {
+    ...NEW_SHEET,
+    id: "new-dread",
+    name: "New Dread",
+    role: "",
+    points: [{ models: 1, cost: 130 }],
+    weapons: [
+      { name: "Dual Big Shoota", type: "ranged", profiles: [{ range: 36, A: 6, skill: 5, S: 5, AP: 0, D: 1, keywords: [] }] },
+      { name: "Rokkit Launcha", type: "ranged", profiles: [{ range: 24, A: 2, skill: 5, S: 9, AP: -2, D: 3, keywords: [] }] },
+      { name: "Buzzsaw", type: "melee", profiles: [{ range: "Melee", A: 4, skill: 4, S: 9, AP: -2, D: 2, keywords: [] }] },
+      { name: "Grabbin' Klaw", type: "melee", profiles: [{ range: "Melee", A: 3, skill: 4, S: 10, AP: -2, D: 3, keywords: [] }] },
+    ],
+    wargearOptions: [
+      { replaces: ["Dual Big Shoota"], choices: [["Rokkit Launcha"]], limit: { kind: "count", n: 1 } },
+      { replaces: [], choices: [["Buzzsaw"], ["Grabbin' Klaw"]], limit: { kind: "count", n: 1 } },
+      { replaces: ["No Such Gun"], choices: [["Buzzsaw"]], limit: { kind: "any" } },
+    ],
+    abilities: [],
+    leads: [],
+  };
+  const compiled = compileFaction("orks", { ...REPLACE_ORKS, datasheets: [dread] }, "Orks");
+
+  it("compiles name-based options to id-based records, skipping unknown names", () => {
+    expect(compiled.wargearOptions).toHaveLength(2);
+    const [swap, choice] = compiled.wargearOptions;
+    expect(swap.replaces).toEqual(["new-dread--dual-big-shoota"]);
+    expect(swap.replacement).toEqual(["new-dread--rokkit-launcha"]);
+    expect(swap.model_constraint?.max_count).toBe(1);
+    expect(choice.replaces).toBeUndefined();
+    expect(choice.replacement_choice).toEqual([
+      ["new-dread--buzzsaw"],
+      ["new-dread--grabbin-klaw"],
+    ]);
+  });
+
+  it("rides through the merge so the loadout maths sees the swap", () => {
+    const merged = buildMergedRaw(syntheticBase(), compiled);
+    const ds = new mod.Dataset(merged);
+    const unit = ds.units.getInFaction("new-dread", "orks")!.raw;
+    const options = ds.wargearOptionsOf(unit);
+    expect(options).toHaveLength(2);
+    // Base loadout carries the dual big shoota, not its replacement.
+    const base = mod.baseLoadout(unit, 1, options);
+    expect(base.counts.get("new-dread--dual-big-shoota")).toBe(1);
+    expect(base.counts.get("new-dread--rokkit-launcha") ?? 0).toBe(0);
+    const bounds = mod.weaponBounds(unit, 1, options);
+    expect(bounds.get("new-dread--rokkit-launcha")).toEqual({ min: 0, max: 1 });
+  });
+});
+
 describe("applyRecordPatches (patch mode)", () => {
   const base = syntheticBase();
   const patch: PatchFaction = {

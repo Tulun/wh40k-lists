@@ -1,9 +1,29 @@
 import type {
   EditableDatasheet,
   EditableProfile,
+  EditableWargearOption,
   EditableWeapon,
 } from "../lib/codex-model";
 import { formatRange } from "../lib/describe";
+
+/** Paraphrased bullet for one wargear option (our wording, never the book's). */
+export function wargearOptionSentence(o: EditableWargearOption): string {
+  const who =
+    o.limit.kind === "any"
+      ? o.modelName
+        ? `Any ${o.modelName}`
+        : "Any model"
+      : o.limit.kind === "per-models"
+        ? `For every ${o.limit.n} models, 1${o.modelName ? ` ${o.modelName}` : " model"}`
+        : o.limit.n === 1
+          ? `1${o.modelName ? ` ${o.modelName}` : " model"}`
+          : `Up to ${o.limit.n}${o.modelName ? ` ${o.modelName}` : " models"}`;
+  const picks = o.choices.map((branch) => branch.join(" + "));
+  const what = picks.length === 1 ? picks[0] : `one of: ${picks.join("; ")}`;
+  return o.replaces.length > 0
+    ? `${who} can swap ${o.replaces.join(" + ")} for ${what}.`
+    : `${who} can take ${what}.`;
+}
 
 const ROLE_LABELS: Record<EditableDatasheet["role"], string> = {
   "": "",
@@ -165,6 +185,17 @@ export default function DatasheetCard({
 
       <WeaponRows title="Ranged weapons" skillLabel="BS" weapons={ranged} />
       <WeaponRows title="Melee weapons" skillLabel="WS" weapons={melee} />
+
+      {(sheet.wargearOptions?.length ?? 0) > 0 && (
+        <section>
+          <div className={BAND_HEAD}>Wargear options</div>
+          <ul className="list-inside list-disc space-y-1 px-3 py-2 text-[13px] leading-snug">
+            {sheet.wargearOptions!.map((o, i) => (
+              <li key={i}>{wargearOptionSentence(o)}</li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {sheet.abilities.length > 0 && (
         <section>

@@ -10,12 +10,14 @@ import {
   TextArea,
   TextInput,
 } from "../components/editor/fields";
-import DatasheetCard from "../components/DatasheetCard";
+import DatasheetCard, { wargearOptionSentence } from "../components/DatasheetCard";
+import Dropdown from "../components/Dropdown";
 import { ModeToggle } from "../components/editor/fields";
 import RefImagePanel from "../components/editor/RefImagePanel";
 import { useDataset } from "../hooks/useDataset";
 import type {
   EditableDatasheet,
+  EditableWargearOption,
   EditableWeapon,
   EditableWeaponProfile,
 } from "../lib/codex-model";
@@ -49,6 +51,177 @@ function blankSheet(factionKeyword: string): EditableDatasheet {
 
 function blankWeaponProfile(): EditableWeaponProfile {
   return { range: 12, A: 1, skill: 4, S: 4, AP: 0, D: 1, keywords: [] };
+}
+
+function blankWargearOption(): EditableWargearOption {
+  return { replaces: [], choices: [[]], limit: { kind: "count", n: 1 } };
+}
+
+/** Removable weapon-name chips plus a picker to append one from the sheet. */
+function WeaponNamePicker({
+  names,
+  pool,
+  onChange,
+}: {
+  names: string[];
+  pool: string[];
+  onChange: (names: string[]) => void;
+}) {
+  const available = pool.filter((n) => !names.includes(n));
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {names.map((n, i) => (
+        <span
+          key={`${n}-${i}`}
+          className="inline-flex items-center gap-1 rounded-full border border-edge bg-panel px-2 py-0.5 text-xs"
+        >
+          {n}
+          <button
+            type="button"
+            aria-label={`Remove ${n}`}
+            className="text-ink-faint"
+            onClick={() => onChange(names.filter((_, j) => j !== i))}
+          >
+            ✕
+          </button>
+        </span>
+      ))}
+      {available.length > 0 && (
+        <Dropdown
+          value={null}
+          placeholder="+ weapon"
+          options={available.map((n) => ({ value: n, label: n }))}
+          onChange={(n) => {
+            if (n) onChange([...names, n]);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const LIMIT_KINDS = [
+  { value: "count", label: "Up to N models" },
+  { value: "any", label: "Any number of models" },
+  { value: "per-models", label: "1 per N models" },
+] as const;
+
+/**
+ * Authoring UI for the datasheet's WARGEAR OPTIONS bullets: what gets
+ * replaced, the alternatives ("one of the following"), and how many models
+ * may take the swap. The list editor turns these into swap steppers.
+ */
+function WargearOptionsSection({
+  options,
+  weaponNames,
+  onChange,
+}: {
+  options: EditableWargearOption[];
+  weaponNames: string[];
+  onChange: (options: EditableWargearOption[]) => void;
+}) {
+  const patchOption = (i: number, p: Partial<EditableWargearOption>) =>
+    onChange(options.map((o, j) => (j === i ? { ...o, ...p } : o)));
+  return (
+    <SectionCard
+      title="Wargear options"
+      actions={
+        <SmallButton onClick={() => onChange([...options, blankWargearOption()])}>
+          + option
+        </SmallButton>
+      }
+    >
+      {options.length === 0 && (
+        <p className="text-xs text-ink-faint">
+          No wargear options — the unit's loadout is fixed. Add the datasheet's swap bullets
+          here ("Dual Big Shoota can be replaced with 1 Rokkit Launcha…").
+        </p>
+      )}
+      {options.map((o, i) => (
+        <div key={i} className="space-y-2 rounded-md border border-edge p-2">
+          <div className="grid grid-cols-[1fr_auto_auto] items-end gap-2">
+            <Field label="Who may take it">
+              <div className="flex items-center gap-2">
+                <Dropdown
+                  value={o.limit.kind}
+                  placeholder="Limit"
+                  options={LIMIT_KINDS.map((k) => ({ value: k.value, label: k.label }))}
+                  onChange={(kind) => {
+                    if (kind === "any") patchOption(i, { limit: { kind: "any" } });
+                    else if (kind === "per-models" || kind === "count")
+                      patchOption(i, {
+                        limit: { kind, n: o.limit.kind === "any" ? 1 : o.limit.n },
+                      });
+                  }}
+                />
+                {o.limit.kind !== "any" && (
+                  <span className="w-16 shrink-0">
+                    <NumberInput
+                      value={o.limit.n}
+                      fallback={1}
+                      onValue={(n) => patchOption(i, { limit: { kind: o.limit.kind as "count" | "per-models", n } })}
+                    />
+                  </span>
+                )}
+              </div>
+            </Field>
+            <Field label="Model type (opt.)">
+              <TextInput
+                value={o.modelName ?? ""}
+                placeholder="Boss Nob"
+                onChange={(e) =>
+                  patchOption(i, { modelName: e.target.value.trim() ? e.target.value : undefined })
+                }
+              />
+            </Field>
+            <SmallButton tone="danger" onClick={() => onChange(options.filter((_, j) => j !== i))}>
+              ✕
+            </SmallButton>
+          </div>
+          <Field label="Replaces (empty = pure add-on)">
+            <WeaponNamePicker
+              names={o.replaces}
+              pool={weaponNames}
+              onChange={(replaces) => patchOption(i, { replaces })}
+            />
+          </Field>
+          {o.choices.map((branch, bi) => (
+            <Field key={bi} label={bi === 0 ? "Takes" : `Or (alternative ${bi + 1})`}>
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <WeaponNamePicker
+                    names={branch}
+                    pool={weaponNames}
+                    onChange={(names) =>
+                      patchOption(i, {
+                        choices: o.choices.map((b, j) => (j === bi ? names : b)),
+                      })
+                    }
+                  />
+                </div>
+                {o.choices.length > 1 && (
+                  <SmallButton
+                    tone="danger"
+                    onClick={() =>
+                      patchOption(i, { choices: o.choices.filter((_, j) => j !== bi) })
+                    }
+                  >
+                    ✕
+                  </SmallButton>
+                )}
+              </div>
+            </Field>
+          ))}
+          <div className="flex items-center justify-between">
+            <SmallButton onClick={() => patchOption(i, { choices: [...o.choices, []] })}>
+              + alternative
+            </SmallButton>
+            <span className="text-[11px] text-ink-faint">{wargearOptionSentence(o)}</span>
+          </div>
+        </div>
+      ))}
+    </SectionCard>
+  );
 }
 
 export default function DatasheetEditScreen() {
@@ -438,6 +611,12 @@ export default function DatasheetEditScreen() {
           </div>
         ))}
       </SectionCard>
+
+      <WargearOptionsSection
+        options={sheet.wargearOptions ?? []}
+        weaponNames={sheet.weapons.map((w) => w.name).filter((n) => n.trim())}
+        onChange={(wargearOptions) => patch({ wargearOptions })}
+      />
 
       <SectionCard
         title="Abilities"

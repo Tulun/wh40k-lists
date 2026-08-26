@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { RosterUnit, Unit } from "@alpaca-software/40kdc-data";
+import Dropdown from "../components/Dropdown";
 import { useDataset } from "../hooks/useDataset";
 import type { Data40k } from "../lib/data";
 import {
   addDetachment,
   addUnit,
+  applyWargearOption,
   duplicateUnit,
   enhancementChoices,
   loadoutDataMissing,
@@ -20,6 +22,7 @@ import {
   setWeaponCount,
   sizeRange,
   wargearCounts,
+  wargearOptionStates,
   type ListContent,
 } from "../lib/list-edit";
 import { byId } from "../lib/lookup";
@@ -166,21 +169,18 @@ export default function ListEditScreen() {
             </span>
           ))}
           {detachmentPool.length > 0 && (
-            <select
-              value=""
-              onChange={(e) => {
-                if (e.target.value) apply(addDetachment(data, content, e.target.value));
+            <Dropdown
+              value={null}
+              placeholder="+ detachment"
+              options={detachmentPool.map((d) => ({
+                value: d.id,
+                label: d.name,
+                detail: d.detachment_points != null ? `${d.detachment_points} DP` : undefined,
+              }))}
+              onChange={(id) => {
+                if (id) apply(addDetachment(data, content, id));
               }}
-              className="rounded-md border border-edge bg-panel px-2 py-1 text-xs text-ink-dim"
-            >
-              <option value="">+ detachment</option>
-              {detachmentPool.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                  {d.detachment_points != null ? ` (${d.detachment_points} DP)` : ""}
-                </option>
-              ))}
-            </select>
+            />
           )}
           {roster.points.detachment_cap != null && (
             <span className="text-xs text-ink-faint">
@@ -355,8 +355,14 @@ function UnitRow({
         </button>
       </div>
 
-      {unit?.role === "character" && (
-        <EnhancementPicker data={data} content={content} index={index} apply={apply} />
+      {(unit?.role === "character" || u.enhancement) && (
+        <EnhancementPicker
+          data={data}
+          content={content}
+          index={index}
+          apply={apply}
+          offerChoices={unit?.role === "character"}
+        />
       )}
 
       {unit && (
@@ -414,35 +420,62 @@ function EnhancementPicker({
   content,
   index,
   apply,
+  offerChoices,
 }: {
   data: Data40k;
   content: ListContent;
   index: number;
   apply: (next: ListContent) => void;
+  /** False for non-characters carrying an upgrade — clearing only, no catalog. */
+  offerChoices: boolean;
 }) {
   const u = content.roster.units[index];
-  const choices = enhancementChoices(data, content.roster, index);
+  const choices = offerChoices ? enhancementChoices(data, content.roster, index) : [];
   if (choices.length === 0 && !u.enhancement) return null;
+  // An unmatched enhancement (text-only import) isn't in the choice list; show
+  // it as its own row so the trigger names it and picking anything replaces it.
+  const unmatched = u.enhancement && !u.enhancement.id ? u.enhancement.raw_name : null;
+  // The CURRENT enhancement must always be a listed option, even when the
+  // choice filters exclude it (other detachment, upgrade on a vehicle, …) —
+  // otherwise the trigger would falsely read "No enhancement".
+  const currentId = u.enhancement?.id ?? null;
+  const currentRow =
+    currentId && !choices.some((c) => c.id === currentId)
+      ? [
+          {
+            value: currentId,
+            label:
+              byId(data.enhancements, currentId, content.roster.faction_id)?.name ??
+              u.enhancement!.raw_name,
+            detail: u.enhancement_points != null ? `${u.enhancement_points} pts` : undefined,
+          },
+        ]
+      : [];
   return (
     <div className="mt-2 flex items-center gap-2">
       <span className="text-xs text-accent">✦</span>
-      <select
-        value={u.enhancement?.id ?? ""}
-        onChange={(e) => apply(setEnhancement(data, content, index, e.target.value || null))}
-        className="min-w-0 flex-1 rounded-md border border-edge bg-panel px-2 py-1.5 text-xs"
-      >
-        <option value="">No enhancement</option>
-        {u.enhancement && !u.enhancement.id && (
-          <option value="" disabled>
-            {u.enhancement.raw_name} (unmatched)
-          </option>
-        )}
-        {choices.map((c) => (
-          <option key={c.id} value={c.id} disabled={c.takenBy != null}>
-            {c.name} ({c.cost} pts){c.takenBy != null ? " — taken" : ""}
-          </option>
-        ))}
-      </select>
+      <div className="min-w-0 flex-1">
+        <Dropdown
+          value={unmatched ? "unmatched" : currentId}
+          placeholder="No enhancement"
+          clearable
+          options={[
+            ...(unmatched
+              ? [{ value: "unmatched", label: `${unmatched} (unmatched)`, disabled: true }]
+              : []),
+            ...currentRow,
+            ...choices.map((c) => ({
+              value: c.id,
+              label: c.name,
+              detail: c.takenBy != null ? `${c.cost} pts · taken` : `${c.cost} pts`,
+              disabled: c.takenBy != null,
+            })),
+          ]}
+          onChange={(id) =>
+            apply(setEnhancement(data, content, index, id === "unmatched" ? null : id))
+          }
+        />
+      </div>
     </div>
   );
 }
@@ -462,33 +495,36 @@ function WargearEditor({
 }) {
   const u = content.roster.units[index];
   const counts = wargearCounts(u);
-  // Codex-overlay units carry no options/composition — the loadout maths would
-  // call every weapon mandatory. Offer free steppers (0..squad size) instead.
-  const freeform = loadoutDataMissing(data, unit);
-  const options = freeform ? [] : data.dataset.wargearOptionsOf(unit);
-  const models = freeform ? undefined : data.dataset.unitCompositionOf(unit)?.models;
-  const bounds = freeform
-    ? new Map((unit.weapon_ids ?? []).map((id) => [id, { min: 0, max: u.model_count }]))
-    : data.weaponBounds(unit, u.model_count, options, models);
-  const violations = freeform
-    ? []
-    : data.validateLoadout(unit, u.model_count, options, counts, models);
-
-  const ids = [...new Set([...bounds.keys(), ...counts.keys()])];
-  const rows = ids
-    .map((id) => ({
-      id,
-      name:
-        byId(data.weapons, id, content.roster.faction_id)?.name ??
-        byId(data.wargear, id, content.roster.faction_id)?.name ??
-        id,
-      count: counts.get(id) ?? 0,
-      bound: bounds.get(id),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const factionId = content.roster.faction_id;
+  const nameOf = (id: string) =>
+    byId(data.weapons, id, factionId)?.name ?? byId(data.wargear, id, factionId)?.name ?? id;
   const unresolvedGear = u.wargear.filter((w) => !w.ref.id);
-  const editable = rows.some((r) => r.bound && r.bound.max > r.bound.min);
-  if (rows.length === 0 && unresolvedGear.length === 0) return null;
+
+  // Epic heroes come as they are — no swaps, nothing removable.
+  const locked = unit.role === "epic-hero";
+  // Codex-overlay units with no authored options/composition can't express
+  // swaps yet — offer free steppers (0..squad size) until options are recorded.
+  const freeform = !locked && loadoutDataMissing(data, unit);
+  const optionStates = locked || freeform ? [] : wargearOptionStates(data, u, unit);
+  const violations =
+    locked || freeform
+      ? []
+      : data.validateLoadout(
+          unit,
+          u.model_count,
+          optionStates.map((s) => s.option),
+          counts,
+          data.dataset.unitCompositionOf(unit)?.models,
+        );
+
+  const gearIds = freeform
+    ? [...new Set([...(unit.weapon_ids ?? []), ...counts.keys()])]
+    : [...counts.keys()];
+  const rows = gearIds
+    .map((id) => ({ id, name: nameOf(id), count: counts.get(id) ?? 0 }))
+    .filter((r) => freeform || r.count > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (rows.length === 0 && unresolvedGear.length === 0 && optionStates.length === 0) return null;
 
   return (
     <details className="mt-2 rounded-md border border-edge">
@@ -496,7 +532,7 @@ function WargearEditor({
         Wargear{" "}
         <span className="text-ink-faint">
           ({rows.filter((r) => r.count > 0).length + unresolvedGear.length} items
-          {editable ? "" : " · fixed"})
+          {locked ? " · fixed" : ""})
         </span>
         {violations.length > 0 && <span className="text-opponent"> ⚠ {violations.length}</span>}
       </summary>
@@ -504,28 +540,14 @@ function WargearEditor({
         {rows.map((r) => (
           <div key={r.id} className="flex items-center gap-2">
             <span className="min-w-0 flex-1 truncate text-xs">{r.name}</span>
-            {r.bound && r.bound.max > r.bound.min ? (
-              <span className="inline-flex items-center overflow-hidden rounded-md border border-edge">
-                <button
-                  type="button"
-                  aria-label={`Fewer ${r.name}`}
-                  disabled={r.count <= r.bound.min}
-                  onClick={() => apply(setWeaponCount(data, content, index, r.id, r.count - 1))}
-                  className="min-w-7 bg-panel px-1.5 py-0.5 text-sm disabled:opacity-30"
-                >
-                  −
-                </button>
-                <span className="min-w-6 text-center text-xs">{r.count}</span>
-                <button
-                  type="button"
-                  aria-label={`More ${r.name}`}
-                  disabled={r.count >= r.bound.max}
-                  onClick={() => apply(setWeaponCount(data, content, index, r.id, r.count + 1))}
-                  className="min-w-7 bg-panel px-1.5 py-0.5 text-sm disabled:opacity-30"
-                >
-                  +
-                </button>
-              </span>
+            {freeform ? (
+              <Stepper
+                label={r.name}
+                count={r.count}
+                canDown={r.count > 0}
+                canUp={r.count < u.model_count}
+                onStep={(d) => apply(setWeaponCount(data, content, index, r.id, r.count + d))}
+              />
             ) : (
               <span className="text-xs text-ink-faint">×{r.count}</span>
             )}
@@ -539,6 +561,46 @@ function WargearEditor({
             <span className="text-xs text-ink-faint">×{w.count} (text)</span>
           </div>
         ))}
+
+        {optionStates.length > 0 && (
+          <div className="mt-1 border-t border-edge/60 pt-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+              Wargear options
+            </p>
+            {optionStates.map((s) => {
+              const replaces = (s.option.replaces ?? []).map(nameOf).join(" + ");
+              const who = s.option.model_constraint?.model_name;
+              const swapAvailable = (s.option.replaces ?? []).every(
+                (id) => (counts.get(id) ?? 0) > 0,
+              );
+              return s.branches.map((b, bi) => {
+                const added = b.ids.map(nameOf).join(" + ");
+                const label = replaces ? `${replaces} → ${added}` : `Add ${added}`;
+                return (
+                  <div key={`${s.option.id}-${bi}`} className="flex items-center gap-2 py-0.5">
+                    <span className="min-w-0 flex-1 truncate text-xs">
+                      {who && <span className="text-ink-faint">{who}: </span>}
+                      {label}
+                    </span>
+                    <span className="shrink-0 text-[10px] text-ink-faint">
+                      {s.totalApplied}/{s.cap}
+                    </span>
+                    <Stepper
+                      label={label}
+                      count={b.applied}
+                      canDown={b.applied > 0}
+                      canUp={s.totalApplied < s.cap && swapAvailable}
+                      onStep={(d) =>
+                        apply(applyWargearOption(data, content, index, s.option.id, bi, d))
+                      }
+                    />
+                  </div>
+                );
+              });
+            })}
+          </div>
+        )}
+
         {violations.map((v, i) => (
           <p key={`v-${i}`} className="text-[11px] text-opponent">
             ⚠ {v.message}
@@ -546,5 +608,43 @@ function WargearEditor({
         ))}
       </div>
     </details>
+  );
+}
+
+function Stepper({
+  label,
+  count,
+  canDown,
+  canUp,
+  onStep,
+}: {
+  label: string;
+  count: number;
+  canDown: boolean;
+  canUp: boolean;
+  onStep: (delta: 1 | -1) => void;
+}) {
+  return (
+    <span className="inline-flex shrink-0 items-center overflow-hidden rounded-md border border-edge">
+      <button
+        type="button"
+        aria-label={`Fewer ${label}`}
+        disabled={!canDown}
+        onClick={() => onStep(-1)}
+        className="min-w-7 bg-panel px-1.5 py-0.5 text-sm disabled:opacity-30"
+      >
+        −
+      </button>
+      <span className="min-w-6 text-center text-xs">{count}</span>
+      <button
+        type="button"
+        aria-label={`More ${label}`}
+        disabled={!canUp}
+        onClick={() => onStep(1)}
+        className="min-w-7 bg-panel px-1.5 py-0.5 text-sm disabled:opacity-30"
+      >
+        +
+      </button>
+    </span>
   );
 }

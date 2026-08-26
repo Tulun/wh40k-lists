@@ -19,6 +19,7 @@ import type {
   LeaderAttachment,
   Stratagem,
   Unit,
+  WargearOption,
   Weapon,
   WeaponKeyword,
 } from "@alpaca-software/40kdc-data";
@@ -48,6 +49,7 @@ export interface CompiledRecords {
   enhancements: Enhancement[];
   stratagems: Stratagem[];
   leaderAttachments: LeaderAttachment[];
+  wargearOptions: WargearOption[];
   /** Ad-hoc catalog entries for hand-typed weapon keywords unknown upstream. */
   weaponKeywords: WeaponKeyword[];
 }
@@ -147,8 +149,45 @@ function compileWeapon(unitId: string, weapon: EditableWeapon, out: CompiledReco
   return id;
 }
 
+/**
+ * Name-based wargear options → normalized WargearOption records. Names resolve
+ * against the sheet's own weapons (same `${unitId}--${slug}` ids compileWeapon
+ * mints); an option naming an unknown weapon is skipped rather than emitting a
+ * dangling ref.
+ */
+function compileWargearOptions(sheet: EditableDatasheet, out: CompiledRecords): void {
+  const idByName = new Map(sheet.weapons.map((w) => [w.name.trim().toLowerCase(), `${sheet.id}--${slugify(w.name)}`]));
+  const resolve = (names: string[]): string[] | null => {
+    const ids = names.map((n) => idByName.get(n.trim().toLowerCase()));
+    return ids.every((id): id is string => !!id) ? ids : null;
+  };
+  (sheet.wargearOptions ?? []).forEach((opt, i) => {
+    const replaces = resolve(opt.replaces);
+    const branches = opt.choices.map(resolve);
+    if (!replaces || branches.length === 0 || branches.some((b) => !b || b.length === 0)) return;
+    const constraint: NonNullable<WargearOption["model_constraint"]> = {};
+    if (opt.modelName?.trim()) constraint.model_name = opt.modelName.trim();
+    if (opt.limit.kind === "any") constraint.any_number = true;
+    else if (opt.limit.kind === "per-models") constraint.per_n_models = opt.limit.n;
+    else constraint.max_count = opt.limit.n;
+    const record = {
+      id: `${sheet.id}--wargear-option-${i + 1}`,
+      unit_id: sheet.id,
+      faction_id: out.factionId,
+      model_constraint: constraint,
+      ...(replaces.length > 0 ? { replaces } : {}),
+      ...(branches.length === 1
+        ? { replacement: branches[0] }
+        : { replacement_choice: branches }),
+      game_version: GV_REF,
+    } as unknown as WargearOption;
+    out.wargearOptions.push(record);
+  });
+}
+
 function compileDatasheet(factionId: string, sheet: EditableDatasheet, out: CompiledRecords): void {
   const weaponIds = sheet.weapons.map((w) => compileWeapon(sheet.id, w, out));
+  compileWargearOptions(sheet, out);
   const abilityIds = sheet.abilities.map((a) => {
     const id = `${sheet.id}--${slugify(a.name)}`;
     out.abilities.push(
@@ -265,6 +304,7 @@ function emptyCompiled(factionId: string): CompiledRecords {
     enhancements: [],
     stratagems: [],
     leaderAttachments: [],
+    wargearOptions: [],
     weaponKeywords: [],
   };
 }

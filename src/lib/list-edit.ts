@@ -288,6 +288,84 @@ export function setWeaponCount(
   return finalize(data, next, [u.ref.id]);
 }
 
+/** One wargear option with its current take-count per branch, for the editor UI. */
+export interface WargearOptionState {
+  option: WargearOption;
+  /** Alternatives: the weapon ids each branch adds, and how many times it's taken. */
+  branches: { ids: string[]; applied: number }[];
+  /** Max total takes across branches at the unit's current size. */
+  cap: number;
+  totalApplied: number;
+}
+
+function optionBranches(option: WargearOption): string[][] {
+  return (option.replacement_choice ?? (option.replacement ? [option.replacement] : [])).map(
+    (b) => [...b],
+  );
+}
+
+/**
+ * The unit's authored wargear options with how often each is currently taken —
+ * inferred from the loadout as the smallest count among a branch's added ids.
+ */
+export function wargearOptionStates(
+  data: Data40k,
+  rosterUnit: RosterUnit,
+  unit: Unit,
+): WargearOptionState[] {
+  const { options, models } = loadoutCtx(data, unit);
+  const counts = wargearCounts(rosterUnit);
+  return options.map((option) => {
+    const branches = optionBranches(option).map((ids) => ({
+      ids,
+      applied: ids.length > 0 ? Math.min(...ids.map((id) => counts.get(id) ?? 0)) : 0,
+    }));
+    return {
+      option,
+      branches,
+      cap: data.optionCap(option, rosterUnit.model_count, models),
+      totalApplied: branches.reduce((s, b) => s + b.applied, 0),
+    };
+  });
+}
+
+/**
+ * Take (or give back) one wargear option: the swap moves counts BOTH ways —
+ * taking it removes the replaced weapons and adds the branch's, un-taking
+ * reverses that. Refused (returns `content` unchanged) when the swap has
+ * nothing left to exchange.
+ */
+export function applyWargearOption(
+  data: Data40k,
+  content: ListContent,
+  index: number,
+  optionId: string,
+  branchIndex: number,
+  delta: 1 | -1,
+): ListContent {
+  const next = clone(content);
+  const u = next.roster.units[index];
+  const unit = unitEntity(data, u.ref, next.roster.faction_id);
+  if (!unit) return content;
+  const { options, models } = loadoutCtx(data, unit);
+  const option = options.find((o) => o.id === optionId);
+  const branch = option ? optionBranches(option)[branchIndex] : undefined;
+  if (!option || !branch) return content;
+  const counts = wargearCounts(u);
+  const removed = delta === 1 ? (option.replaces ?? []) : branch;
+  const added = delta === 1 ? branch : (option.replaces ?? []);
+  for (const id of removed) {
+    if ((counts.get(id) ?? 0) <= 0) return content;
+  }
+  for (const id of removed) counts.set(id, (counts.get(id) ?? 0) - 1);
+  for (const id of added) counts.set(id, (counts.get(id) ?? 0) + 1);
+  u.wargear = wargearFromCounts(data, counts, next.roster.faction_id, u.wargear);
+  u.loadout_groups = regenGroups(
+    data, unit, u.model_count, options, models, wargearCounts(u), next.roster.faction_id,
+  );
+  return finalize(data, next, [u.ref.id]);
+}
+
 export function setEnhancement(
   data: Data40k,
   content: ListContent,
