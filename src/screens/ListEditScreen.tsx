@@ -564,11 +564,13 @@ function WargearEditor({
           data.dataset.unitCompositionOf(unit)?.models,
         );
 
+  const surcharge = (id: string) =>
+    unit.wargear_costs?.find((c) => c.item_id === id)?.cost ?? 0;
   const gearIds = freeform
     ? [...new Set([...(unit.weapon_ids ?? []), ...counts.keys()])]
     : [...counts.keys()];
   const rows = gearIds
-    .map((id) => ({ id, name: nameOf(id), count: counts.get(id) ?? 0 }))
+    .map((id) => ({ id, name: nameOf(id), count: counts.get(id) ?? 0, cost: surcharge(id) }))
     .filter((r) => freeform || r.count > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
   if (rows.length === 0 && unresolvedGear.length === 0 && optionStates.length === 0) return null;
@@ -586,7 +588,10 @@ function WargearEditor({
       <div className="space-y-1 px-2 pb-2">
         {rows.map((r) => (
           <div key={r.id} className="flex items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-xs">{r.name}</span>
+            <span className="min-w-0 flex-1 truncate text-xs">
+              {r.name}
+              {r.cost > 0 && <span className="text-ink-faint"> +{r.cost} pts ea</span>}
+            </span>
             {freeform ? (
               <Stepper
                 label={r.name}

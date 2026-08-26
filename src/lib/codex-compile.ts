@@ -188,6 +188,9 @@ function compileWargearOptions(sheet: EditableDatasheet, out: CompiledRecords): 
 function compileDatasheet(factionId: string, sheet: EditableDatasheet, out: CompiledRecords): void {
   const weaponIds = sheet.weapons.map((w) => compileWeapon(sheet.id, w, out));
   compileWargearOptions(sheet, out);
+  const wargearCosts = sheet.weapons
+    .filter((w) => (w.cost ?? 0) > 0)
+    .map((w) => ({ item_id: `${sheet.id}--${slugify(w.name)}`, cost: w.cost! }));
   const abilityIds = sheet.abilities.map((a) => {
     const id = `${sheet.id}--${slugify(a.name)}`;
     out.abilities.push(
@@ -212,6 +215,7 @@ function compileDatasheet(factionId: string, sheet: EditableDatasheet, out: Comp
       OC: p.OC,
     })) as Unit["profiles"],
     points: sheet.points.map((p) => ({ models: p.models, cost: p.cost })),
+    ...(wargearCosts.length > 0 ? { wargear_costs: wargearCosts } : {}),
     keywords: sheet.keywords,
     faction_keywords: sheet.factionKeywords,
     ...(models.length > 0

@@ -47,6 +47,8 @@ export interface EditableWeaponProfile {
 export interface EditableWeapon {
   name: string;
   type: "ranged" | "melee";
+  /** MFM surcharge in points charged per copy taken ("each killsaw costs 5"). */
+  cost?: number;
   profiles: EditableWeaponProfile[];
 }
 
@@ -223,6 +225,7 @@ export function seedDatasheetFromUpstream(view: UnitView, leads: string[] = []):
     weapons: view.weapons.map((w) => ({
       name: w.name,
       type: w.raw.type,
+      ...(costOf(raw, w.raw.id) != null ? { cost: costOf(raw, w.raw.id)! } : {}),
       profiles: w.raw.profiles.map((p, i) => ({
         name: p.name,
         range: (p.range ?? "Melee") as number | "Melee",
@@ -242,6 +245,10 @@ export function seedDatasheetFromUpstream(view: UnitView, leads: string[] = []):
     })),
     leads,
   };
+}
+
+function costOf(raw: UnitView["raw"], weaponId: string): number | null {
+  return raw.wargear_costs?.find((c) => c.item_id === weaponId)?.cost ?? null;
 }
 
 /**

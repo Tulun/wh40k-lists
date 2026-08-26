@@ -311,6 +311,23 @@ describe("wargear options", () => {
     ]);
   });
 
+  it("compiles per-weapon costs into wargear_costs and prices them", () => {
+    const priced: EditableDatasheet = {
+      ...dread,
+      id: "new-meganobz",
+      name: "New Meganobz",
+      weapons: dread.weapons.map((w) =>
+        w.name === "Buzzsaw" ? { ...w, cost: 5 } : w,
+      ),
+      wargearOptions: [],
+    };
+    const out = compileFaction("orks", { ...REPLACE_ORKS, datasheets: [priced] }, "Orks");
+    const unit = out.units.find((u) => u.id === "new-meganobz")!;
+    expect(unit.wargear_costs).toEqual([{ item_id: "new-meganobz--buzzsaw", cost: 5 }]);
+    const counts = new Map([["new-meganobz--buzzsaw", 3]]);
+    expect(mod.wargearPoints(unit, counts)).toBe(15);
+  });
+
   it("rides through the merge so the loadout maths sees the swap", () => {
     const merged = buildMergedRaw(syntheticBase(), compiled);
     const ds = new mod.Dataset(merged);

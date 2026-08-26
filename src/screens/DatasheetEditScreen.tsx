@@ -491,7 +491,7 @@ export default function DatasheetEditScreen() {
         {sheet.weapons.length === 0 && <p className="text-xs text-ink-faint">No weapons yet.</p>}
         {sheet.weapons.map((w, i) => (
           <div key={i} className="space-y-2 rounded-md border border-edge p-2">
-            <div className="grid grid-cols-[1fr_7rem_auto] items-end gap-2">
+            <div className="grid grid-cols-[1fr_6rem_4.5rem_auto] items-end gap-2">
               <Field label="Weapon name">
                 <TextInput value={w.name} onChange={(e) => patchWeapon(i, { name: e.target.value })} />
               </Field>
@@ -504,6 +504,12 @@ export default function DatasheetEditScreen() {
                   <option value="ranged">Ranged</option>
                   <option value="melee">Melee</option>
                 </select>
+              </Field>
+              <Field label="Pts each">
+                <NumberInput
+                  value={w.cost ?? 0}
+                  onValue={(n) => patchWeapon(i, { cost: n > 0 ? n : undefined })}
+                />
               </Field>
               <SmallButton tone="danger" onClick={() => patch({ weapons: sheet.weapons.filter((_, j) => j !== i) })}>
                 ✕
