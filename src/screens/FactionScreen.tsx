@@ -53,7 +53,9 @@ export default function FactionScreen() {
     ),
   })).filter((g) => g.units.length > 0);
 
-  const detachments = data.detachments.byFaction(factionId);
+  const detachments = [...data.detachments.byFaction(factionId)].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
   const armyRuleId = faction.raw.faction_rule_id;
   const armyRule = armyRuleId ? byId(data.abilities, armyRuleId, factionId) : undefined;
 
@@ -90,46 +92,35 @@ export default function FactionScreen() {
           <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">
             Detachments <span className="text-xs font-normal text-ink-faint">({detachments.length})</span>
           </summary>
-          <div className="space-y-2 px-3 pb-2">
-            {detachments.map((d) => {
-              const ruleIds = d.detachment_rule_ids?.length
-                ? d.detachment_rule_ids
-                : d.detachment_rule_id
-                  ? [d.detachment_rule_id]
-                  : [];
-              return (
-                <div key={d.id} className="border-t border-edge pt-2 first:border-t-0">
-                  <div className="text-sm font-medium">
-                    {d.name}
-                    {d.detachment_points != null && (
-                      <span className="ml-1 text-xs text-ink-faint">· {d.detachment_points} DP</span>
+          <ul className="divide-y divide-edge border-t border-edge">
+            {detachments.map((d) => (
+              <li key={d.id}>
+                <Link
+                  to={`/explore/${factionId}/detachment/${d.id}`}
+                  className="flex min-h-11 items-center gap-2 px-3 py-1.5 active:bg-panel"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="text-sm font-medium">
+                      {d.name}
+                      {d.detachment_points != null && (
+                        <span className="ml-1 text-xs font-normal text-ink-faint">
+                          · {d.detachment_points} DP
+                        </span>
+                      )}
+                    </span>
+                    {(d.force_dispositions?.length ?? 0) > 0 && (
+                      <span className="block text-xs text-ink-faint">
+                        {d.force_dispositions!
+                          .map((id) => DISPOSITIONS.find((x) => x.id === id)?.label ?? id)
+                          .join(" · ")}
+                      </span>
                     )}
-                  </div>
-                  {(d.force_dispositions?.length ?? 0) > 0 && (
-                    <div className="text-xs text-ink-faint">
-                      {d.force_dispositions!
-                        .map((id) => DISPOSITIONS.find((x) => x.id === id)?.label ?? id)
-                        .join(" · ")}
-                    </div>
-                  )}
-                  {ruleIds.map((id) => {
-                    const ability = byId(data.abilities, id, factionId);
-                    if (!ability) return null;
-                    return (
-                      <details key={id} className="mt-1">
-                        <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-accent">
-                          {ability.name}
-                        </summary>
-                        <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">
-                          {abilityText(ability)}
-                        </p>
-                      </details>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
+                  </span>
+                  <span className="text-xs text-ink-faint">›</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </details>
       )}
 

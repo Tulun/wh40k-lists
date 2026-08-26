@@ -14,9 +14,8 @@ import {
 import RefImagePanel from "../components/editor/RefImagePanel";
 import { useDataset } from "../hooks/useDataset";
 import type { EditableDetachment, EditableStratagem } from "../lib/codex-model";
-import { DISPOSITIONS, seedDetachmentFromUpstream, slugify, uniqueSlug } from "../lib/codex-model";
-import { abilityText } from "../lib/describe";
-import { byId } from "../lib/lookup";
+import { DISPOSITIONS, slugify, uniqueSlug } from "../lib/codex-model";
+import { detachmentView } from "../lib/detachment-view";
 import { refImageKey } from "../lib/ref-images";
 import { useCodex } from "../store/codex";
 
@@ -60,29 +59,7 @@ export default function DetachmentEditScreen() {
   // including its enhancements and stratagems with their rendered rule text.
   const seeded = useMemo(() => {
     if (existing || detId === "new" || !data) return null;
-    const det = data.detachments.getInFaction(detId, factionId) ?? data.detachments.getAny(detId);
-    if (!det) return null;
-    const ruleIds = det.detachment_rule_ids?.length
-      ? det.detachment_rule_ids
-      : det.detachment_rule_id
-        ? [det.detachment_rule_id]
-        : [];
-    const rule = ruleIds[0] ? byId(data.abilities, ruleIds[0], factionId) : undefined;
-    const enhancements = data.enhancements.all
-      .filter((e) => e.detachment_id === det.id)
-      .map((record) => ({
-        record,
-        text: record.ability_id
-          ? (byId(data.abilities, record.ability_id, factionId)?.describe() ?? null)
-          : null,
-      }));
-    const stratagems = data.stratagems.all
-      .filter((s) => s.detachment_id === det.id)
-      .map((record) => {
-        const view = record.ability_id ? byId(data.abilities, record.ability_id, factionId) : undefined;
-        return { record, text: view ? abilityText(view) : null };
-      });
-    return seedDetachmentFromUpstream(det, rule ? abilityText(rule) : null, rule?.name ?? null, enhancements, stratagems);
+    return detachmentView(data, factionId, detId);
   }, [existing, detId, data, factionId]);
 
   const [det, setDet] = useState<EditableDetachment | null>(existing ?? seeded);
