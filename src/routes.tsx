@@ -10,6 +10,7 @@ import DetachmentEditScreen from "./screens/DetachmentEditScreen";
 import EditorFactionScreen from "./screens/EditorFactionScreen";
 import EditorHomeScreen from "./screens/EditorHomeScreen";
 import ListsScreen from "./screens/ListsScreen";
+import SyncSetupScreen from "./screens/SyncSetupScreen";
 import UnitDetailScreen from "./screens/UnitDetailScreen";
 
 export const router = createHashRouter([
@@ -21,6 +22,7 @@ export const router = createHashRouter([
       { path: "import", element: <ImportScreen /> },
       { path: "unit/:entryKey", element: <UnitDetailScreen /> },
       { path: "lists", element: <ListsScreen /> },
+      { path: "sync-setup", element: <SyncSetupScreen /> },
       { path: "explore", element: <ExploreScreen /> },
       { path: "explore/:factionId", element: <FactionScreen /> },
       { path: "explore/:factionId/:unitId", element: <DatasheetScreen /> },

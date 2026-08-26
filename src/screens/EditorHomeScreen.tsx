@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { renderSVG } from "uqr";
 import { Field, SectionCard, SmallButton, TextInput } from "../components/editor/fields";
 import { useDataset } from "../hooks/useDataset";
 import { getCodexBuildError } from "../lib/data";
-import { EXPLORE_FACTION_IDS } from "../lib/flags";
+import { EXPLORE_FACTION_IDS, QR_SYNC_SETUP_ENABLED } from "../lib/flags";
 import { pullRemote, pushLocal, setUpSync } from "../lib/gist-sync";
 import { codexBadge, factionMode, useCodex } from "../store/codex";
 import { useLists } from "../store/lists";
@@ -21,6 +22,7 @@ export default function EditorHomeScreen() {
   const [note, setNote] = useState<SyncNote>(null);
   const [busy, setBusy] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const [tokenDraft, setTokenDraft] = useState("");
   const [gistDraft, setGistDraft] = useState("");
 
@@ -112,6 +114,35 @@ export default function EditorHomeScreen() {
               Set up sync
             </button>
           </p>
+        )}
+        {QR_SYNC_SETUP_ENABLED && connected && (
+          <div className="border-t border-edge pt-2">
+            <button
+              type="button"
+              onClick={() => setShowQr((v) => !v)}
+              className="text-xs text-accent underline"
+            >
+              {showQr ? "Hide QR" : "Show QR to connect another device"}
+            </button>
+            {showQr && sync.gistId && sync.token && (
+              <div className="mt-2 space-y-2">
+                <div
+                  className="w-56 max-w-full rounded-md bg-white p-3 [&_svg]:h-auto [&_svg]:w-full"
+                  dangerouslySetInnerHTML={{
+                    __html: renderSVG(
+                      `${window.location.origin}${window.location.pathname}#/sync-setup?token=${encodeURIComponent(sync.token)}&gist=${encodeURIComponent(sync.gistId)}`,
+                    ),
+                  }}
+                />
+                <p className="text-[10px] leading-snug text-ink-faint">
+                  Scan with the other device's camera — it opens the app and connects on its own.
+                  The token rides in the URL fragment, which never leaves the two devices. Anyone
+                  who can photograph this code gets your token, so keep it on screen only while
+                  scanning.
+                </p>
+              </div>
+            )}
+          </div>
         )}
         {showSetup && (
           <div className="space-y-2 border-t border-edge pt-2">

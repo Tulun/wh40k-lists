@@ -26,3 +26,11 @@ export const EXPLORE_FACTION_IDS: readonly string[] | null = [
  * record-level fixes on top of upstream.
  */
 export const REPLACE_FACTION_IDS: readonly string[] = ["orks"];
+
+/**
+ * QR sync hand-off: the connected device can show a QR code that carries the
+ * gist token + id in a URL fragment; scanning it connects another device
+ * without typing the token. Flip off once devices are synced; flip back on
+ * when the PAT rotates. Gates both the QR button and the /sync-setup route.
+ */
+export const QR_SYNC_SETUP_ENABLED = true;
