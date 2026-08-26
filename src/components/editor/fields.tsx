@@ -166,6 +166,32 @@ export function SectionCard({
   );
 }
 
+/** View/Edit segmented toggle shared by the editor screens. */
+export function ModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: "view" | "edit";
+  onChange: (m: "view" | "edit") => void;
+}) {
+  return (
+    <div className="flex shrink-0 overflow-hidden rounded-md border border-edge text-xs font-semibold">
+      {(["view", "edit"] as const).map((m) => (
+        <button
+          key={m}
+          type="button"
+          onClick={() => onChange(m)}
+          className={`px-3 py-1.5 capitalize ${
+            mode === m ? "bg-accent/20 text-accent" : "text-ink-faint active:bg-panel"
+          }`}
+        >
+          {m}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function SmallButton({
   onClick,
   children,

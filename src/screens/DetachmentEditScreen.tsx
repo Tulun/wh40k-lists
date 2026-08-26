@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import DetachmentCard from "../components/DetachmentCard";
 import {
   ChipListInput,
   Field,
+  ModeToggle,
   NumberInput,
   SectionCard,
   SmallButton,
@@ -85,6 +87,7 @@ export default function DetachmentEditScreen() {
 
   const [det, setDet] = useState<EditableDetachment | null>(existing ?? seeded);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [mode, setMode] = useState<"view" | "edit">(detId === "new" ? "edit" : "view");
   if (det === null) {
     if (detId === "new") {
       setDet(blankDetachment());
@@ -125,15 +128,20 @@ export default function DetachmentEditScreen() {
 
   return (
     <div className="space-y-3 pb-8">
-      <div className="flex items-baseline gap-2">
-        <h1 className="flex-1 text-lg font-bold">
-          {detId === "new" ? "New detachment" : `Edit · ${det.name || detId}`}
+      <div className="flex items-center gap-2">
+        <h1 className="min-w-0 flex-1 truncate text-lg font-bold">
+          {detId === "new" ? "New detachment" : det.name || detId}
         </h1>
+        <ModeToggle mode={mode} onChange={setMode} />
         <Link to={`/editor/${factionId}`} className="text-xs text-ink-faint underline">
           cancel
         </Link>
       </div>
 
+      {mode === "view" && <DetachmentCard det={det} />}
+
+      {mode === "edit" && (
+      <>
       {detId !== "new" && <RefImagePanel entityKey={refImageKey(factionId, "detachment", detId)} />}
 
       <SectionCard title="Detachment">
@@ -341,6 +349,8 @@ export default function DetachmentEditScreen() {
           );
         })}
       </SectionCard>
+      </>
+      )}
 
       <div className="flex items-center gap-2">
         <button

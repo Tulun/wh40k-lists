@@ -11,6 +11,7 @@ import {
   TextInput,
 } from "../components/editor/fields";
 import DatasheetCard from "../components/DatasheetCard";
+import { ModeToggle } from "../components/editor/fields";
 import RefImagePanel from "../components/editor/RefImagePanel";
 import { useDataset } from "../hooks/useDataset";
 import type {
@@ -132,20 +133,7 @@ export default function DatasheetEditScreen() {
         <h1 className="min-w-0 flex-1 truncate text-lg font-bold">
           {sheetId === "new" ? "New datasheet" : sheet.name || sheetId}
         </h1>
-        <div className="flex shrink-0 overflow-hidden rounded-md border border-edge text-xs font-semibold">
-          {(["view", "edit"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={`px-3 py-1.5 capitalize ${
-                mode === m ? "bg-accent/20 text-accent" : "text-ink-faint active:bg-panel"
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
+        <ModeToggle mode={mode} onChange={setMode} />
         <Link to={`/editor/${factionId}`} className="text-xs text-ink-faint underline">
           cancel
         </Link>
