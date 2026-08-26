@@ -253,6 +253,8 @@ function compileDetachment(factionId: string, det: EditableDetachment, out: Comp
       cost: enh.cost,
       ability_id: abilityId,
       ...(enh.restrictions.length > 0 ? { keyword_restrictions: enh.restrictions } : {}),
+      ...(enh.exclusions?.length ? { exclusion_keywords: enh.exclusions } : {}),
+      ...(enh.upgrade ? { upgrade_tag: true } : {}),
       game_version: GV_REF,
     });
   }

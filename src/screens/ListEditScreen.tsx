@@ -16,6 +16,7 @@ import {
   removeUnit,
   setEnhancement,
   setModelCount,
+  setForceDisposition,
   setRawModelCount,
   setUnitPoints,
   setWarlord,
@@ -25,6 +26,7 @@ import {
   wargearOptionStates,
   type ListContent,
 } from "../lib/list-edit";
+import { DISPOSITIONS } from "../lib/codex-model";
 import { byId } from "../lib/lookup";
 import { useLists } from "../store/lists";
 
@@ -115,6 +117,12 @@ export default function ListEditScreen() {
         .sort((a, b) => a.name.localeCompare(b.name))
     : [];
   const dpSpent = roster.detachments.reduce((s, d) => s + (d.dp_cost ?? 0), 0);
+  // The dispositions the chosen detachments grant; empty = data unrecorded, offer all.
+  const grantedDispositions = new Set(
+    roster.detachments.flatMap(
+      (d) => byId(data.detachments, d.ref.id, factionId)?.force_dispositions ?? [],
+    ),
+  );
 
   return (
     <div className="space-y-3 pb-8">
@@ -162,7 +170,7 @@ export default function ListEditScreen() {
                 type="button"
                 aria-label="Remove detachment"
                 className="px-0.5 text-ink-faint"
-                onClick={() => apply(removeDetachment(content, i))}
+                onClick={() => apply(removeDetachment(data, content, i))}
               >
                 ✕
               </button>
@@ -187,6 +195,24 @@ export default function ListEditScreen() {
               {dpSpent}/{roster.points.detachment_cap} DP
             </span>
           )}
+        </div>
+
+        <div className="mt-2 flex items-center gap-2">
+          <span className="shrink-0 text-xs text-ink-faint">Disposition</span>
+          <div className="min-w-0 flex-1">
+            <Dropdown
+              value={roster.force_disposition ?? null}
+              placeholder="Not picked"
+              clearable
+              options={DISPOSITIONS.map((d) => ({
+                value: d.id,
+                label: d.label,
+                detail: grantedDispositions.has(d.id) ? "granted" : undefined,
+                disabled: grantedDispositions.size > 0 && !grantedDispositions.has(d.id),
+              }))}
+              onChange={(id) => apply(setForceDisposition(content, id))}
+            />
+          </div>
         </div>
       </div>
 
@@ -355,15 +381,7 @@ function UnitRow({
         </button>
       </div>
 
-      {(unit?.role === "character" || u.enhancement) && (
-        <EnhancementPicker
-          data={data}
-          content={content}
-          index={index}
-          apply={apply}
-          offerChoices={unit?.role === "character"}
-        />
-      )}
+      <EnhancementPicker data={data} content={content} index={index} apply={apply} />
 
       {unit && (
         <WargearEditor data={data} content={content} index={index} unit={unit} apply={apply} />
@@ -420,17 +438,14 @@ function EnhancementPicker({
   content,
   index,
   apply,
-  offerChoices,
 }: {
   data: Data40k;
   content: ListContent;
   index: number;
   apply: (next: ListContent) => void;
-  /** False for non-characters carrying an upgrade — clearing only, no catalog. */
-  offerChoices: boolean;
 }) {
   const u = content.roster.units[index];
-  const choices = offerChoices ? enhancementChoices(data, content.roster, index) : [];
+  const choices = enhancementChoices(data, content.roster, index);
   if (choices.length === 0 && !u.enhancement) return null;
   // An unmatched enhancement (text-only import) isn't in the choice list; show
   // it as its own row so the trigger names it and picking anything replaces it.
@@ -467,8 +482,13 @@ function EnhancementPicker({
             ...choices.map((c) => ({
               value: c.id,
               label: c.name,
-              detail: c.takenBy != null ? `${c.cost} pts · taken` : `${c.cost} pts`,
-              disabled: c.takenBy != null,
+              detail:
+                c.missing.length > 0
+                  ? `needs ${c.missing.join(", ")}`
+                  : c.takenBy != null
+                    ? `${c.cost} pts · taken`
+                    : `${c.cost} pts`,
+              disabled: c.takenBy != null || c.missing.length > 0,
             })),
           ]}
           onChange={(id) =>

@@ -383,8 +383,9 @@ export function setEnhancement(
     u.enhancement = mkRef(enh.id, enh.name);
     u.enhancement_points = enh.cost;
   }
-  recomputeTotal(next.roster);
-  return next;
+  // Reprice the base cost too: source lists sometimes roll an upgrade's cost
+  // into the printed unit cost, and the dataset price is the ground truth here.
+  return finalize(data, next, [u.ref.id]);
 }
 
 /** Make `index` the warlord (or clear it); a roster has at most one. */
@@ -456,9 +457,30 @@ export function addDetachment(data: Data40k, content: ListContent, id: string): 
   return next;
 }
 
-export function removeDetachment(content: ListContent, index: number): ListContent {
+/**
+ * Drop a detachment and strip every enhancement that belonged to it — an
+ * enhancement from a detachment the list no longer runs isn't a choice at all.
+ */
+export function removeDetachment(data: Data40k, content: ListContent, index: number): ListContent {
   const next = clone(content);
   next.roster.detachments.splice(index, 1);
+  const remaining = new Set(next.roster.detachments.map((d) => d.ref.id).filter(Boolean));
+  const touched: (string | null)[] = [];
+  for (const u of next.roster.units) {
+    if (!u.enhancement?.id) continue;
+    const enh = byId(data.enhancements, u.enhancement.id, next.roster.faction_id);
+    if (enh && !remaining.has(enh.detachment_id)) {
+      u.enhancement = null;
+      u.enhancement_points = null;
+      touched.push(u.ref.id);
+    }
+  }
+  return finalize(data, next, touched);
+}
+
+export function setForceDisposition(content: ListContent, id: string | null): ListContent {
+  const next = clone(content);
+  next.roster.force_disposition = id;
   return next;
 }
 
@@ -468,12 +490,17 @@ export interface EnhancementChoice {
   cost: number;
   /** Index of another roster unit already carrying it (an army takes each once). */
   takenBy: number | null;
+  /** Restriction keywords the unit lacks — offered disabled, with the reason. */
+  missing: string[];
 }
 
 /**
- * Enhancements available to the unit at `index`: those of the roster's
- * detachments whose keyword gates the unit passes, flagged when another unit
- * already took them.
+ * Enhancements available to the unit at `index` from the roster's detachments.
+ * Regular enhancements go to characters (not epic heroes); `upgrade_tag`
+ * enhancements go to non-character units instead. The unit's own NAME counts
+ * as a keyword — restrictions routinely name the datasheet ("Deffkilla
+ * Wartrike"). Near-misses are returned with `missing` set so the UI can say
+ * which keyword the unit lacks instead of silently hiding the row.
  */
 export function enhancementChoices(
   data: Data40k,
@@ -484,23 +511,33 @@ export function enhancementChoices(
   if (!factionId) return [];
   const unit = unitEntity(data, roster.units[index].ref, factionId);
   if (!unit) return [];
+  const characterish = unit.role === "character" || unit.role === "epic-hero";
   const keywords = new Set(
-    [...(unit.keywords ?? []), ...(unit.faction_keywords ?? [])].map((k) => k.toLowerCase()),
+    [unit.name, ...(unit.keywords ?? []), ...(unit.faction_keywords ?? [])].map((k) =>
+      k.toLowerCase(),
+    ),
   );
   const detIds = new Set(roster.detachments.map((d) => d.ref.id).filter(Boolean));
   // Enhancement records carry no faction_id, so byFaction() finds nothing —
   // walk the full collection by detachment_id (the detachment scopes the faction).
   return data.enhancements.all
     .filter((e) => detIds.has(e.detachment_id))
-    .filter((e) =>
-      (e.keyword_restrictions ?? []).every((k) => keywords.has(k.toLowerCase())),
-    )
+    .filter((e) => (e.upgrade_tag ? !characterish : unit.role === "character"))
     .filter((e) => !(e.exclusion_keywords ?? []).some((k) => keywords.has(k.toLowerCase())))
     .map((e) => {
       const takenBy = roster.units.findIndex(
         (u, i) => i !== index && u.enhancement?.id === e.id,
       );
-      return { id: e.id, name: e.name, cost: e.cost, takenBy: takenBy === -1 ? null : takenBy };
+      const missing = (e.keyword_restrictions ?? []).filter(
+        (k) => !keywords.has(k.toLowerCase()),
+      );
+      return {
+        id: e.id,
+        name: e.name,
+        cost: e.cost,
+        takenBy: takenBy === -1 ? null : takenBy,
+        missing,
+      };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }

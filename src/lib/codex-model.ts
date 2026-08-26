@@ -98,6 +98,10 @@ export interface EditableEnhancement {
   text: string;
   /** Keyword restrictions, e.g. ["Character"]. */
   restrictions: string[];
+  /** Keywords that bar a unit from taking it, e.g. ["Aircraft"]. */
+  exclusions?: string[];
+  /** An upgrade taken by a non-character UNIT (11e upgrade_tag), not a character. */
+  upgrade?: boolean;
 }
 
 export interface EditableStratagem {

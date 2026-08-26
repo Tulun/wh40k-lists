@@ -16,6 +16,7 @@ import {
   removeDetachment,
   removeUnit,
   setEnhancement,
+  setForceDisposition,
   setModelCount,
   setWarlord,
   setWeaponCount,
@@ -323,7 +324,40 @@ describe("detachments", () => {
   it("adds and removes detachments with their DP costs", () => {
     const withDet = addDetachment(data40k, base, "war-horde");
     expect(withDet.roster.detachments.at(-1)?.ref.id).toBe("war-horde");
-    const removed = removeDetachment(withDet, withDet.roster.detachments.length - 1);
+    const removed = removeDetachment(data40k, withDet, withDet.roster.detachments.length - 1);
     expect(removed.roster.detachments).toHaveLength(base.roster.detachments.length);
+  });
+
+  it("removing a detachment strips the enhancements it granted", () => {
+    // Give a character an enhancement from an extra detachment, then drop it.
+    const enh = data40k.enhancements.all.find((e) =>
+      data40k.detachments.getAny(e.detachment_id),
+    )!;
+    const det = data40k.detachments.getAny(enh.detachment_id)!;
+    const content = structuredClone(base);
+    content.roster.detachments.push({
+      ref: { id: det.id, raw_name: det.name, resolved: true, candidates: [] },
+      dp_cost: null,
+    });
+    const i = indexOf(content, "bigboss");
+    content.roster.units[i].enhancement = {
+      id: enh.id,
+      raw_name: enh.name,
+      resolved: true,
+      candidates: [],
+    };
+    content.roster.units[i].enhancement_points = enh.cost;
+    const next = removeDetachment(data40k, content, content.roster.detachments.length - 1);
+    expect(next.roster.units[i].enhancement).toBeNull();
+    expect(next.roster.units[i].enhancement_points).toBeNull();
+    expect(next.roster.points.total_computed).toBe(total(next));
+  });
+});
+
+describe("setForceDisposition", () => {
+  it("sets and clears the roster's disposition", () => {
+    const next = setForceDisposition(base, "reconnaissance");
+    expect(next.roster.force_disposition).toBe("reconnaissance");
+    expect(setForceDisposition(next, null).roster.force_disposition).toBeNull();
   });
 });

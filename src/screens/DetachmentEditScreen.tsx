@@ -218,6 +218,33 @@ export default function DetachmentEditScreen() {
                 placeholder="Character…"
               />
             </Field>
+            <Field label="Excluded keywords">
+              <ChipListInput
+                value={enh.exclusions ?? []}
+                onChange={(exclusions) =>
+                  patch({
+                    enhancements: det.enhancements.map((q, j) =>
+                      j === i ? { ...q, exclusions: exclusions.length ? exclusions : undefined } : q,
+                    ),
+                  })
+                }
+                placeholder="Aircraft…"
+              />
+            </Field>
+            <label className="flex items-center gap-2 text-xs text-ink-dim">
+              <input
+                type="checkbox"
+                checked={enh.upgrade ?? false}
+                onChange={(e) =>
+                  patch({
+                    enhancements: det.enhancements.map((q, j) =>
+                      j === i ? { ...q, upgrade: e.target.checked || undefined } : q,
+                    ),
+                  })
+                }
+              />
+              Upgrade — taken by a non-character unit
+            </label>
             <TextArea
               value={enh.text}
               placeholder="Paraphrased effect."
