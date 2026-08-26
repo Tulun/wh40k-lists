@@ -676,6 +676,14 @@ export default function DatasheetEditScreen() {
 
       {isCharacter && (
         <SectionCard title="Can lead">
+          <label className="flex items-center gap-2 text-xs text-ink-dim">
+            <input
+              type="checkbox"
+              checked={sheet.support ?? false}
+              onChange={(e) => patch({ support: e.target.checked || undefined })}
+            />
+            Support character — attaches to a unit, can't be fielded alone
+          </label>
           {factionSheets.length === 0 ? (
             <p className="text-xs text-ink-faint">No other datasheets in this faction yet.</p>
           ) : (

@@ -544,6 +544,18 @@ export function legalityIssues(data: Data40k, roster: Roster): string[] {
   return issues;
 }
 
+/** Declare (or clear) which unit the character at `leaderIndex` is attached to. */
+export function setLeaderAttachment(
+  content: ListContent,
+  leaderIndex: number,
+  bodyguardIndex: number | null,
+): ListContent {
+  const next = clone(content);
+  if (bodyguardIndex == null) delete next.attachments[String(leaderIndex)];
+  else next.attachments[String(leaderIndex)] = bodyguardIndex;
+  return next;
+}
+
 export function setForceDisposition(content: ListContent, id: string | null): ListContent {
   const next = clone(content);
   next.roster.force_disposition = id;

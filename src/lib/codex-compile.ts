@@ -223,6 +223,11 @@ function compileDatasheet(factionId: string, sheet: EditableDatasheet, out: Comp
       : {}),
     weapon_ids: weaponIds,
     ability_ids: abilityIds,
+    ...(sheet.support
+      ? { attachment_role: "support" as const }
+      : sheet.leads.length > 0
+        ? { attachment_role: "leader" as const }
+        : {}),
     game_version: GV_REF,
   });
   if (sheet.leads.length > 0) {

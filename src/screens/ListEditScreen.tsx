@@ -19,6 +19,7 @@ import {
   setEnhancement,
   setModelCount,
   setForceDisposition,
+  setLeaderAttachment,
   setRawModelCount,
   setUnitPoints,
   setWarlord,
@@ -239,17 +240,7 @@ export default function ListEditScreen() {
         </details>
       )}
 
-      <ul className="space-y-2">
-        {roster.units.map((u, i) => (
-          <UnitRow
-            key={`${u.ref.id ?? u.ref.raw_name}-${i}`}
-            data={data}
-            content={content}
-            index={i}
-            apply={apply}
-          />
-        ))}
-      </ul>
+      <UnitGroups data={data} content={content} apply={apply} />
 
       <div className="rounded-md border border-edge bg-panel/50 p-3">
         <h2 className="text-sm font-semibold">Add unit</h2>
@@ -294,6 +285,58 @@ export default function ListEditScreen() {
   );
 }
 
+/**
+ * Units in roster order, with attached leaders grouped onto the unit they
+ * lead — one bordered block per attached pairing, instead of a flat list.
+ */
+function UnitGroups({
+  data,
+  content,
+  apply,
+}: {
+  data: Data40k;
+  content: ListContent;
+  apply: (next: ListContent) => void;
+}) {
+  const roster = content.roster;
+  const leadersOf = new Map<number, number[]>();
+  const attached = new Set<number>();
+  for (const [l, b] of Object.entries(content.attachments)) {
+    const li = Number(l);
+    if (!roster.units[li] || !roster.units[b]) continue;
+    if (!leadersOf.has(b)) leadersOf.set(b, []);
+    leadersOf.get(b)!.push(li);
+    attached.add(li);
+  }
+  return (
+    <ul className="space-y-2">
+      {roster.units.map((u, i) => {
+        if (attached.has(i)) return null; // rendered inside its bodyguard's block
+        const key = `${u.ref.id ?? u.ref.raw_name}-${i}`;
+        const leaders = leadersOf.get(i) ?? [];
+        if (leaders.length === 0) {
+          return (
+            <li key={key}>
+              <UnitRow data={data} content={content} index={i} apply={apply} />
+            </li>
+          );
+        }
+        return (
+          <li key={key} className="space-y-1 rounded-lg border border-accent/40 p-1">
+            <p className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
+              Attached unit
+            </p>
+            {leaders.map((li) => (
+              <UnitRow key={li} data={data} content={content} index={li} apply={apply} />
+            ))}
+            <UnitRow data={data} content={content} index={i} apply={apply} />
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function UnitRow({
   data,
   content,
@@ -314,7 +357,7 @@ function UnitRow({
   const isCharacter = unit?.role === "character" || unit?.role === "epic-hero";
 
   return (
-    <li className="rounded-md border border-edge bg-panel/50 px-3 py-2">
+    <div className="rounded-md border border-edge bg-panel/50 px-3 py-2">
       <div className="flex items-baseline gap-2">
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">
           {name}
@@ -394,9 +437,73 @@ function UnitRow({
       <EnhancementPicker data={data} content={content} index={index} apply={apply} />
 
       {unit && (
+        <AttachPicker data={data} content={content} index={index} unit={unit} apply={apply} />
+      )}
+
+      {unit && (
         <WargearEditor data={data} content={content} index={index} unit={unit} apply={apply} />
       )}
-    </li>
+    </div>
+  );
+}
+
+/**
+ * "Leads" dropdown for a character that can attach: eligible bodyguard units
+ * present in the roster, from the dataset's leader-attachment data.
+ */
+function AttachPicker({
+  data,
+  content,
+  index,
+  unit,
+  apply,
+}: {
+  data: Data40k;
+  content: ListContent;
+  index: number;
+  unit: Unit;
+  apply: (next: ListContent) => void;
+}) {
+  const roster = content.roster;
+  const eligible = new Set(data.dataset.bodyguardsAttachableFrom(unit.id).map((v) => v.id));
+  const current = content.attachments[String(index)] ?? null;
+  if (eligible.size === 0 && current == null) return null;
+  const candidates = roster.units
+    .map((u, i) => ({ u, i }))
+    .filter(({ u, i }) => i !== index && u.ref.id != null && eligible.has(u.ref.id));
+  if (candidates.length === 0 && current == null) return null;
+
+  const nameOf = (i: number) => {
+    const u = roster.units[i];
+    return byId(data.units, u.ref.id, roster.faction_id)?.name ?? u.ref.raw_name;
+  };
+  const nth = new Map<string, number>();
+  const options = candidates.map(({ u, i }) => {
+    const n = (nth.get(u.ref.id!) ?? 0) + 1;
+    nth.set(u.ref.id!, n);
+    const dup = candidates.filter((c) => c.u.ref.id === u.ref.id).length > 1;
+    return { value: String(i), label: dup ? `${nameOf(i)} #${n}` : nameOf(i) };
+  });
+  // The current pick may have become ineligible (unit swapped) — keep it visible.
+  if (current != null && !options.some((o) => o.value === String(current))) {
+    options.unshift({ value: String(current), label: nameOf(current) });
+  }
+
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <span className="shrink-0 text-xs text-ink-faint">Leads</span>
+      <div className="min-w-0 flex-1">
+        <Dropdown
+          value={current != null ? String(current) : null}
+          placeholder="Not attached"
+          clearable
+          options={options}
+          onChange={(v) =>
+            apply(setLeaderAttachment(content, index, v == null ? null : Number(v)))
+          }
+        />
+      </div>
+    </div>
   );
 }
 

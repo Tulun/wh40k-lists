@@ -91,6 +91,8 @@ export interface EditableDatasheet {
   abilities: EditableAbility[];
   /** Datasheet ids this character can lead. */
   leads: string[];
+  /** A support character: attaches to a unit but cannot be fielded alone (11e). */
+  support?: boolean;
 }
 
 export interface EditableEnhancement {
@@ -238,6 +240,7 @@ export function seedDatasheetFromUpstream(view: UnitView, leads: string[] = []):
       })),
     })),
     wargearOptions: seedWargearOptions(view),
+    ...(raw.attachment_role === "support" ? { support: true } : {}),
     abilities: view.abilities.map((a) => ({
       name: a.name,
       text: abilityText(a),
