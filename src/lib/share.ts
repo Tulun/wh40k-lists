@@ -3,8 +3,10 @@
  * format the package ships — header block (name, faction, detachments, points,
  * warlord, enhancements), then one line per unit with points and wargear.
  */
+import type { Roster } from "@alpaca-software/40kdc-data";
 import type { SavedList } from "../store/schema";
 import type { Data40k } from "./data";
+import { byId } from "./lookup";
 
 export function shareText(data: Data40k, list: SavedList): string {
   const roster = structuredClone(list.roster);
@@ -12,7 +14,65 @@ export function shareText(data: Data40k, list: SavedList): string {
   // The serializer reports the roster's own totals; after in-app edits only
   // total_computed is current.
   roster.points = { ...roster.points, total_reported: roster.points.total_computed };
-  return spaceUnitBlocks(data.exportRoster(roster, "newrecruit-wtc-compact"));
+  const out = data.exportRoster(roster, "newrecruit-wtc-compact");
+  return spaceUnitBlocks(remarkCharacters(out, data, roster));
+}
+
+/**
+ * The dataset-free serializer only tags `CharN:` on units it can infer are
+ * characters (warlord, enhancement, attachment). We have the dataset, so
+ * re-tag every unit whose datasheet role is character/epic-hero, renumbering
+ * the header's WARLORD and ENHANCEMENT references to match.
+ */
+function remarkCharacters(text: string, data: Data40k, roster: Roster): string {
+  const slots: (number | null)[] = [];
+  let next = 1;
+  for (const u of roster.units) {
+    const role = u.ref.id
+      ? byId(data.units, u.ref.id, roster.faction_id)?.raw.role
+      : undefined;
+    const isChar =
+      role === "character" ||
+      role === "epic-hero" ||
+      u.is_warlord ||
+      u.enhancement != null ||
+      u.leader_attachment != null;
+    slots.push(isChar ? next++ : null);
+  }
+
+  const lines = text.split("\n");
+  let headerEnd = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].startsWith("+++")) {
+      headerEnd = i;
+      break;
+    }
+  }
+  if (headerEnd === -1) return text;
+
+  // Body: one line per unit in roster order (Enhancement lines ride along).
+  let unitIdx = -1;
+  for (let i = headerEnd + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === "" || line.startsWith("Enhancement:")) continue;
+    unitIdx += 1;
+    const stripped = line.replace(/^Char\d+: /, "");
+    const slot = slots[unitIdx];
+    lines[i] = slot != null ? `Char${slot}: ${stripped}` : stripped;
+  }
+
+  const warlordIdx = roster.units.findIndex((u) => u.is_warlord);
+  const enhancedIdx = roster.units.findIndex((u) => u.enhancement != null);
+  for (let i = 0; i < headerEnd; i++) {
+    if (lines[i].startsWith("+ WARLORD:") && warlordIdx >= 0) {
+      lines[i] = `+ WARLORD: Char${slots[warlordIdx]}: ${roster.units[warlordIdx].ref.raw_name}`;
+    }
+    if (lines[i].startsWith("+ ENHANCEMENT:") && enhancedIdx >= 0) {
+      const u = roster.units[enhancedIdx];
+      lines[i] = `+ ENHANCEMENT: ${u.enhancement!.raw_name} (on Char${slots[enhancedIdx]}: ${u.ref.raw_name})`;
+    }
+  }
+  return lines.join("\n");
 }
 
 /**

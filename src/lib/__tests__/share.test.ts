@@ -32,6 +32,17 @@ describe("shareText", () => {
     expect(out).toMatch(/Squighog Boyz \(270 pts\)/);
   });
 
+  it("tags every character with CharN by datasheet role, not just enhanced ones", () => {
+    // Wazdakka is a character with no enhancement/attachment — the raw
+    // serializer would leave him untagged.
+    expect(out).toMatch(/Char\d+: 1x Wazdakka Gutsmek/);
+    // Non-characters stay untagged; header warlord reference uses the same numbering.
+    expect(out).not.toMatch(/Char\d+: \d+x Boyz/);
+    const warlordSlot = out.match(/\+ WARLORD: Char(\d+): Beastboss on Squigosaur/)?.[1];
+    expect(warlordSlot).toBeDefined();
+    expect(out).toContain(`Char${warlordSlot}: 1x Beastboss on Squigosaur`);
+  });
+
   it("puts a blank line between unit blocks, keeping Enhancement lines attached", () => {
     const body = out.slice(out.lastIndexOf("+++"));
     // Units are separated by exactly one blank line…

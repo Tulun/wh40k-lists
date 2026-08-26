@@ -18,9 +18,12 @@ export default function App() {
           <div className="flex-1">
             <SlotToggle />
           </div>
-          <div className="w-14 shrink-0 text-right text-xs text-ink-dim">
-            {points != null && pathname !== "/import" ? `${points} pts` : ""}
-          </div>
+          {active && pathname !== "/import" && (
+            <div className="flex min-w-0 shrink items-baseline justify-end gap-1.5 text-right text-xs">
+              <span className="min-w-0 truncate font-semibold">{active.name}</span>
+              <span className="shrink-0 text-ink-dim">{points} pts</span>
+            </div>
+          )}
         </div>
       </header>
 
