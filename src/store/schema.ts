@@ -3,7 +3,7 @@ import type { RoleHints } from "../lib/normalize";
 import type { Overrides } from "../lib/overrides";
 
 export const STORAGE_KEY = "40k-viewer";
-export const STORAGE_VERSION = 2;
+export const STORAGE_VERSION = 3;
 
 export type Slot = "mine" | "opponent";
 
@@ -29,10 +29,32 @@ export interface SavedList {
   dataVersion: { edition: string; dataslate: string; pkg: string };
 }
 
+export interface ListsSyncState {
+  lastSynced: string | null;
+  /** Remote lists.json `updated` stamp as of the last successful sync — the conflict baseline. */
+  remoteUpdated: string | null;
+}
+
 export interface PersistedState {
   lists: Record<string, SavedList>;
   slots: Record<Slot, string | null>;
   activeSlot: Slot;
+  /** Stamp of the last list/slot mutation on this device — the sync conflict token. */
+  updated: string | null;
+  /** Local changes not yet pushed to the gist. */
+  dirty: boolean;
+  sync: ListsSyncState;
+}
+
+/**
+ * The shape of `lists.json` in the sync gist (same gist as the codex doc).
+ * `activeSlot` stays device-local; lists and slot assignments travel.
+ */
+export interface RemoteLists {
+  version: 1;
+  updated: string;
+  lists: Record<string, SavedList>;
+  slots: Record<Slot, string | null>;
 }
 
 /** Zustand persist migration hook; versions bump when the shape changes. */
@@ -43,6 +65,11 @@ export function migrate(state: unknown, fromVersion: number): PersistedState {
       list.roleHints ??= {};
       list.attachments ??= {};
     }
+  }
+  if (fromVersion < 3) {
+    s.updated ??= null;
+    s.dirty ??= false;
+    s.sync ??= { lastSynced: null, remoteUpdated: null };
   }
   return s;
 }

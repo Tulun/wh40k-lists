@@ -18,9 +18,15 @@ screens show edits immediately, and roster import resolves against the edited da
 
 The editable doc (`CodexDoc`, [src/lib/codex-model.ts](../src/lib/codex-model.ts)) has one home: a
 **secret GitHub Gist** holding `codex.json`. Each device caches a copy in browser storage (key
-`40k-viewer-codex`) so the app works offline, pulls on opening the editor, and auto-pushes a few
-seconds after each save. Conflicts (both sides edited) surface a keep-mine / take-gist choice on
-the editor home screen.
+`40k-viewer-codex`) so the app works offline, pulls on app launch, and auto-pushes a few
+seconds after each save. Conflicts (both sides edited) surface a keep-mine / take-gist banner on
+every screen ([src/components/SyncManager.tsx](../src/components/SyncManager.tsx)).
+
+The same gist also holds `lists.json` — saved lists and slot assignments — so lists follow you
+across devices with no extra setup. It syncs on the same pull-on-launch / debounced auto-push
+cycle with its own per-file conflict baseline (fields on the `40k-viewer` store,
+[src/store/schema.ts](../src/store/schema.ts)). A device's first lists sync merges both sides
+losslessly (union by list id, remote winning collisions) instead of clobbering either.
 
 **Setup per device:** editor home → Set up sync → paste a GitHub **classic** personal access
 token with only the `gist` scope (github.com → Settings → Developer settings → Personal access

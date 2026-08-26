@@ -2,6 +2,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import SlotToggle from "./components/SlotToggle";
 import PoweredBy from "./components/PoweredBy";
+import SyncManager from "./components/SyncManager";
 import { useActiveList } from "./store/lists";
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
       </header>
 
       <main className="flex-1 px-3 pb-6 pt-3">
+        <SyncManager />
         <Outlet />
       </main>
 

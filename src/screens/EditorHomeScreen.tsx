@@ -1,18 +1,12 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Field, SectionCard, SmallButton, TextInput } from "../components/editor/fields";
 import { useDataset } from "../hooks/useDataset";
-import type { CodexDoc } from "../lib/codex-model";
 import { getCodexBuildError } from "../lib/data";
 import { EXPLORE_FACTION_IDS } from "../lib/flags";
-import {
-  pullRemote,
-  pushLocal,
-  resolveConflict,
-  setUpSync,
-  startAutoSync,
-} from "../lib/gist-sync";
+import { pullRemote, pushLocal, setUpSync } from "../lib/gist-sync";
 import { codexBadge, factionMode, useCodex } from "../store/codex";
+import { useLists } from "../store/lists";
 
 type SyncNote = { tone: "ok" | "error"; text: string } | null;
 
@@ -20,9 +14,10 @@ export default function EditorHomeScreen() {
   const data = useDataset();
   const doc = useCodex((s) => s.doc);
   const sync = useCodex((s) => s.sync);
-  const dirty = useCodex((s) => s.dirty);
+  const codexDirty = useCodex((s) => s.dirty);
+  const listsDirty = useLists((s) => s.dirty);
+  const dirty = codexDirty || listsDirty;
 
-  const [conflict, setConflict] = useState<CodexDoc | null>(null);
   const [note, setNote] = useState<SyncNote>(null);
   const [busy, setBusy] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
@@ -32,31 +27,24 @@ export default function EditorHomeScreen() {
   const connected = Boolean(sync.gistId && sync.token);
   const buildError = getCodexBuildError();
 
-  // Pull once on mount and start the debounced auto-push for the session.
-  useEffect(() => {
-    startAutoSync((remoteDoc) => setConflict(remoteDoc));
-    if (!connected) return;
-    void pullRemote().then((r) => {
-      if (r.status === "conflict" && r.remoteDoc) setConflict(r.remoteDoc);
-      else if (r.status === "error") setNote({ tone: "error", text: r.error.message });
-      else if (r.status === "pulled") setNote({ tone: "ok", text: "Pulled latest from gist." });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // Conflicts surface in the app-wide SyncManager banner, not here.
   async function syncNow() {
     setBusy(true);
     setNote(null);
     const pulled = await pullRemote();
-    if (pulled.status === "conflict" && pulled.remoteDoc) {
-      setConflict(pulled.remoteDoc);
+    if (pulled.status === "conflict") {
+      setNote({ tone: "error", text: "Both sides changed — resolve the conflict above." });
     } else if (pulled.status === "error") {
       setNote({ tone: "error", text: pulled.error.message });
-    } else if (dirty) {
+    } else if (useCodex.getState().dirty || useLists.getState().dirty) {
       const pushed = await pushLocal();
-      if (pushed.status === "conflict" && pushed.remoteDoc) setConflict(pushed.remoteDoc);
-      else if (pushed.status === "error") setNote({ tone: "error", text: pushed.error.message });
-      else setNote({ tone: "ok", text: "Pushed local changes." });
+      if (pushed.status === "conflict") {
+        setNote({ tone: "error", text: "Both sides changed — resolve the conflict above." });
+      } else if (pushed.status === "error") {
+        setNote({ tone: "error", text: pushed.error.message });
+      } else {
+        setNote({ tone: "ok", text: "Pushed local changes." });
+      }
     } else {
       setNote({ tone: "ok", text: pulled.status === "pulled" ? "Pulled latest from gist." : "Up to date." });
     }
@@ -93,33 +81,6 @@ export default function EditorHomeScreen() {
         </p>
       )}
 
-      {conflict && (
-        <div className="space-y-2 rounded-md border border-opponent/40 bg-opponent/10 p-3">
-          <p className="text-xs text-opponent">
-            The gist changed since this device last synced (edited on another device, or by
-            Claude), and you also have local edits. Which copy wins?
-          </p>
-          <div className="flex gap-2">
-            <SmallButton
-              tone="primary"
-              onClick={() => {
-                void resolveConflict("local", conflict).then(() => setConflict(null));
-              }}
-            >
-              Keep this device's
-            </SmallButton>
-            <SmallButton
-              tone="danger"
-              onClick={() => {
-                void resolveConflict("remote", conflict).then(() => setConflict(null));
-              }}
-            >
-              Take the gist's
-            </SmallButton>
-          </div>
-        </div>
-      )}
-
       <SectionCard
         title="Sync"
         actions={
@@ -145,7 +106,8 @@ export default function EditorHomeScreen() {
           </div>
         ) : (
           <p className="text-xs text-ink-dim">
-            Not connected — edits stay on this device until you connect a gist.{" "}
+            Not connected — codex edits and saved lists stay on this device until you connect a
+            gist.{" "}
             <button type="button" onClick={() => setShowSetup((v) => !v)} className="text-accent underline">
               Set up sync
             </button>
