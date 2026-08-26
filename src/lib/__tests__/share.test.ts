@@ -32,6 +32,12 @@ describe("shareText", () => {
     expect(out).toMatch(/Squighog Boyz \(270 pts\)/);
   });
 
+  it("orders characters before other units", () => {
+    // Wazdakka sits mid-roster in the source; the share pulls characters up.
+    expect(out.indexOf("1x Wazdakka Gutsmek")).toBeLessThan(out.indexOf("Squighog Boyz"));
+    expect(out.indexOf("1x Wazdakka Gutsmek")).toBeLessThan(out.indexOf("x Boyz"));
+  });
+
   it("tags every character with CharN by datasheet role, not just enhanced ones", () => {
     // Wazdakka is a character with no enhancement/attachment — the raw
     // serializer would leave him untagged.

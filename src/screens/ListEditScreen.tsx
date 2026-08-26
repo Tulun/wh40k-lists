@@ -311,9 +311,23 @@ function UnitGroups({
   }
   for (const leaders of leadersOf.values()) leaders.sort((a, b) => a - b);
 
+  // Characters first (like the glance view), attached pairs anchored at the
+  // character; stable within each rank so roster order still breaks ties.
+  const rankOf = (i: number) => {
+    const u = roster.units[i];
+    const role = u.ref.id
+      ? byId(data.units, u.ref.id, roster.faction_id)?.raw.role
+      : undefined;
+    return role === "character" || role === "epic-hero" ? 0 : 1;
+  };
+  const displayOrder = roster.units
+    .map((_, i) => i)
+    .sort((a, b) => rankOf(a) - rankOf(b) || a - b);
+
   return (
     <ul className="space-y-2">
-      {roster.units.map((u, i) => {
+      {displayOrder.map((i) => {
+        const u = roster.units[i];
         const key = `${u.ref.id ?? u.ref.raw_name}-${i}`;
         if (leadersOf.has(i)) return null; // moves up to its (first) leader's slot
         const body = bodyguardOf.get(i);

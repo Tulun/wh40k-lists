@@ -14,8 +14,16 @@ export function shareText(data: Data40k, list: SavedList): string {
   // The serializer reports the roster's own totals; after in-app edits only
   // total_computed is current.
   roster.points = { ...roster.points, total_reported: roster.points.total_computed };
+  // Characters first (stable within each group) — the WTC convention, and how
+  // every other view in the app orders the army.
+  roster.units = [...roster.units].sort((a, b) => charRank(data, roster, a) - charRank(data, roster, b));
   const out = data.exportRoster(roster, "newrecruit-wtc-compact");
   return spaceUnitBlocks(remarkCharacters(out, data, roster));
+}
+
+function charRank(data: Data40k, roster: Roster, u: Roster["units"][number]): number {
+  const role = u.ref.id ? byId(data.units, u.ref.id, roster.faction_id)?.raw.role : undefined;
+  return role === "character" || role === "epic-hero" ? 0 : 1;
 }
 
 /**
