@@ -6,7 +6,7 @@ import { MicroStats } from "../components/StatLine";
 import { useDataset } from "../hooks/useDataset";
 import type { Data40k } from "../lib/data";
 import { dedupeRoster, type DisplayEntry } from "../lib/dedupe";
-import { abilityText, fnpFromAbilityNames } from "../lib/describe";
+import { fnpFromAbilityNames } from "../lib/describe";
 import { byId } from "../lib/lookup";
 import { armyStratagems, sortStratagems } from "../lib/stratagems";
 import { useActiveList, useLists } from "../store/lists";
@@ -170,31 +170,42 @@ function ArmyHeader({ data, roster }: { data: Data40k | null; roster: import("@a
           : entity?.detachment_rule_id
             ? [entity.detachment_rule_id]
             : [];
-        return (
-          <div key={detachment.ref.id ?? `${detachment.ref.raw_name}-${i}`}>
-            <div className="mt-0.5 text-xs text-ink-dim">
-              {entity?.name ?? detachment.ref.raw_name}
-              {detachment.dp_cost != null && (
-                <span className="text-ink-faint"> · {detachment.dp_cost} DP</span>
-              )}
-            </div>
-            {data &&
-              ruleIds.map((id) => {
-                const ability = byId(data.abilities, id, roster.faction_id);
-                if (!ability) return null;
-                return (
-                  <details key={id} className="mt-1">
-                    <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-accent">
-                      {ability.name}
-                    </summary>
-                    <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">
-                      {abilityText(ability)}
-                    </p>
-                  </details>
-                );
-              })}
+        const header = (
+          <div className="mt-0.5 text-xs text-ink-dim">
+            {entity?.name ?? detachment.ref.raw_name}
+            {detachment.dp_cost != null && (
+              <span className="text-ink-faint"> · {detachment.dp_cost} DP</span>
+            )}
           </div>
         );
+        // Tapping the block opens the detachment's full page — rule text,
+        // enhancements, and stratagems — when it resolves to a real entity.
+        if (entity && roster.faction_id) {
+          return (
+            <Link
+              key={detachment.ref.id ?? `${detachment.ref.raw_name}-${i}`}
+              to={`/explore/${roster.faction_id}/detachment/${entity.id}`}
+              className="block active:bg-panel"
+            >
+              {header}
+              {data &&
+                ruleIds.map((id) => {
+                  const ability = byId(data.abilities, id, roster.faction_id);
+                  if (!ability) return null;
+                  return (
+                    <div
+                      key={id}
+                      className="mt-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-accent"
+                    >
+                      <span className="min-w-0 flex-1 truncate">{ability.name}</span>
+                      <span aria-hidden>›</span>
+                    </div>
+                  );
+                })}
+            </Link>
+          );
+        }
+        return <div key={detachment.ref.id ?? `${detachment.ref.raw_name}-${i}`}>{header}</div>;
       })}
     </div>
   );
