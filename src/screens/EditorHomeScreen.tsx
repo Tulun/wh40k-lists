@@ -130,7 +130,7 @@ export default function EditorHomeScreen() {
                   className="w-56 max-w-full rounded-md bg-white p-3 [&_svg]:h-auto [&_svg]:w-full"
                   dangerouslySetInnerHTML={{
                     __html: renderSVG(
-                      `${window.location.origin}${window.location.pathname}#/sync-setup?token=${encodeURIComponent(sync.token)}&gist=${encodeURIComponent(sync.gistId)}`,
+                      `${window.location.origin}${import.meta.env.BASE_URL}#/sync-setup?token=${encodeURIComponent(sync.token)}&gist=${encodeURIComponent(sync.gistId)}`,
                     ),
                   }}
                 />

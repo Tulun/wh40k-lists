@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>40k List Viewer</title>
+    <script>
+      // GH Pages SPA fallback: any path that isn't a real file lands here with
+      // a 404 status. Rebuild the intended hash route and redirect into the
+      // app. Notably recovers QR scans where the scanner percent-encoded the
+      // '#' (the fragment arrives as a literal path segment, e.g.
+      // /wh40k-lists/%23/sync-setup?token=...), and bare deep links typed
+      // without the hash (/wh40k-lists/lists).
+      (function () {
+        var loc = window.location;
+        var base = "/" + loc.pathname.split("/")[1] + "/";
+        var rest = loc.pathname.slice(base.length) + loc.search + loc.hash;
+        try {
+          rest = decodeURIComponent(rest);
+        } catch (e) {
+          /* keep as-is */
+        }
+        if (rest.charAt(0) === "#") rest = rest.slice(1);
+        if (rest.charAt(0) === "/") rest = rest.slice(1);
+        loc.replace(base + "#/" + rest);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

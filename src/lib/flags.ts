@@ -33,4 +33,4 @@ export const REPLACE_FACTION_IDS: readonly string[] = ["orks"];
  * without typing the token. Flip off once devices are synced; flip back on
  * when the PAT rotates. Gates both the QR button and the /sync-setup route.
  */
-export const QR_SYNC_SETUP_ENABLED = true;
+export const QR_SYNC_SETUP_ENABLED = false;
