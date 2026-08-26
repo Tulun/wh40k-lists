@@ -451,7 +451,7 @@ export default function DatasheetEditScreen() {
         }
       >
         {sheet.points.map((tier, i) => (
-          <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+          <div key={i} className="grid grid-cols-[1fr_1fr_4rem_4rem_auto] items-end gap-2">
             <Field label="Models">
               <NumberInput
                 value={tier.models}
@@ -466,6 +466,39 @@ export default function DatasheetEditScreen() {
                 value={tier.cost}
                 onValue={(cost) =>
                   patch({ points: sheet.points.map((t, j) => (j === i ? { ...t, cost } : t)) })
+                }
+              />
+            </Field>
+            {/* 11e ordinal bands: this price applies to army copies #from..#to. */}
+            <Field label="Copy from">
+              <TextInput
+                value={tier.fromUnit ?? ""}
+                placeholder="—"
+                inputMode="numeric"
+                onChange={(e) =>
+                  patch({
+                    points: sheet.points.map((t, j) =>
+                      j === i
+                        ? { ...t, fromUnit: e.target.value.trim() === "" ? undefined : Number(e.target.value) }
+                        : t,
+                    ),
+                  })
+                }
+              />
+            </Field>
+            <Field label="to">
+              <TextInput
+                value={tier.toUnit ?? ""}
+                placeholder="—"
+                inputMode="numeric"
+                onChange={(e) =>
+                  patch({
+                    points: sheet.points.map((t, j) =>
+                      j === i
+                        ? { ...t, toUnit: e.target.value.trim() === "" ? undefined : Number(e.target.value) }
+                        : t,
+                    ),
+                  })
                 }
               />
             </Field>

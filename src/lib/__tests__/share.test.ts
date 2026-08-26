@@ -31,4 +31,17 @@ describe("shareText", () => {
     expect(out).toMatch(/Beastboss on Squigosaur \(105 pts\): .*Beastchoppa/);
     expect(out).toMatch(/Squighog Boyz \(270 pts\)/);
   });
+
+  it("puts a blank line between unit blocks, keeping Enhancement lines attached", () => {
+    const body = out.slice(out.lastIndexOf("+++"));
+    // Units are separated by exactly one blank line…
+    expect(body).toMatch(/Squigosaur.*\nEnhancement: Da Kaptin\n\n/);
+    // …and no unit line directly follows another without one.
+    const lines = out.split("\n");
+    const start = lines.map((l) => l.startsWith("+++")).lastIndexOf(true) + 2;
+    for (let i = start; i < lines.length - 1; i++) {
+      if (lines[i] === "" || lines[i + 1] === "") continue;
+      expect(lines[i + 1].startsWith("Enhancement:")).toBe(true);
+    }
+  });
 });

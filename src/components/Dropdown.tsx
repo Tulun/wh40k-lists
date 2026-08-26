@@ -5,6 +5,8 @@ export interface DropdownOption {
   label: string;
   /** Right-aligned secondary text ("10 pts", "2 DP", "taken"). */
   detail?: string;
+  /** Faint second line under the label ("5× Twin Killsaws, 5× Kustom Shoota"). */
+  sub?: string;
   disabled?: boolean;
 }
 
@@ -93,6 +95,7 @@ export default function Dropdown({
               key={o.value}
               label={o.label}
               detail={o.detail}
+              sub={o.sub}
               disabled={o.disabled}
               selected={o.value === value}
               onPick={() => {
@@ -113,6 +116,7 @@ export default function Dropdown({
 function Row({
   label,
   detail,
+  sub,
   disabled = false,
   muted = false,
   selected,
@@ -120,6 +124,7 @@ function Row({
 }: {
   label: string;
   detail?: string;
+  sub?: string;
   disabled?: boolean;
   muted?: boolean;
   selected: boolean;
@@ -142,7 +147,14 @@ function Row({
         }`}
       >
         <span className={`w-3 shrink-0 ${selected ? "" : "opacity-0"}`}>✓</span>
-        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">{label}</span>
+          {sub && (
+            <span className={`block truncate text-[10px] ${disabled ? "" : "text-ink-faint"}`}>
+              {sub}
+            </span>
+          )}
+        </span>
         {detail && (
           <span className={`shrink-0 ${disabled ? "" : "text-ink-faint"}`}>{detail}</span>
         )}

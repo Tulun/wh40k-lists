@@ -477,16 +477,42 @@ function AttachPicker({
     const u = roster.units[i];
     return byId(data.units, u.ref.id, roster.faction_id)?.name ?? u.ref.raw_name;
   };
+  const gearOf = (i: number) => {
+    const u = roster.units[i];
+    return u.wargear
+      .filter((w) => w.count > 0)
+      .map((w) => {
+        const name = w.ref.id
+          ? (byId(data.weapons, w.ref.id, roster.faction_id)?.name ??
+            byId(data.wargear, w.ref.id, roster.faction_id)?.name ??
+            w.ref.raw_name)
+          : w.ref.raw_name;
+        return `${w.count}× ${name}`;
+      })
+      .join(", ");
+  };
+  const describe = (i: number) => {
+    const u = roster.units[i];
+    const pts = (u.points ?? 0) + (u.enhancement_points ?? 0);
+    return {
+      detail: `${u.model_count} model${u.model_count === 1 ? "" : "s"} · ${pts} pts`,
+      sub: gearOf(i) || undefined,
+    };
+  };
   const nth = new Map<string, number>();
   const options = candidates.map(({ u, i }) => {
     const n = (nth.get(u.ref.id!) ?? 0) + 1;
     nth.set(u.ref.id!, n);
     const dup = candidates.filter((c) => c.u.ref.id === u.ref.id).length > 1;
-    return { value: String(i), label: dup ? `${nameOf(i)} #${n}` : nameOf(i) };
+    return {
+      value: String(i),
+      label: dup ? `${nameOf(i)} #${n}` : nameOf(i),
+      ...describe(i),
+    };
   });
   // The current pick may have become ineligible (unit swapped) — keep it visible.
   if (current != null && !options.some((o) => o.value === String(current))) {
-    options.unshift({ value: String(current), label: nameOf(current) });
+    options.unshift({ value: String(current), label: nameOf(current), ...describe(current) });
   }
 
   return (

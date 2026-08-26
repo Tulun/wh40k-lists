@@ -13,7 +13,6 @@ export default function ListsScreen() {
   const assignSlot = useLists((s) => s.assignSlot);
   const setActiveSlot = useLists((s) => s.setActiveSlot);
   const deleteList = useLists((s) => s.deleteList);
-  const renameList = useLists((s) => s.renameList);
   const navigate = useNavigate();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -60,7 +59,7 @@ export default function ListsScreen() {
       <ul className="space-y-2">
         {all.map((list) => (
           <li key={list.id} className="rounded-md border border-edge bg-panel/50 px-3 py-2">
-            <div className="flex items-baseline gap-2">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 className="min-w-0 flex-1 truncate text-left text-sm font-semibold active:text-accent"
@@ -70,14 +69,21 @@ export default function ListsScreen() {
               </button>
               <button
                 type="button"
-                aria-label="Rename list"
-                className="shrink-0 px-1 text-xs text-ink-faint"
+                title={slots.mine === list.id ? "Active army" : "Set as active army"}
+                aria-pressed={slots.mine === list.id}
                 onClick={() => {
-                  const name = prompt("Rename list", list.name);
-                  if (name?.trim()) renameList(list.id, name.trim());
+                  if (slots.mine === list.id) {
+                    assignSlot("mine", null);
+                  } else {
+                    assignSlot("mine", list.id);
+                    setActiveSlot("mine");
+                  }
                 }}
+                className={`shrink-0 px-1 text-base leading-none ${
+                  slots.mine === list.id ? "text-accent" : "text-ink-faint opacity-50"
+                }`}
               >
-                ✏️
+                {slots.mine === list.id ? "★" : "☆"}
               </button>
               <span className="shrink-0 text-xs text-ink-faint">
                 {list.roster.points.total_computed} pts
@@ -92,21 +98,17 @@ export default function ListsScreen() {
               {list.dataVersion.dataslate}
             </button>
             <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={() => use("mine", list.id)}
-                className={`flex-1 rounded-md py-1.5 text-xs font-semibold ${
-                  slots.mine === list.id ? "bg-mine/30 text-mine" : "bg-panel text-ink-dim"
-                }`}
-              >
-                {OPPONENT_SLOT_ENABLED
-                  ? slots.mine === list.id
-                    ? "✓ Mine"
-                    : "Use as mine"
-                  : slots.mine === list.id
-                    ? "✓ Active army"
-                    : "Set as active army"}
-              </button>
+              {OPPONENT_SLOT_ENABLED && (
+                <button
+                  type="button"
+                  onClick={() => use("mine", list.id)}
+                  className={`flex-1 rounded-md py-1.5 text-xs font-semibold ${
+                    slots.mine === list.id ? "bg-mine/30 text-mine" : "bg-panel text-ink-dim"
+                  }`}
+                >
+                  {slots.mine === list.id ? "✓ Mine" : "Use as mine"}
+                </button>
+              )}
               {OPPONENT_SLOT_ENABLED && (
                 <button
                   type="button"
@@ -122,7 +124,7 @@ export default function ListsScreen() {
               )}
               <Link
                 to={`/lists/${list.id}/edit`}
-                className="rounded-md bg-panel px-3 py-1.5 text-xs font-semibold text-ink-dim"
+                className="flex-1 rounded-md bg-panel px-3 py-1.5 text-center text-xs font-semibold text-ink-dim"
               >
                 Edit
               </Link>

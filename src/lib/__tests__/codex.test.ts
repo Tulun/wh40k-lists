@@ -311,6 +311,28 @@ describe("wargear options", () => {
     ]);
   });
 
+  it("compiles ordinal-banded points tiers (the 3rd Meganobz squad pays more)", () => {
+    const banded: EditableDatasheet = {
+      ...NEW_SHEET,
+      id: "new-manz",
+      name: "New Manz",
+      weapons: [],
+      abilities: [],
+      wargearOptions: [],
+      points: [
+        { models: 3, cost: 110 },
+        { models: 5, cost: 185, toUnit: 2 },
+        { models: 5, cost: 225, fromUnit: 3 },
+      ],
+    };
+    const out = compileFaction("orks", { ...REPLACE_ORKS, datasheets: [banded] }, "Orks");
+    const unit = out.units.find((u) => u.id === "new-manz")!;
+    expect(mod.baseUnitPoints(unit, 5, 1)).toBe(185);
+    expect(mod.baseUnitPoints(unit, 5, 2)).toBe(185);
+    expect(mod.baseUnitPoints(unit, 5, 3)).toBe(225);
+    expect(mod.baseUnitPoints(unit, 3, 3)).toBe(110); // unbanded size unaffected
+  });
+
   it("compiles per-weapon costs into wargear_costs and prices them", () => {
     const priced: EditableDatasheet = {
       ...dread,
@@ -403,7 +425,15 @@ describe("against the real dataset", () => {
     expect(unitRecord.profiles).toMatchObject(
       boyz!.raw.profiles.map((p) => ({ M: p.M, T: p.T, W: p.W, Sv: p.Sv, Ld: p.Ld, OC: p.OC })),
     );
-    expect(unitRecord.points).toEqual(boyz!.raw.points?.map((p) => ({ models: p.models, cost: p.cost })));
+    // Ordinal bands (unit_count_min/max) round-trip through the seed too.
+    expect(unitRecord.points).toEqual(
+      boyz!.raw.points?.map((p) => ({
+        models: p.models,
+        cost: p.cost,
+        ...(p.unit_count_min != null ? { unit_count_min: p.unit_count_min } : {}),
+        ...(p.unit_count_max != null ? { unit_count_max: p.unit_count_max } : {}),
+      })),
+    );
   });
 
   it("applyCodex end to end: replace Orks + patch an Aeldari unit", () => {

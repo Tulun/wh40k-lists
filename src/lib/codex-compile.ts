@@ -214,7 +214,12 @@ function compileDatasheet(factionId: string, sheet: EditableDatasheet, out: Comp
       Ld: p.Ld,
       OC: p.OC,
     })) as Unit["profiles"],
-    points: sheet.points.map((p) => ({ models: p.models, cost: p.cost })),
+    points: sheet.points.map((p) => ({
+      models: p.models,
+      cost: p.cost,
+      ...(p.fromUnit != null ? { unit_count_min: p.fromUnit } : {}),
+      ...(p.toUnit != null ? { unit_count_max: p.toUnit } : {}),
+    })),
     ...(wargearCosts.length > 0 ? { wargear_costs: wargearCosts } : {}),
     keywords: sheet.keywords,
     faction_keywords: sheet.factionKeywords,

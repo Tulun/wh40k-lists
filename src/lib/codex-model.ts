@@ -84,7 +84,12 @@ export interface EditableDatasheet {
   profiles: EditableProfile[];
   keywords: string[];
   factionKeywords: string[];
-  points: { models: number; cost: number }[];
+  /**
+   * Cost tiers. `fromUnit`/`toUnit` (1-based, inclusive) band a tier to the
+   * Nth..Mth copy of the datasheet in the army — 11e ordinal pricing ("the 3rd
+   * Meganobz unit pays more"). Both absent = the tier applies to every copy.
+   */
+  points: { models: number; cost: number; fromUnit?: number; toUnit?: number }[];
   weapons: EditableWeapon[];
   /** Wargear-option bullets; absent on docs saved before the field existed. */
   wargearOptions?: EditableWargearOption[];
@@ -223,7 +228,12 @@ export function seedDatasheetFromUpstream(view: UnitView, leads: string[] = []):
     })),
     keywords: [...(raw.keywords ?? [])],
     factionKeywords: [...(raw.faction_keywords ?? [])],
-    points: (raw.points ?? []).map((p) => ({ models: p.models, cost: p.cost })),
+    points: (raw.points ?? []).map((p) => ({
+      models: p.models,
+      cost: p.cost,
+      ...(p.unit_count_min != null ? { fromUnit: p.unit_count_min } : {}),
+      ...(p.unit_count_max != null ? { toUnit: p.unit_count_max } : {}),
+    })),
     weapons: view.weapons.map((w) => ({
       name: w.name,
       type: w.raw.type,
