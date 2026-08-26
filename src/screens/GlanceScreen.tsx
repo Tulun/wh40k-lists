@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import type { UnitView } from "@alpaca-software/40kdc-data";
 import StratagemCard from "../components/StratagemCard";
 import { MicroStats } from "../components/StatLine";
 import { useDataset } from "../hooks/useDataset";
 import type { Data40k } from "../lib/data";
-import { dedupeRoster, type DisplayEntry } from "../lib/dedupe";
+import { dedupeRoster, unitKey, type DisplayEntry } from "../lib/dedupe";
 import { fnpFromAbilityNames } from "../lib/describe";
 import { byId } from "../lib/lookup";
 import { armyStratagems, sortStratagems } from "../lib/stratagems";
@@ -31,12 +30,6 @@ export default function GlanceScreen() {
     [list],
   );
 
-  const resolveUnit = (entry: DisplayEntry): UnitView | undefined => {
-    if (!data || !list) return undefined;
-    const rosterUnit = list.roster.units[entry.instances[0].rosterIndex];
-    return data.resolveRosterUnit(rosterUnit, data.dataset, list.roster.faction_id);
-  };
-
   if (!list) {
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
@@ -54,21 +47,59 @@ export default function GlanceScreen() {
   }
 
   const roster = list.roster;
-  const sorted = [...entries].sort((a, b) => {
-    if (!data) return 0;
-    const ra = ROLE_ORDER[resolveUnit(a)?.raw.role ?? ""] ?? 3;
-    const rb = ROLE_ORDER[resolveUnit(b)?.raw.role ?? ""] ?? 3;
-    if (ra !== rb) return ra - rb;
-    return a.name.localeCompare(b.name);
-  });
+  const resolveAt = (i: number) =>
+    data ? data.resolveRosterUnit(roster.units[i], data.dataset, roster.faction_id) : undefined;
+
+  // Attachment shape: led units render under their character(s), anchored at
+  // the (first) character's slot — same grouping the editor shows.
+  const bodyguardOf = new Map<number, number>();
+  const leadersOf = new Map<number, number[]>();
+  for (const [l, b] of Object.entries(list.attachments)) {
+    const li = Number(l);
+    if (!roster.units[li] || !roster.units[b]) continue;
+    bodyguardOf.set(li, b);
+    if (!leadersOf.has(b)) leadersOf.set(b, []);
+    leadersOf.get(b)!.push(li);
+  }
+  for (const leaders of leadersOf.values()) leaders.sort((a, b) => a - b);
+
+  const anchors = roster.units
+    .map((_, i) => i)
+    .filter((i) => {
+      if (leadersOf.has(i)) return false; // led unit renders under its leader
+      const b = bodyguardOf.get(i);
+      return b == null || leadersOf.get(b)![0] === i; // co-leaders ride with the first
+    })
+    .sort((a, b) => {
+      const ra = ROLE_ORDER[resolveAt(a)?.raw.role ?? ""] ?? 3;
+      const rb = ROLE_ORDER[resolveAt(b)?.raw.role ?? ""] ?? 3;
+      if (ra !== rb) return ra - rb;
+      return roster.units[a].ref.raw_name.localeCompare(roster.units[b].ref.raw_name);
+    });
+
+  const sequence: { index: number; inGroup: boolean; isLed: boolean }[] = [];
+  for (const a of anchors) {
+    const b = bodyguardOf.get(a);
+    if (b != null) {
+      for (const li of leadersOf.get(b)!) sequence.push({ index: li, inGroup: true, isLed: false });
+      sequence.push({ index: b, inGroup: true, isLed: true });
+    } else {
+      sequence.push({ index: a, inGroup: false, isLed: false });
+    }
+  }
+
   const q = query.trim().toLowerCase();
   const filtered = q
-    ? sorted.filter((e) => {
-        if (e.name.toLowerCase().includes(q)) return true;
-        const raw = resolveUnit(e)?.raw;
-        return (raw?.keywords ?? []).some((k) => k.toLowerCase().includes(q));
+    ? sequence.filter(({ index }) => {
+        const ru = roster.units[index];
+        if (ru.ref.raw_name.toLowerCase().includes(q)) return true;
+        const raw = resolveAt(index)?.raw;
+        return (
+          (raw?.name.toLowerCase().includes(q) ?? false) ||
+          (raw?.keywords ?? []).some((k) => k.toLowerCase().includes(q))
+        );
       })
-    : sorted;
+    : sequence;
 
   const withEnhancements = entries.filter((e) => e.enhancement);
 
@@ -98,34 +129,44 @@ export default function GlanceScreen() {
       />
 
       <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
-        {filtered.map((entry) => {
-          const view = resolveUnit(entry);
+        {filtered.map(({ index, inGroup, isLed }) => {
+          const ru = roster.units[index];
+          const view = resolveAt(index);
           const profile = view?.raw.profiles[0];
           const fnp = view ? fnpFromAbilityNames(view.abilities.map((a) => a.name)) : null;
+          const pts = (ru.points ?? 0) + (ru.enhancement_points ?? 0);
+          const enhName = ru.enhancement
+            ? data
+              ? (byId(data.enhancements, ru.enhancement.id, roster.faction_id)?.name ??
+                ru.enhancement.raw_name)
+              : ru.enhancement.raw_name
+            : null;
           return (
-            <li key={entry.key}>
+            <li key={index} className={inGroup && !q ? "border-l-2 border-accent/50" : ""}>
               <Link
-                to={`/unit/${encodeURIComponent(entry.key)}`}
-                className="flex min-h-11 items-center gap-2 px-3 py-1.5 active:bg-panel"
+                to={`/unit/${encodeURIComponent(unitKey(ru))}`}
+                className={`block min-h-11 px-3 py-1.5 active:bg-panel ${isLed && !q ? "pl-6" : ""}`}
               >
-                {entry.count > 1 && (
-                  <span className="rounded bg-accent/20 px-1.5 py-px text-xs font-bold text-accent">
-                    ×{entry.count}
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {isLed && !q && <span className="text-ink-faint">↳ </span>}
+                    {ru.is_warlord && <span title="Warlord">⭐ </span>}
+                    {view?.name ?? ru.ref.raw_name}
+                    {ru.enhancement && <span className="text-accent"> ✦</span>}
+                    {!ru.ref.id && (
+                      <span className="ml-1 text-[10px] text-opponent">unmatched</span>
+                    )}
                   </span>
-                )}
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {entry.isWarlord && <span title="Warlord">⭐ </span>}
-                  {entry.name}
-                  {entry.enhancement && <span className="text-accent"> ✦</span>}
-                  {!entry.unitId && (
-                    <span className="ml-1 text-[10px] text-opponent">unmatched</span>
+                  {profile ? (
+                    <MicroStats profile={profile} fnp={fnp} />
+                  ) : (
+                    <span className="text-xs text-ink-faint">{pts} pts</span>
                   )}
-                </span>
-                {profile ? (
-                  <MicroStats profile={profile} fnp={fnp} />
-                ) : (
-                  <span className="text-xs text-ink-faint">{entry.totalPoints} pts</span>
-                )}
+                </div>
+                <div className="mt-0.5 truncate text-[11px] text-ink-faint">
+                  {ru.model_count} model{ru.model_count === 1 ? "" : "s"} · {pts} pts
+                  {enhName && <span className="text-accent/80"> · ✦ {enhName}</span>}
+                </div>
               </Link>
             </li>
           );

@@ -64,7 +64,8 @@ export function normalizeKey(name: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function unitKey(unit: RosterUnit): string {
+/** Display key for a roster unit: datasheet id + enhancement — the unit-detail route key. */
+export function unitKey(unit: RosterUnit): string {
   const base = unit.ref.id ?? `raw:${normalizeKey(unit.ref.raw_name)}`;
   const enh = unit.enhancement
     ? (unit.enhancement.id ?? `raw:${normalizeKey(unit.enhancement.raw_name)}`)
