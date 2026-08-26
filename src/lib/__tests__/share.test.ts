@@ -1,0 +1,34 @@
+/** The copy-share export: WTC-compact with the list's current name and totals. */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import * as data40k from "@alpaca-software/40kdc-data";
+import { shareText } from "../share";
+import type { SavedList } from "../../store/schema";
+
+const text = readFileSync(join(import.meta.dirname, "gw-11e-attached.txt"), "utf8");
+
+describe("shareText", () => {
+  const result = data40k.tryImportRoster(text);
+  if (!result.ok) throw new Error(result.message);
+  const list = {
+    id: "l1",
+    name: "My Renamed List",
+    roster: {
+      ...result.roster,
+      points: { ...result.roster.points, total_computed: 1600 },
+    },
+  } as SavedList;
+  const out = shareText(data40k as never, list);
+
+  it("uses the list's display name and current computed total", () => {
+    expect(out).toContain("LIST NAME: My Renamed List");
+    expect(out).toContain("TOTAL ARMY POINTS: 1600pts");
+  });
+
+  it("shows enhancements and per-unit wargear", () => {
+    expect(out).toContain("ENHANCEMENT: Da Kaptin");
+    expect(out).toMatch(/Beastboss on Squigosaur \(105 pts\): .*Beastchoppa/);
+    expect(out).toMatch(/Squighog Boyz \(270 pts\)/);
+  });
+});

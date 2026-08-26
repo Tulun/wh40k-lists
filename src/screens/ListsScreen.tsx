@@ -1,5 +1,8 @@
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { loadMergedData } from "../lib/data";
 import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
+import { shareText } from "../lib/share";
 import { useLists } from "../store/lists";
 import type { SavedList, Slot } from "../store/schema";
 
@@ -12,6 +15,17 @@ export default function ListsScreen() {
   const deleteList = useLists((s) => s.deleteList);
   const renameList = useLists((s) => s.renameList);
   const navigate = useNavigate();
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  /** Copy the shareable text (WTC-compact) for pasting into Discord/Facebook. */
+  async function share(list: SavedList) {
+    const data = await loadMergedData();
+    await navigator.clipboard.writeText(shareText(data, list));
+    setCopiedId(list.id);
+    clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopiedId(null), 2000);
+  }
 
   const all = Object.values(lists).sort(
     (a, b) => b.importedAt.localeCompare(a.importedAt),
@@ -112,6 +126,15 @@ export default function ListsScreen() {
               >
                 Edit
               </Link>
+              <button
+                type="button"
+                onClick={() => void share(list)}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                  copiedId === list.id ? "bg-accent/20 text-accent" : "bg-panel text-ink-dim"
+                }`}
+              >
+                {copiedId === list.id ? "✓ Copied" : "Share"}
+              </button>
               <button
                 type="button"
                 onClick={() => {
