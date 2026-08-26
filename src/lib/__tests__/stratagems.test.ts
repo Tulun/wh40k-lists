@@ -21,6 +21,7 @@ const strat = (partial: Partial<Stratagem> & { id: string }): Stratagem => ({
 });
 
 const orkBoyz = {
+  name: "Boyz",
   keywords: ["Infantry", "Battleline", "Mob", "Boyz"],
   faction_keywords: ["Orks"],
 };
@@ -105,13 +106,13 @@ describe("detachment granted keywords", () => {
   } as unknown as Detachment;
 
   it("grants construction keywords to matching units for stratagem targeting", () => {
-    const warDog = { keywords: ["Vehicle", "War Dog"], faction_keywords: ["Chaos Knights"] };
+    const warDog = { name: "War Dog Karnivore", keywords: ["Vehicle", "War Dog"], faction_keywords: ["Chaos Knights"] };
     const pool = [
       strat({ id: "s", target_restrictions: { required_keywords: ["Battleline"] } }),
     ];
     expect(stratagemsForUnit(warDog, pool, [detachment])).toHaveLength(1);
     expect(stratagemsForUnit(orkBoyz, pool, [detachment])).toHaveLength(1); // Boyz are Battleline already
-    const rhino = { keywords: ["Vehicle"], faction_keywords: ["Chaos Knights"] };
+    const rhino = { name: "Rhino", keywords: ["Vehicle"], faction_keywords: ["Chaos Knights"] };
     expect(stratagemsForUnit(rhino, pool, [detachment])).toHaveLength(0);
   });
 });

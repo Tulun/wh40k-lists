@@ -30,12 +30,17 @@ export function armyStratagems(
 
 const lc = (k: string) => k.toLowerCase();
 
-/** Datasheet + faction keywords, plus detachment-granted construction keywords. */
+/**
+ * Datasheet + faction keywords, plus detachment-granted construction keywords.
+ * The unit's NAME counts too — restrictions routinely name the datasheet
+ * ("Rukkatrukk Squigbuggies") rather than a printed keyword.
+ */
 export function effectiveKeywords(
-  unit: Pick<Unit, "keywords" | "faction_keywords">,
+  unit: Pick<Unit, "name" | "keywords" | "faction_keywords">,
   detachments: readonly Detachment[] = [],
 ): Set<string> {
   const kw = new Set([
+    lc(unit.name),
     ...(unit.keywords ?? []).map(lc),
     ...(unit.faction_keywords ?? []).map(lc),
   ]);
@@ -65,7 +70,7 @@ export function matchesTargetRestrictions(
 }
 
 export function stratagemsForUnit(
-  unit: Pick<Unit, "keywords" | "faction_keywords">,
+  unit: Pick<Unit, "name" | "keywords" | "faction_keywords">,
   pool: readonly Stratagem[],
   detachments: readonly Detachment[] = [],
 ): Stratagem[] {

@@ -85,7 +85,13 @@ export default function ListsScreen() {
                   slots.mine === list.id ? "bg-mine/30 text-mine" : "bg-panel text-ink-dim"
                 }`}
               >
-                {slots.mine === list.id ? "✓ Mine" : "Use as mine"}
+                {OPPONENT_SLOT_ENABLED
+                  ? slots.mine === list.id
+                    ? "✓ Mine"
+                    : "Use as mine"
+                  : slots.mine === list.id
+                    ? "✓ Active army"
+                    : "Set as active army"}
               </button>
               {OPPONENT_SLOT_ENABLED && (
                 <button

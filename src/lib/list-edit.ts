@@ -136,7 +136,13 @@ function repriceUnits(data: Data40k, roster: Roster, touchedIds: ReadonlySet<str
     const computed =
       data.hostUnitPoints(unit, u.model_count, ordinal, faction ?? null) +
       data.wargearPoints(unit, wargearCounts(u));
-    const next: RosterUnit = { ...u, points: computed > 0 ? computed : u.points };
+    // Only trust the computed price when a tier actually covers this size —
+    // baseUnitPoints silently prices an uncovered count from the nearest tier.
+    const covered = !data.pointsTierMissing(unit, u.model_count, ordinal);
+    const next: RosterUnit = {
+      ...u,
+      points: covered && computed > 0 ? computed : u.points,
+    };
     if (u.enhancement?.id) {
       const enh = byId(data.enhancements, u.enhancement.id, roster.faction_id);
       if (enh) next.enhancement_points = enh.cost;
@@ -476,6 +482,17 @@ export function removeDetachment(data: Data40k, content: ListContent, index: num
     }
   }
   return finalize(data, next, touched);
+}
+
+/**
+ * Reprice every resolved unit from the dataset and recompute the total — run
+ * when the editor opens, so stored costs from imports (which sometimes roll an
+ * upgrade into the printed number) snap to the dataset's ground truth. Units
+ * the dataset can't price keep their stored points, as everywhere else.
+ */
+export function repriceAll(data: Data40k, content: ListContent): ListContent {
+  const next = clone(content);
+  return finalize(data, next, next.roster.units.map((u) => u.ref.id));
 }
 
 export function setForceDisposition(content: ListContent, id: string | null): ListContent {

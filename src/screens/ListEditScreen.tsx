@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { RosterUnit, Unit } from "@alpaca-software/40kdc-data";
 import Dropdown from "../components/Dropdown";
@@ -14,6 +14,7 @@ import {
   nextSize,
   removeDetachment,
   removeUnit,
+  repriceAll,
   setEnhancement,
   setModelCount,
   setForceDisposition,
@@ -50,6 +51,32 @@ export default function ListEditScreen() {
     () => (data && list ? data.checkRoster(list.roster, data.dataset) : null),
     [data, list],
   );
+
+  // Opening the editor snaps stored costs to the dataset (imports sometimes
+  // roll an upgrade's cost into the printed unit cost, e.g. Deffkoptas at 170).
+  useEffect(() => {
+    if (!list || !data) return;
+    const repriced = repriceAll(data, {
+      roster: list.roster,
+      roleHints: list.roleHints,
+      attachments: list.attachments,
+    });
+    const changed =
+      repriced.roster.points.total_computed !== list.roster.points.total_computed ||
+      repriced.roster.units.some(
+        (u, i) =>
+          u.points !== list.roster.units[i].points ||
+          u.enhancement_points !== list.roster.units[i].enhancement_points,
+      );
+    if (changed) {
+      updateListContent(list.id, {
+        ...repriced,
+        rawText: data.exportRoster(repriced.roster, "roster-json"),
+      });
+    }
+    // Run once per list per dataset build — not on every store write.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list?.id, data]);
 
   if (!list) {
     return (
