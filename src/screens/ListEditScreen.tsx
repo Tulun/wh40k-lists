@@ -286,8 +286,9 @@ export default function ListEditScreen() {
 }
 
 /**
- * Units in roster order, with attached leaders grouped onto the unit they
- * lead — one bordered block per attached pairing, instead of a flat list.
+ * Units in roster order, with attached pairings grouped into one bordered
+ * block anchored at the CHARACTER's position — the led unit moves up to its
+ * leader, not the other way around.
  */
 function UnitGroups({
   data,
@@ -299,36 +300,40 @@ function UnitGroups({
   apply: (next: ListContent) => void;
 }) {
   const roster = content.roster;
+  const bodyguardOf = new Map<number, number>();
   const leadersOf = new Map<number, number[]>();
-  const attached = new Set<number>();
   for (const [l, b] of Object.entries(content.attachments)) {
     const li = Number(l);
     if (!roster.units[li] || !roster.units[b]) continue;
+    bodyguardOf.set(li, b);
     if (!leadersOf.has(b)) leadersOf.set(b, []);
     leadersOf.get(b)!.push(li);
-    attached.add(li);
   }
+  for (const leaders of leadersOf.values()) leaders.sort((a, b) => a - b);
+
   return (
     <ul className="space-y-2">
       {roster.units.map((u, i) => {
-        if (attached.has(i)) return null; // rendered inside its bodyguard's block
         const key = `${u.ref.id ?? u.ref.raw_name}-${i}`;
-        const leaders = leadersOf.get(i) ?? [];
-        if (leaders.length === 0) {
+        if (leadersOf.has(i)) return null; // moves up to its (first) leader's slot
+        const body = bodyguardOf.get(i);
+        if (body != null) {
+          const leaders = leadersOf.get(body)!;
+          if (leaders[0] !== i) return null; // co-leader, rendered with the first
           return (
-            <li key={key}>
-              <UnitRow data={data} content={content} index={i} apply={apply} />
+            <li key={key} className="space-y-1 rounded-lg border border-accent/40 p-1">
+              <p className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                Attached unit
+              </p>
+              {leaders.map((li) => (
+                <UnitRow key={li} data={data} content={content} index={li} apply={apply} />
+              ))}
+              <UnitRow data={data} content={content} index={body} apply={apply} />
             </li>
           );
         }
         return (
-          <li key={key} className="space-y-1 rounded-lg border border-accent/40 p-1">
-            <p className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
-              Attached unit
-            </p>
-            {leaders.map((li) => (
-              <UnitRow key={li} data={data} content={content} index={li} apply={apply} />
-            ))}
+          <li key={key}>
             <UnitRow data={data} content={content} index={i} apply={apply} />
           </li>
         );
@@ -468,9 +473,24 @@ function AttachPicker({
   const eligible = new Set(data.dataset.bodyguardsAttachableFrom(unit.id).map((v) => v.id));
   const current = content.attachments[String(index)] ?? null;
   if (eligible.size === 0 && current == null) return null;
+  // A unit takes at most 1 leader and 1 support: hide units that already have
+  // an attached character of this character's role class.
+  const roleOf = (i: number) => {
+    const u = roster.units[i];
+    const ent = u.ref.id ? byId(data.units, u.ref.id, roster.faction_id)?.raw : undefined;
+    return ent?.attachment_role === "support" ? "support" : "leader";
+  };
+  const occupied = new Set<number>();
+  for (const [l, b] of Object.entries(content.attachments)) {
+    const li = Number(l);
+    if (li !== index && roleOf(li) === roleOf(index)) occupied.add(b);
+  }
   const candidates = roster.units
     .map((u, i) => ({ u, i }))
-    .filter(({ u, i }) => i !== index && u.ref.id != null && eligible.has(u.ref.id));
+    .filter(
+      ({ u, i }) =>
+        i !== index && u.ref.id != null && eligible.has(u.ref.id) && !occupied.has(i),
+    );
   if (candidates.length === 0 && current == null) return null;
 
   const nameOf = (i: number) => {
