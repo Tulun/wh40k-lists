@@ -11,6 +11,10 @@
   --color-accent-dim: #b45309;
   --color-mine: #38bdf8;
   --color-opponent: #f87171;
+  /* GW-datasheet teal bands (DatasheetCard) */
+  --color-band: #14424e;
+  --color-band-deep: #0b2b33;
+  --color-band-hi: #6fbdd1;
 }
 
 html {

@@ -10,6 +10,7 @@ import {
   TextArea,
   TextInput,
 } from "../components/editor/fields";
+import DatasheetCard from "../components/DatasheetCard";
 import RefImagePanel from "../components/editor/RefImagePanel";
 import { useDataset } from "../hooks/useDataset";
 import type {
@@ -77,6 +78,7 @@ export default function DatasheetEditScreen() {
 
   const [sheet, setSheet] = useState<EditableDatasheet | null>(existing ?? seeded);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [mode, setMode] = useState<"view" | "edit">(sheetId === "new" ? "edit" : "view");
   if (sheet === null) {
     if (sheetId === "new") {
       setSheet(blankSheet(factionName));
@@ -122,17 +124,39 @@ export default function DatasheetEditScreen() {
     navigate(`/editor/${factionId}`);
   }
 
+  const leadNames = sheet.leads.map((id) => factionSheets.find((u) => u.id === id)?.name ?? id);
+
   return (
     <div className="space-y-3 pb-8">
-      <div className="flex items-baseline gap-2">
-        <h1 className="flex-1 text-lg font-bold">
-          {sheetId === "new" ? "New datasheet" : `Edit · ${sheet.name || sheetId}`}
+      <div className="flex items-center gap-2">
+        <h1 className="min-w-0 flex-1 truncate text-lg font-bold">
+          {sheetId === "new" ? "New datasheet" : sheet.name || sheetId}
         </h1>
+        <div className="flex shrink-0 overflow-hidden rounded-md border border-edge text-xs font-semibold">
+          {(["view", "edit"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`px-3 py-1.5 capitalize ${
+                mode === m ? "bg-accent/20 text-accent" : "text-ink-faint active:bg-panel"
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
         <Link to={`/editor/${factionId}`} className="text-xs text-ink-faint underline">
           cancel
         </Link>
       </div>
 
+      {mode === "view" && (
+        <DatasheetCard sheet={sheet} leadNames={isCharacter ? leadNames : undefined} />
+      )}
+
+      {mode === "edit" && (
+      <>
       {sheetId !== "new" && <RefImagePanel entityKey={refImageKey(factionId, "datasheet", sheetId)} />}
 
       <SectionCard title="Basics">
@@ -502,6 +526,8 @@ export default function DatasheetEditScreen() {
             </div>
           )}
         </SectionCard>
+      )}
+      </>
       )}
 
       <div className="flex items-center gap-2">
