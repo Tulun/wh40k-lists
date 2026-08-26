@@ -14,6 +14,11 @@ interface ListsStore extends PersistedState {
   saveList(list: SavedList): void;
   deleteList(id: string): void;
   renameList(id: string, name: string): void;
+  /** Patch a list's editable content (roster/roleHints/attachments/rawText/name) in place. */
+  updateListContent(
+    id: string,
+    patch: Partial<Pick<SavedList, "roster" | "roleHints" | "attachments" | "rawText" | "name">>,
+  ): void;
   assignSlot(slot: Slot, listId: string | null): void;
   setActiveSlot(slot: Slot): void;
   setNote(listId: string, entityId: string, note: string): void;
@@ -23,10 +28,14 @@ interface ListsStore extends PersistedState {
   /** Replace lists/slots wholesale from the remote copy; keeps activeSlot. */
   adoptRemote(remote: RemoteLists): void;
   /**
-   * First-sync merge: union of both sides, remote winning id collisions.
-   * Leaves the store dirty so the merged result gets pushed back.
+   * Install a merge of local + remote (computed by gist-sync), adopting the
+   * remote stamp as the new baseline and leaving the store dirty so the merged
+   * result gets pushed back.
    */
-  mergeRemote(remote: RemoteLists): void;
+  adoptMerged(
+    merged: Pick<RemoteLists, "lists" | "slots">,
+    remoteUpdated: string,
+  ): void;
   markSynced(at: string, remoteUpdated: string): void;
 }
 
@@ -34,11 +43,12 @@ export const useLists = create<ListsStore>()(
   persist(
     (set) => {
       /** Apply a content mutation, stamping the sync token — unless it was a no-op. */
-      const update = (fn: (s: ListsStore) => Partial<PersistedState> | ListsStore) =>
+      const update = (fn: (s: ListsStore, now: string) => Partial<PersistedState> | ListsStore) =>
         set((s) => {
-          const patch = fn(s);
+          const now = new Date().toISOString();
+          const patch = fn(s, now);
           if (patch === s) return s;
-          return { ...patch, updated: new Date().toISOString(), dirty: true };
+          return { ...patch, updated: now, dirty: true };
         });
 
       return {
@@ -47,10 +57,10 @@ export const useLists = create<ListsStore>()(
         activeSlot: "mine" as Slot,
         updated: null,
         dirty: false,
-        sync: { lastSynced: null, remoteUpdated: null },
+        sync: { lastSynced: null, remoteUpdated: null, knownIds: [] },
 
         saveList: (list) =>
-          update((s) => ({ lists: { ...s.lists, [list.id]: list } })),
+          update((s, now) => ({ lists: { ...s.lists, [list.id]: { ...list, updated: now } } })),
 
         deleteList: (id) =>
           update((s) => {
@@ -64,10 +74,17 @@ export const useLists = create<ListsStore>()(
           }),
 
         renameList: (id, name) =>
-          update((s) => {
+          update((s, now) => {
             const list = s.lists[id];
             if (!list) return s;
-            return { lists: { ...s.lists, [id]: { ...list, name } } };
+            return { lists: { ...s.lists, [id]: { ...list, name, updated: now } } };
+          }),
+
+        updateListContent: (id, patch) =>
+          update((s, now) => {
+            const list = s.lists[id];
+            if (!list) return s;
+            return { lists: { ...s.lists, [id]: { ...list, ...patch, updated: now } } };
           }),
 
         assignSlot: (slot, listId) =>
@@ -76,23 +93,23 @@ export const useLists = create<ListsStore>()(
         setActiveSlot: (slot) => set({ activeSlot: slot }),
 
         setNote: (listId, entityId, note) =>
-          update((s) => {
+          update((s, now) => {
             const list = s.lists[listId];
             if (!list) return s;
             const notes = { ...list.notes };
             if (note.trim()) notes[entityId] = note;
             else delete notes[entityId];
-            return { lists: { ...s.lists, [listId]: { ...list, notes } } };
+            return { lists: { ...s.lists, [listId]: { ...list, notes, updated: now } } };
           }),
 
         setAttachment: (listId, leaderIndex, bodyguardIndex) =>
-          update((s) => {
+          update((s, now) => {
             const list = s.lists[listId];
             if (!list) return s;
             const attachments = { ...list.attachments };
             if (bodyguardIndex == null) delete attachments[String(leaderIndex)];
             else attachments[String(leaderIndex)] = bodyguardIndex;
-            return { lists: { ...s.lists, [listId]: { ...list, attachments } } };
+            return { lists: { ...s.lists, [listId]: { ...list, attachments, updated: now } } };
           }),
 
         adoptRemote: (remote) =>
@@ -103,19 +120,20 @@ export const useLists = create<ListsStore>()(
             dirty: false,
           }),
 
-        mergeRemote: (remote) =>
+        adoptMerged: (merged, remoteUpdated) =>
           set((s) => ({
-            lists: { ...s.lists, ...remote.lists },
-            slots: {
-              mine: remote.slots.mine ?? s.slots.mine,
-              opponent: remote.slots.opponent ?? s.slots.opponent,
-            },
+            lists: merged.lists,
+            slots: merged.slots,
             updated: new Date().toISOString(),
             dirty: true,
+            sync: { ...s.sync, remoteUpdated },
           })),
 
         markSynced: (at, remoteUpdated) =>
-          set(() => ({ sync: { lastSynced: at, remoteUpdated }, dirty: false })),
+          set((s) => ({
+            sync: { lastSynced: at, remoteUpdated, knownIds: Object.keys(s.lists) },
+            dirty: false,
+          })),
       };
     },
     {

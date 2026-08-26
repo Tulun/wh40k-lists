@@ -100,6 +100,12 @@ export default function ListsScreen() {
                   {slots.opponent === list.id ? "✓ Opponent" : "Use as opponent"}
                 </button>
               )}
+              <Link
+                to={`/lists/${list.id}/edit`}
+                className="rounded-md bg-panel px-3 py-1.5 text-xs font-semibold text-ink-dim"
+              >
+                Edit
+              </Link>
               <button
                 type="button"
                 onClick={() => {

@@ -3,7 +3,7 @@ import type { RoleHints } from "../lib/normalize";
 import type { Overrides } from "../lib/overrides";
 
 export const STORAGE_KEY = "40k-viewer";
-export const STORAGE_VERSION = 3;
+export const STORAGE_VERSION = 4;
 
 export type Slot = "mine" | "opponent";
 
@@ -27,12 +27,25 @@ export interface SavedList {
   attachments: Record<string, number>;
   importedAt: string;
   dataVersion: { edition: string; dataslate: string; pkg: string };
+  /**
+   * Stamp of the last edit to THIS list, letting sync merge diverged devices
+   * per list (newest copy of each wins) instead of all-or-nothing. Optional
+   * because remote files written by older app versions lack it; merging falls
+   * back to `importedAt`.
+   */
+  updated?: string;
 }
 
 export interface ListsSyncState {
   lastSynced: string | null;
   /** Remote lists.json `updated` stamp as of the last successful sync — the conflict baseline. */
   remoteUpdated: string | null;
+  /**
+   * List ids present at the last successful sync. Lets the merge tell a list
+   * deleted on one side (id known, missing there) from a list newly created on
+   * the other (id unknown), so deletions propagate without resurrections.
+   */
+  knownIds: string[];
 }
 
 export interface PersistedState {
@@ -69,7 +82,13 @@ export function migrate(state: unknown, fromVersion: number): PersistedState {
   if (fromVersion < 3) {
     s.updated ??= null;
     s.dirty ??= false;
-    s.sync ??= { lastSynced: null, remoteUpdated: null };
+    s.sync ??= { lastSynced: null, remoteUpdated: null, knownIds: [] };
+  }
+  if (fromVersion < 4) {
+    for (const list of Object.values(s.lists ?? {})) list.updated ??= list.importedAt;
+    // Best available baseline: if this device has synced before, everything it
+    // holds now was part of that sync.
+    s.sync.knownIds ??= s.sync.remoteUpdated !== null ? Object.keys(s.lists ?? {}) : [];
   }
   return s;
 }

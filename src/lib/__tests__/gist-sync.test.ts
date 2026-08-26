@@ -1,7 +1,7 @@
 /**
  * Gist sync against a mocked GitHub API: load/save/create plumbing, error
- * typing, and the per-file pull/push conflict baselines held in the codex and
- * lists stores.
+ * typing, the per-file pull/push divergence baselines held in the codex and
+ * lists stores, and the per-list auto-merge.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CodexDoc } from "../codex-model";
@@ -14,7 +14,6 @@ import {
   normalizeGistId,
   pullRemote,
   pushLocal,
-  resolveListsConflict,
   saveRemoteDoc,
 } from "../gist-sync";
 import { useCodex } from "../../store/codex";
@@ -24,12 +23,17 @@ import type { RemoteLists, SavedList } from "../../store/schema";
 
 const CFG = { gistId: "abc123abc123abc123", token: "ghp_test" };
 
-function doc(updated: string): CodexDoc {
-  return { version: 1, updated, factions: {} };
+function doc(updated: string, factions: CodexDoc["factions"] = {}): CodexDoc {
+  return { version: 1, updated, factions };
 }
 
-function savedList(id: string, name = id): SavedList {
-  return { id, name } as SavedList;
+/** Distinct codex content, so stamp divergence doesn't short-circuit as equal. */
+function distinctFactions(name: string): CodexDoc["factions"] {
+  return { [name]: { name } } as unknown as CodexDoc["factions"];
+}
+
+function savedList(id: string, name = id, updated?: string): SavedList {
+  return { id, name, updated } as SavedList;
 }
 
 function remoteLists(updated: string, lists: Record<string, SavedList>): RemoteLists {
@@ -59,9 +63,9 @@ beforeEach(() => {
     activeSlot: "mine",
     updated: null,
     dirty: false,
-    sync: { lastSynced: null, remoteUpdated: null },
+    sync: { lastSynced: null, remoteUpdated: null, knownIds: [] },
   });
-  useSyncUi.setState({ codexConflict: null, listsConflict: null });
+  useSyncUi.setState({ codexConflict: null });
 });
 
 afterEach(() => {
@@ -138,16 +142,37 @@ describe("pullRemote / pushLocal", () => {
     expect(useCodex.getState().sync.remoteUpdated).toBe("T5");
   });
 
-  it("reports a conflict when remote moved and local is dirty", async () => {
+  it("reports a conflict when remote moved and local is dirty with different content", async () => {
     useCodex.setState({
-      doc: doc("LOCAL"),
+      doc: doc("LOCAL", distinctFactions("orks")),
       sync: { gistId: CFG.gistId, token: CFG.token, lastSynced: null, remoteUpdated: "T0" },
       dirty: true,
     });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(gistResponse(JSON.stringify(doc("T5")))));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(gistResponse(JSON.stringify(doc("T5", distinctFactions("aeldari"))))),
+    );
     const result = await pullRemote();
     expect(result.status).toBe("conflict");
     expect(useCodex.getState().doc.updated).toBe("LOCAL");
+    expect(useSyncUi.getState().codexConflict?.updated).toBe("T5");
+  });
+
+  it("adopts the remote stamp silently when a 'conflict' has identical content", async () => {
+    useCodex.setState({
+      doc: doc("LOCAL", distinctFactions("orks")),
+      sync: { gistId: CFG.gistId, token: CFG.token, lastSynced: null, remoteUpdated: "T0" },
+      dirty: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(gistResponse(JSON.stringify(doc("T5", distinctFactions("orks"))))),
+    );
+    const result = await pullRemote();
+    expect(result.status).toBe("up-to-date");
+    expect(useCodex.getState().doc.updated).toBe("T5");
+    expect(useCodex.getState().dirty).toBe(false);
+    expect(useSyncUi.getState().codexConflict).toBeNull();
   });
 
   it("pushes when the remote matches the baseline, refuses when it moved", async () => {
@@ -167,11 +192,14 @@ describe("pullRemote / pushLocal", () => {
     expect(useCodex.getState().sync.remoteUpdated).toBe("LOCAL");
 
     useCodex.setState({
-      doc: doc("LOCAL2"),
+      doc: doc("LOCAL2", distinctFactions("orks")),
       sync: { gistId: CFG.gistId, token: CFG.token, lastSynced: null, remoteUpdated: "T0" },
       dirty: true,
     });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(gistResponse(JSON.stringify(doc("SOMEONE-ELSE")))));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(gistResponse(JSON.stringify(doc("SOMEONE-ELSE", distinctFactions("aeldari"))))),
+    );
     result = await pushLocal();
     expect(result.status).toBe("conflict");
   });
@@ -243,57 +271,99 @@ describe("lists sync", () => {
     expect(useLists.getState().sync.remoteUpdated).not.toBeNull();
   });
 
-  it("reports a lists conflict when remote moved and local is dirty", async () => {
+  it("merges per list when remote moved and local is dirty — newest copy of each wins", async () => {
     connect();
     useLists.setState({
-      lists: { a: savedList("a") },
-      updated: "LOCAL",
+      lists: { a: savedList("a", "a edited here", "T9"), b: savedList("b", "b new here", "T8") },
+      updated: "T9",
       dirty: true,
-      sync: { lastSynced: null, remoteUpdated: "L0" },
+      sync: { lastSynced: "T5", remoteUpdated: "L0", knownIds: ["a"] },
     });
-    const remote = remoteLists("L5", { z: savedList("z") });
+    // Remote kept an older copy of `a` and added `z`.
+    const remote = remoteLists("L5", { a: savedList("a", "a stale", "T2"), z: savedList("z", "z", "T7") });
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockImplementation(() =>
-        Promise.resolve(gistResponse(codexJson, { [LISTS_FILE]: JSON.stringify(remote) })),
-      ),
+      vi.fn().mockResolvedValue(gistResponse(codexJson, { [LISTS_FILE]: JSON.stringify(remote) })),
     );
     const pulled = await pullRemote();
-    expect(pulled.status === "conflict" && pulled.listsConflict?.updated).toBe("L5");
-    expect(Object.keys(useLists.getState().lists)).toEqual(["a"]); // untouched
-    expect(useSyncUi.getState().listsConflict?.updated).toBe("L5");
-
-    const pushed = await pushLocal();
-    expect(pushed.status).toBe("conflict");
-
-    // Resolving for the remote side adopts it and clears the banner.
-    await resolveListsConflict("remote", remote);
-    expect(Object.keys(useLists.getState().lists)).toEqual(["z"]);
-    expect(useLists.getState().sync.remoteUpdated).toBe("L5");
-    expect(useSyncUi.getState().listsConflict).toBeNull();
+    expect(pulled.status).toBe("pulled");
+    const s = useLists.getState();
+    expect(Object.keys(s.lists).sort()).toEqual(["a", "b", "z"]);
+    expect(s.lists.a.name).toBe("a edited here"); // newer local copy won
+    expect(s.dirty).toBe(true); // merge queued for push
+    expect(s.sync.remoteUpdated).toBe("L5"); // baseline adopted so the push isn't refused
+    expect(useSyncUi.getState().codexConflict).toBeNull();
   });
 
-  it("a lists conflict does not block pushing dirty codex edits", async () => {
+  it("propagates a remote deletion through the merge, but an edit beats it", async () => {
     connect();
-    useCodex.setState({ doc: doc("CODEX-LOCAL"), dirty: true });
     useLists.setState({
-      lists: { a: savedList("a") },
-      updated: "LOCAL",
+      lists: {
+        // Synced before, untouched since → the remote deletion wins.
+        stale: savedList("stale", "stale", "T2"),
+        // Synced before, edited after lastSynced → survives the remote deletion.
+        edited: savedList("edited", "edited", "T9"),
+      },
+      updated: "T9",
       dirty: true,
-      sync: { lastSynced: null, remoteUpdated: "L0" },
+      sync: { lastSynced: "T5", remoteUpdated: "L0", knownIds: ["stale", "edited"] },
     });
-    const remote = remoteLists("L5", { z: savedList("z") });
+    const remote = remoteLists("L5", {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(gistResponse(codexJson, { [LISTS_FILE]: JSON.stringify(remote) })),
+    );
+    await pullRemote();
+    expect(Object.keys(useLists.getState().lists)).toEqual(["edited"]);
+    expect(useLists.getState().dirty).toBe(true);
+  });
+
+  it("adopts the remote copy cleanly when the merge keeps exactly it", async () => {
+    connect();
+    // Local dirty edit is an older copy of `a` than the remote's — the merge
+    // resolves entirely to the remote side, so nothing needs pushing.
+    useLists.setState({
+      lists: { a: savedList("a", "a old", "T2") },
+      updated: "T2",
+      dirty: true,
+      sync: { lastSynced: "T1", remoteUpdated: "L0", knownIds: ["a"] },
+    });
+    const remote = remoteLists("L5", { a: savedList("a", "a newer", "T8") });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(gistResponse(codexJson, { [LISTS_FILE]: JSON.stringify(remote) })),
+    );
+    const pulled = await pullRemote();
+    expect(pulled.status).toBe("pulled");
+    const s = useLists.getState();
+    expect(s.lists.a.name).toBe("a newer");
+    expect(s.dirty).toBe(false);
+    expect(s.sync.remoteUpdated).toBe("L5");
+  });
+
+  it("push merges diverged lists and sends the merge alongside dirty codex edits", async () => {
+    connect();
+    useCodex.setState({ doc: doc("T0"), dirty: true });
+    useLists.setState({
+      lists: { a: savedList("a", "a", "T9") },
+      updated: "T9",
+      dirty: true,
+      sync: { lastSynced: "T5", remoteUpdated: "L0", knownIds: ["a"] },
+    });
+    const remote = remoteLists("L5", { a: savedList("a", "a", "T1"), z: savedList("z", "z", "T7") });
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(gistResponse(codexJson, { [LISTS_FILE]: JSON.stringify(remote) }))
       .mockResolvedValueOnce(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const result = await pushLocal();
-    expect(result.status === "conflict" && result.listsConflict?.updated).toBe("L5");
+    expect(result.status).toBe("pushed");
     const [, init] = fetchMock.mock.calls[1] as [string, RequestInit];
     const body = JSON.parse(init.body as string) as { files: Record<string, { content: string }> };
-    expect(Object.keys(body.files)).toEqual([GIST_FILE]); // codex went through
+    expect(Object.keys(body.files).sort()).toEqual([GIST_FILE, LISTS_FILE].sort());
+    const pushedLists = JSON.parse(body.files[LISTS_FILE].content) as RemoteLists;
+    expect(Object.keys(pushedLists.lists).sort()).toEqual(["a", "z"]);
     expect(useCodex.getState().dirty).toBe(false);
-    expect(useLists.getState().dirty).toBe(true);
+    expect(useLists.getState().dirty).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { ImportResult, Roster } from "@alpaca-software/40kdc-data";
 import CandidatePicker from "../components/CandidatePicker";
 import { loadMergedData, type Data40k } from "../lib/data";
@@ -21,12 +21,15 @@ interface Review {
 }
 
 export default function ImportScreen() {
-  const [text, setText] = useState("");
+  const [params] = useSearchParams();
+  const editId = params.get("edit");
+  const editing = useLists((s) => (editId ? (s.lists[editId] ?? null) : null));
+  const [text, setText] = useState(editing?.rawText ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [review, setReview] = useState<Review | null>(null);
   const [overrides, setOverrides] = useState<Overrides>({});
-  const [name, setName] = useState("");
+  const [name, setName] = useState(editing?.name ?? "");
   const saveList = useLists((s) => s.saveList);
   const assignSlot = useLists((s) => s.assignSlot);
   const setActiveSlot = useLists((s) => s.setActiveSlot);
@@ -64,8 +67,9 @@ export default function ImportScreen() {
         text,
       );
       setReview({ data, roster, roleHints, attachmentSeeds, rawText: text, format: result.format });
-      setName(result.roster.name !== "Imported roster" ? result.roster.name : "");
-      setOverrides({});
+      setName((n) => n.trim() || (result.roster.name !== "Imported roster" ? result.roster.name : ""));
+      // When re-importing a saved list, its earlier picker decisions still apply by raw name.
+      setOverrides(editing?.overrides ?? {});
     } finally {
       setBusy(false);
     }
@@ -77,12 +81,15 @@ export default function ImportScreen() {
       ? review.data.factions.getAny(patched.faction_id)?.name
       : undefined;
     const list = {
-      id: crypto.randomUUID(),
+      // Editing keeps the id (slot assignments follow it) and the notes, which
+      // are keyed by stratagem/enhancement id and survive a text change.
+      // Attachments are keyed by roster index, so they're re-seeded from the text.
+      id: editing?.id ?? crypto.randomUUID(),
       name: name.trim() || faction || "Imported list",
       rawText: review.rawText,
       roster: patched,
       overrides,
-      notes: {},
+      notes: editing?.notes ?? {},
       roleHints: review.roleHints,
       attachments: review.attachmentSeeds,
       importedAt: new Date().toISOString(),
@@ -111,7 +118,7 @@ export default function ImportScreen() {
     const gearRows = rows.filter((u) => u.kind === "weapon");
     return (
       <div className="space-y-3">
-        <h1 className="text-lg font-bold">Review import</h1>
+        <h1 className="text-lg font-bold">{editing ? "Review changes" : "Review import"}</h1>
         <div className="rounded-md border border-edge bg-panel/50 px-3 py-2 text-sm">
           <span className="font-medium">
             {(patched.faction_id && review.data.factions.getAny(patched.faction_id)?.name) ??
@@ -192,19 +199,29 @@ export default function ImportScreen() {
           placeholder="List name"
           className="w-full rounded-md border border-edge bg-panel px-3 py-2 text-sm"
         />
-        <div className={`grid gap-2 ${OPPONENT_SLOT_ENABLED ? "grid-cols-3" : "grid-cols-2"}`}>
-          <button type="button" onClick={() => save("mine")} className="rounded-md bg-mine/20 py-2.5 text-sm font-semibold text-mine">
-            Save as mine
+        {editing ? (
+          <button
+            type="button"
+            onClick={() => save(null)}
+            className="w-full rounded-md bg-accent py-2.5 text-sm font-bold text-surface"
+          >
+            Save changes
           </button>
-          {OPPONENT_SLOT_ENABLED && (
-            <button type="button" onClick={() => save("opponent")} className="rounded-md bg-opponent/20 py-2.5 text-sm font-semibold text-opponent">
-              Save as opponent
+        ) : (
+          <div className={`grid gap-2 ${OPPONENT_SLOT_ENABLED ? "grid-cols-3" : "grid-cols-2"}`}>
+            <button type="button" onClick={() => save("mine")} className="rounded-md bg-mine/20 py-2.5 text-sm font-semibold text-mine">
+              Save as mine
             </button>
-          )}
-          <button type="button" onClick={() => save(null)} className="rounded-md bg-panel py-2.5 text-sm font-semibold text-ink-dim">
-            Just save
-          </button>
-        </div>
+            {OPPONENT_SLOT_ENABLED && (
+              <button type="button" onClick={() => save("opponent")} className="rounded-md bg-opponent/20 py-2.5 text-sm font-semibold text-opponent">
+                Save as opponent
+              </button>
+            )}
+            <button type="button" onClick={() => save(null)} className="rounded-md bg-panel py-2.5 text-sm font-semibold text-ink-dim">
+              Just save
+            </button>
+          </div>
+        )}
         <button type="button" onClick={() => setReview(null)} className="text-xs text-ink-faint underline">
           ← back to paste
         </button>
@@ -214,10 +231,11 @@ export default function ImportScreen() {
 
   return (
     <div className="flex h-full flex-col gap-3">
-      <h1 className="text-lg font-bold">Import a list</h1>
+      <h1 className="text-lg font-bold">{editing ? `Edit “${editing.name}”` : "Import a list"}</h1>
       <p className="text-xs text-ink-dim">
-        Paste an army list export — GW app, New Recruit (text or JSON), ListForge, or
-        Rosterizer. Format is detected automatically.
+        {editing
+          ? "Edit the list text below, then re-import. Saving replaces this list in place — slots and notes are kept."
+          : "Paste an army list export — GW app, New Recruit (text or JSON), ListForge, or Rosterizer. Format is detected automatically."}
       </p>
       <textarea
         value={text}
@@ -237,7 +255,7 @@ export default function ImportScreen() {
         onClick={() => void runImport()}
         className="rounded-md bg-accent py-3 text-sm font-bold text-surface disabled:opacity-40"
       >
-        {busy ? "Reading list…" : "Import"}
+        {busy ? "Reading list…" : editing ? "Re-import" : "Import"}
       </button>
     </div>
   );
