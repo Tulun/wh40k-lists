@@ -64,9 +64,12 @@ export default function UnitDetailScreen() {
 
   const pools = armyStratagems(data.stratagems.all, detachmentIds);
   const linkedStratagems = raw
-    ? sortStratagems(
-        stratagemsForUnit(raw, [...pools.detachment, ...pools.core], detachmentEntities),
-      )
+    ? sortStratagems(stratagemsForUnit(raw, pools.detachment, detachmentEntities))
+    : [];
+  // Core stratagems that can target this unit live in their own section at the
+  // bottom — they're always available, the detachment ones are the news.
+  const coreStratagems = raw
+    ? sortStratagems(stratagemsForUnit(raw, pools.core, detachmentEntities))
     : [];
   // Most stratagems have no authored target data yet; surface the rest of the
   // detachment's stratagems in a collapsed section so nothing is invisible.
@@ -190,6 +193,22 @@ export default function UnitDetailScreen() {
         <Section title={`Detachment stratagems (${otherDetachmentStratagems.length})`}>
           <div className="space-y-2">
             {otherDetachmentStratagems.map((s) => (
+              <StratagemCard
+                key={s.id}
+                data={data}
+                stratagem={s}
+                factionId={roster.faction_id}
+                listId={list.id}
+              />
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {coreStratagems.length > 0 && (
+        <Section title={`Core stratagems for this unit (${coreStratagems.length})`}>
+          <div className="space-y-2">
+            {coreStratagems.map((s) => (
               <StratagemCard
                 key={s.id}
                 data={data}

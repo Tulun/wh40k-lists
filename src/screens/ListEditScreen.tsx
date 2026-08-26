@@ -10,6 +10,7 @@ import {
   applyWargearOption,
   duplicateUnit,
   enhancementChoices,
+  legalityIssues,
   loadoutDataMissing,
   nextSize,
   removeDetachment,
@@ -47,8 +48,8 @@ export default function ListEditScreen() {
   const data = useDataset();
   const [addQuery, setAddQuery] = useState("");
 
-  const legality = useMemo(
-    () => (data && list ? data.checkRoster(list.roster, data.dataset) : null),
+  const issues = useMemo(
+    () => (data && list ? legalityIssues(data, list.roster) : []),
     [data, list],
   );
 
@@ -101,24 +102,6 @@ export default function ListEditScreen() {
       ...next,
       rawText: data.exportRoster(next.roster, "roster-json"),
     });
-
-  // Army-level issues plus per-unit loadout violations, one flat readable list.
-  const issues: string[] = [];
-  if (legality) {
-    for (const v of legality.army) {
-      const unitName =
-        v.unitIndex != null ? roster.units[v.unitIndex]?.ref.raw_name : null;
-      issues.push(unitName ? `${unitName}: ${v.message}` : v.message);
-    }
-    for (const ul of legality.units) {
-      // Skip loadout complaints for units the dataset has no loadout data for
-      // (codex-overlay entries) — the check would flag every weapon count.
-      const view = data.resolveRosterUnit(roster.units[ul.unitIndex], data.dataset, factionId);
-      if (view && loadoutDataMissing(data, view.raw)) continue;
-      const unitName = roster.units[ul.unitIndex]?.ref.raw_name;
-      for (const v of ul.violations) issues.push(`${unitName}: ${v.message}`);
-    }
-  }
 
   const q = addQuery.trim().toLowerCase();
   const addResults =

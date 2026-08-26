@@ -495,6 +495,55 @@ export function repriceAll(data: Data40k, content: ListContent): ListContent {
   return finalize(data, next, next.roster.units.map((u) => u.ref.id));
 }
 
+/**
+ * The legality report as displayable lines, with two app-level filters over
+ * the package's `checkRoster`:
+ * - loadout complaints are dropped for units the dataset has no loadout data
+ *   for (codex-overlay entries — the check would flag every weapon count);
+ * - enhancement keyword mismatches are dropped when the "missing" keyword is
+ *   the unit's own datasheet name ("DEFFKILLA WARTRIKE model only") — the
+ *   package matches printed keywords only, the app treats the name as one.
+ */
+export function legalityIssues(data: Data40k, roster: Roster): string[] {
+  const legality = data.checkRoster(roster, data.dataset);
+  const factionId = roster.faction_id;
+  const issues: string[] = [];
+
+  const nameSatisfiesRestriction = (unitIndex: number): boolean => {
+    const ru = roster.units[unitIndex];
+    const unit = ru ? unitEntity(data, ru.ref, factionId) : undefined;
+    const enh = ru?.enhancement?.id ? byId(data.enhancements, ru.enhancement.id, factionId) : undefined;
+    if (!unit || !enh) return false;
+    const kws = new Set(
+      [unit.name, ...(unit.keywords ?? []), ...(unit.faction_keywords ?? [])].map((k) =>
+        k.toLowerCase(),
+      ),
+    );
+    return (
+      (enh.keyword_restrictions ?? []).every((k) => kws.has(k.toLowerCase())) &&
+      !(enh.exclusion_keywords ?? []).some((k) => kws.has(k.toLowerCase()))
+    );
+  };
+
+  for (const v of legality.army) {
+    if (
+      v.code === "enhancement-keyword-mismatch" &&
+      v.unitIndex != null &&
+      nameSatisfiesRestriction(v.unitIndex)
+    )
+      continue;
+    const unitName = v.unitIndex != null ? roster.units[v.unitIndex]?.ref.raw_name : null;
+    issues.push(unitName ? `${unitName}: ${v.message}` : v.message);
+  }
+  for (const ul of legality.units) {
+    const ru = roster.units[ul.unitIndex];
+    const unit = ru ? unitEntity(data, ru.ref, factionId) : undefined;
+    if (unit && loadoutDataMissing(data, unit)) continue;
+    for (const v of ul.violations) issues.push(`${ru?.ref.raw_name}: ${v.message}`);
+  }
+  return issues;
+}
+
 export function setForceDisposition(content: ListContent, id: string | null): ListContent {
   const next = clone(content);
   next.roster.force_disposition = id;
