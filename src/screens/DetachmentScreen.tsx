@@ -1,4 +1,5 @@
 import { Link, useParams } from "react-router-dom";
+import BackBar from "../components/BackBar";
 import DetachmentCard from "../components/DetachmentCard";
 import { useDataset } from "../hooks/useDataset";
 import { detachmentView } from "../lib/detachment-view";
@@ -26,6 +27,7 @@ export default function DetachmentScreen() {
 
   return (
     <div className="space-y-3">
+      <BackBar />
       <div className="flex items-baseline gap-2">
         <h1 className="min-w-0 flex-1 truncate text-lg font-bold">{det.name}</h1>
         <Link to={`/explore/${factionId}`} className="shrink-0 text-xs text-ink-faint underline">

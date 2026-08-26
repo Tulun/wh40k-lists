@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { backState } from "../components/BackBar";
 import StratagemCard from "../components/StratagemCard";
 import { MicroStats } from "../components/StatLine";
 import { useDataset } from "../hooks/useDataset";
@@ -105,7 +106,7 @@ export default function GlanceScreen() {
 
   return (
     <div className="space-y-3">
-      <ArmyHeader data={data} roster={roster} />
+      <ArmyHeader data={data} roster={roster} listName={list.name} />
 
       {withEnhancements.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -188,7 +189,15 @@ function enhancementName(
   return ref.raw_name;
 }
 
-function ArmyHeader({ data, roster }: { data: Data40k | null; roster: import("@alpaca-software/40kdc-data").Roster }) {
+function ArmyHeader({
+  data,
+  roster,
+  listName,
+}: {
+  data: Data40k | null;
+  roster: import("@alpaca-software/40kdc-data").Roster;
+  listName: string;
+}) {
   const faction = data && roster.faction_id ? data.factions.getAny(roster.faction_id) : undefined;
 
   return (
@@ -226,6 +235,7 @@ function ArmyHeader({ data, roster }: { data: Data40k | null; roster: import("@a
             <Link
               key={detachment.ref.id ?? `${detachment.ref.raw_name}-${i}`}
               to={`/explore/${roster.faction_id}/detachment/${entity.id}`}
+              state={backState("/", listName)}
               className="block active:bg-panel"
             >
               {header}

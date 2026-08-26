@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import type { ResolvedRef } from "@alpaca-software/40kdc-data";
 import AbilityBlock from "../components/AbilityBlock";
+import BackBar from "../components/BackBar";
 import KeywordChips from "../components/KeywordChips";
 import { isProvisional } from "./UnitDetailScreen";
 import StatLine from "../components/StatLine";
@@ -53,6 +54,7 @@ export default function DatasheetScreen() {
 
   return (
     <div className="space-y-4">
+      <BackBar />
       <div className="sticky top-12 z-10 -mx-3 flex items-center gap-1 border-b border-edge bg-surface/95 px-1 py-1.5 backdrop-blur">
         <Link
           to={`/explore/${factionId}`}
