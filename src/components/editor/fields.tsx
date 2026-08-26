@@ -166,6 +166,36 @@ export function SectionCard({
   );
 }
 
+/** Full-width tab bar for switching lists; labels carry their counts. */
+export function TabBar({
+  tabs,
+  active,
+  onSelect,
+}: {
+  tabs: { id: string; label: string }[];
+  active: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div role="tablist" className="flex overflow-hidden rounded-md border border-edge text-sm font-semibold">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={active === t.id}
+          onClick={() => onSelect(t.id)}
+          className={`min-h-11 flex-1 px-2 ${
+            active === t.id ? "bg-accent/20 text-accent" : "text-ink-dim active:bg-panel"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** View/Edit segmented toggle shared by the editor screens. */
 export function ModeToggle({
   mode,
