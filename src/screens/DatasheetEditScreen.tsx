@@ -717,6 +717,60 @@ export default function DatasheetEditScreen() {
         ))}
       </SectionCard>
 
+      <SectionCard
+        title="Other wargear"
+        actions={
+          <SmallButton
+            onClick={() => patch({ wargearItems: [...(sheet.wargearItems ?? []), { name: "" }] })}
+          >
+            + item
+          </SmallButton>
+        }
+      >
+        {(sheet.wargearItems ?? []).length === 0 && (
+          <p className="text-xs text-ink-faint">
+            Non-weapon wargear (force fields, one-shot rokkits) — no statline, rule lives in an
+            ability. Referencable from wargear options by name.
+          </p>
+        )}
+        {(sheet.wargearItems ?? []).map((item, i) => (
+          <div key={i} className="grid grid-cols-[1fr_4.5rem_auto] items-end gap-2">
+            <Field label="Item name">
+              <TextInput
+                value={item.name}
+                onChange={(e) =>
+                  patch({
+                    wargearItems: sheet.wargearItems!.map((it, j) =>
+                      j === i ? { ...it, name: e.target.value } : it,
+                    ),
+                  })
+                }
+              />
+            </Field>
+            <Field label="Pts each">
+              <NumberInput
+                value={item.cost ?? 0}
+                onValue={(n) =>
+                  patch({
+                    wargearItems: sheet.wargearItems!.map((it, j) =>
+                      j === i ? { ...it, cost: n > 0 ? n : undefined } : it,
+                    ),
+                  })
+                }
+              />
+            </Field>
+            <SmallButton
+              tone="danger"
+              onClick={() =>
+                patch({ wargearItems: sheet.wargearItems!.filter((_, j) => j !== i) })
+              }
+            >
+              ✕
+            </SmallButton>
+          </div>
+        ))}
+      </SectionCard>
+
       <CompositionSection
         rows={sheet.composition ?? []}
         weaponNames={sheet.weapons.map((w) => w.name).filter((n) => n.trim())}
@@ -725,7 +779,10 @@ export default function DatasheetEditScreen() {
 
       <WargearOptionsSection
         options={sheet.wargearOptions ?? []}
-        weaponNames={sheet.weapons.map((w) => w.name).filter((n) => n.trim())}
+        weaponNames={[
+          ...sheet.weapons.map((w) => w.name),
+          ...(sheet.wargearItems ?? []).map((it) => it.name),
+        ].filter((n) => n.trim())}
         onChange={(wargearOptions) => patch({ wargearOptions })}
       />
 

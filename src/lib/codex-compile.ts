@@ -31,11 +31,13 @@ import type {
   PatchFaction,
   ReplaceFaction,
 } from "./codex-model";
+import type { RawData } from "@alpaca-software/40kdc-data";
 import { slugify } from "./codex-model";
 
 export const CODEX_GAME_VERSION = { edition: "11th", dataslate: "leak-provisional" } as const;
 type GV = Unit["game_version"];
 const GV_REF = CODEX_GAME_VERSION as unknown as GV;
+type WargearItem = RawData["wargear"][number];
 
 export type CompiledAbility = AbilityDSLEntry & { leak_text: string };
 
@@ -52,6 +54,8 @@ export interface CompiledRecords {
   leaderAttachments: LeaderAttachment[];
   wargearOptions: WargearOption[];
   unitCompositions: UnitComposition[];
+  /** Non-weapon wargear items ({id, name} records, same shape as upstream). */
+  wargear: WargearItem[];
   /** Ad-hoc catalog entries for hand-typed weapon keywords unknown upstream. */
   weaponKeywords: WeaponKeyword[];
 }
@@ -159,9 +163,10 @@ function compileWeapon(unitId: string, weapon: EditableWeapon, out: CompiledReco
 }
 
 /**
- * Weapon name (lowercased) → the id(s) compileWeapon mints for it. Dual-mode
- * weapons are two same-named entries with distinct ids; a name reference in
- * composition or a wargear option means the physical weapon, i.e. every mode.
+ * Weapon/wargear name (lowercased) → the id(s) compileWeapon mints for it.
+ * Dual-mode weapons are two same-named entries with distinct ids; a name
+ * reference in composition or a wargear option means the physical weapon,
+ * i.e. every mode. Non-weapon wargear items resolve by the same rule.
  */
 function weaponIdsByName(sheet: EditableDatasheet): Map<string, string[]> {
   const map = new Map<string, string[]>();
@@ -173,6 +178,11 @@ function weaponIdsByName(sheet: EditableDatasheet): Map<string, string[]> {
     minted.add(id);
     const key = w.name.trim().toLowerCase();
     map.set(key, [...(map.get(key) ?? []), id]);
+  }
+  for (const item of sheet.wargearItems ?? []) {
+    const key = item.name.trim().toLowerCase();
+    if (map.has(key)) continue; // a weapon already claims the name
+    map.set(key, [`${sheet.id}--${slugify(item.name)}`]);
   }
   return map;
 }
@@ -233,9 +243,16 @@ function compileComposition(factionId: string, sheet: EditableDatasheet, out: Co
 
 function compileDatasheet(factionId: string, sheet: EditableDatasheet, out: CompiledRecords): void {
   const weaponIds = sheet.weapons.map((w) => compileWeapon(sheet.id, w, out));
+  for (const item of sheet.wargearItems ?? []) {
+    out.wargear.push({
+      id: `${sheet.id}--${slugify(item.name)}`,
+      name: item.name,
+      game_version: GV_REF,
+    } as WargearItem);
+  }
   compileWargearOptions(sheet, out);
   compileComposition(factionId, sheet, out);
-  const wargearCosts = sheet.weapons
+  const wargearCosts = [...sheet.weapons, ...(sheet.wargearItems ?? [])]
     .filter((w) => (w.cost ?? 0) > 0)
     .map((w) => ({ item_id: `${sheet.id}--${slugify(w.name)}`, cost: w.cost! }));
   const abilityIds = sheet.abilities.map((a) => {
@@ -369,6 +386,7 @@ function emptyCompiled(factionId: string): CompiledRecords {
     leaderAttachments: [],
     wargearOptions: [],
     unitCompositions: [],
+    wargear: [],
     weaponKeywords: [],
   };
 }

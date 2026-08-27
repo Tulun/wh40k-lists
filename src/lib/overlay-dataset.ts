@@ -153,6 +153,9 @@ export function buildMergedRaw(base: RawData, compiled: CompiledRecords): RawDat
       ...base.wargearOptions.filter((w) => w.faction_id !== factionId),
       ...compiled.wargearOptions,
     ],
+    // Wargear items carry no faction_id; ours use `${unitId}--` ids so they
+    // can't collide with upstream — plain append.
+    wargear: [...base.wargear, ...compiled.wargear],
     targetProfiles: base.targetProfiles.filter((t) => t.faction_id !== factionId),
     phaseMappings: base.phaseMappings.filter(
       (p) => !abilityIdsGone.has(p.source_id) && !removedStratagemIds.has(p.source_id),
@@ -224,6 +227,7 @@ export function applyRecordPatches(base: RawData, compiled: CompiledRecords): Ra
       ),
       ...compiled.unitCompositions,
     ],
+    wargear: [...base.wargear, ...compiled.wargear],
     phaseMappings: base.phaseMappings.filter((p) => !removedStratagemIds.has(p.source_id)),
   };
 }

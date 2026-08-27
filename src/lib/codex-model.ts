@@ -112,6 +112,13 @@ export interface EditableDatasheet {
    */
   points: { models: number; cost: number; fromUnit?: number; toUnit?: number }[];
   weapons: EditableWeapon[];
+  /**
+   * Non-weapon wargear items (Pulsa Rokkit, Kustom Force Field): no statline,
+   * their rule lives in a datasheet ability. Referencable by name from
+   * wargear options and composition rows just like weapons; `cost` is a
+   * per-copy MFM surcharge.
+   */
+  wargearItems?: { name: string; cost?: number }[];
   /** Wargear-option bullets; absent on docs saved before the field existed. */
   wargearOptions?: EditableWargearOption[];
   /** Unit-composition rows; absent on docs saved before the field existed. */

@@ -730,6 +730,17 @@ function WargearEditor({
           counts,
           data.dataset.unitCompositionOf(unit)?.models,
         );
+  // The package validator misses one-of add-ons taken twice across branches
+  // (extra Busta Rokkit Launcha AND Pulsa Rokkit) — flag over-cap ourselves.
+  const overCap = optionStates
+    .filter((s) => s.totalApplied > s.cap)
+    .map((s) => {
+      const picked = s.branches
+        .filter((b) => b.applied > 0)
+        .map((b) => b.ids.map(nameOf).join(" + "))
+        .join(", ");
+      return `Only ${s.cap} of: ${picked} (${s.totalApplied} taken)`;
+    });
 
   const surcharge = (id: string) =>
     unit.wargear_costs?.find((c) => c.item_id === id)?.cost ?? 0;
@@ -763,14 +774,17 @@ function WargearEditor({
           ({rows.filter((r) => r.count > 0).length + unresolvedGear.length} items
           {locked ? " · fixed" : ""})
         </span>
-        {violations.length > 0 && <span className="text-opponent"> ⚠ {violations.length}</span>}
+        {violations.length + overCap.length > 0 && (
+          <span className="text-opponent"> ⚠ {violations.length + overCap.length}</span>
+        )}
       </summary>
       <div className="space-y-1 px-2 pb-2">
         {splitGroups
           ? splitGroups.map((g, gi) => (
               <div key={`grp-${gi}`} className={gi > 0 ? "border-t border-edge/40 pt-1" : ""}>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-                  {g.count}× {g.model_name ?? "model"}
+                  {g.model_name ?? "Model"} wargear
+                  {g.count > 1 && <span className="normal-case"> · {g.count} models</span>}
                 </p>
                 {g.weapons.map((w) => (
                   <div key={`${gi}-${w.id}`} className="flex items-center gap-2">
@@ -872,6 +886,11 @@ function WargearEditor({
         {violations.map((v, i) => (
           <p key={`v-${i}`} className="text-[11px] text-opponent">
             ⚠ {v.message}
+          </p>
+        ))}
+        {overCap.map((msg, i) => (
+          <p key={`oc-${i}`} className="text-[11px] text-opponent">
+            ⚠ {msg}
           </p>
         ))}
       </div>

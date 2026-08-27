@@ -366,7 +366,10 @@ function optionBranches(option: WargearOption): string[][] {
 
 /**
  * The unit's authored wargear options with how often each is currently taken —
- * inferred from the loadout as the smallest count among a branch's added ids.
+ * inferred from the loadout as the smallest count among a branch's added ids
+ * BEYOND the base loadout. The base must be subtracted or a branch that adds a
+ * weapon the unit also carries by default (Tankbustas' extra Busta Rokkit
+ * Launcha atop 5 default ones) reads as already taken.
  */
 export function wargearOptionStates(
   data: Data40k,
@@ -375,10 +378,17 @@ export function wargearOptionStates(
 ): WargearOptionState[] {
   const { options, models } = loadoutCtx(data, unit);
   const counts = wargearCounts(rosterUnit);
+  const base = data.baseLoadout(unit, rosterUnit.model_count, options, models).counts;
   return options.map((option) => {
     const branches = optionBranches(option).map((ids) => ({
       ids,
-      applied: ids.length > 0 ? Math.min(...ids.map((id) => counts.get(id) ?? 0)) : 0,
+      applied:
+        ids.length > 0
+          ? Math.max(
+              0,
+              Math.min(...ids.map((id) => (counts.get(id) ?? 0) - (base.get(id) ?? 0))),
+            )
+          : 0,
     }));
     return {
       option,
