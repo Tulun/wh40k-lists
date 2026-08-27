@@ -139,7 +139,7 @@ export default function ListsScreen() {
               )}
               <Link
                 to={`/lists/${list.id}/edit`}
-                className="flex-1 rounded-md bg-panel px-3 py-1.5 text-center text-xs font-semibold text-ink-dim"
+                className="ml-auto rounded-md bg-panel px-3 py-1.5 text-xs font-semibold text-ink-dim"
               >
                 Edit
               </Link>

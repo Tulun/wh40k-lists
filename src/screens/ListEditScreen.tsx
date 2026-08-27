@@ -148,11 +148,11 @@ export default function ListEditScreen() {
 
   return (
     <div className="space-y-3 pb-8">
-      <div className="flex items-center justify-between gap-2">
+      <div className="sticky top-12 z-10 -mx-3 flex items-center justify-between gap-2 border-b border-edge bg-surface/95 px-3 py-1.5 backdrop-blur">
         <h1 className="text-lg font-bold">Edit list</h1>
         <Link
           to="/lists"
-          className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-surface"
+          className="rounded-md bg-accent px-4 py-1.5 text-sm font-bold text-surface"
         >
           Done
         </Link>
@@ -479,6 +479,15 @@ function UnitRow({
 
         <span className="flex-1" />
 
+        {unit && roster.faction_id && (
+          <Link
+            to={`/explore/${roster.faction_id}/${unit.id}`}
+            state={editBack}
+            className="rounded-md bg-panel px-2.5 py-1 text-xs font-semibold text-ink-dim"
+          >
+            Datasheet
+          </Link>
+        )}
         <button
           type="button"
           title="Duplicate unit"
