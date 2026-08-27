@@ -139,15 +139,17 @@ export default function ListsScreen() {
               )}
               <Link
                 to={`/lists/${list.id}/edit`}
-                className="ml-auto rounded-md bg-panel px-3 py-1.5 text-xs font-semibold text-ink-dim"
+                className="ml-auto rounded-md bg-panel px-6 py-1.5 text-sm font-semibold text-ink-dim transition-colors hover:bg-edge hover:text-ink"
               >
                 Edit
               </Link>
               <button
                 type="button"
                 onClick={() => void share(list)}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
-                  copiedId === list.id ? "bg-accent/20 text-accent" : "bg-panel text-ink-dim"
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  copiedId === list.id
+                    ? "bg-accent/20 text-accent"
+                    : "bg-panel text-ink-dim hover:bg-edge hover:text-ink"
                 }`}
               >
                 {copiedId === list.id ? "✓ Copied" : "Share"}
@@ -157,7 +159,7 @@ export default function ListsScreen() {
                 onClick={() => {
                   if (confirm(`Delete "${list.name}"?`)) deleteList(list.id);
                 }}
-                className="rounded-md bg-panel px-3 py-1.5 text-xs text-opponent"
+                className="rounded-md bg-panel px-3 py-1.5 text-xs text-opponent transition-colors hover:bg-opponent/15"
               >
                 Delete
               </button>

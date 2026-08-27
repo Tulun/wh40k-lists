@@ -34,3 +34,13 @@ body {
   min-height: 100dvh;
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* Tailwind v4 preflight leaves buttons with the default arrow cursor;
+   restore the pointer for anything clickable (disabled stays default). */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary {
+    cursor: pointer;
+  }
+}

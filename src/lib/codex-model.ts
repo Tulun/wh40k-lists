@@ -364,6 +364,10 @@ export function seedDetachmentFromUpstream(
       cost: record.cost,
       text: text ?? "",
       restrictions: [...(record.keyword_restrictions ?? [])],
+      ...(record.exclusion_keywords?.length
+        ? { exclusions: [...record.exclusion_keywords] }
+        : {}),
+      ...(record.upgrade_tag ? { upgrade: true } : {}),
     })),
     stratagems: stratagems.map(({ record, text }) => ({
       id: record.id,

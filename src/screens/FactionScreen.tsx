@@ -17,11 +17,14 @@ const ROLE_ORDER: [string, string][] = [
   ["allied", "Allied"],
 ];
 
+type Tab = "rule" | "detachments" | "units";
+
 export default function FactionScreen() {
   const { factionId } = useParams();
   const data = useDataset();
   const doc = useCodex((s) => s.doc);
   const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<Tab>("units");
 
   if (!data) {
     return <p className="py-16 text-center text-xs text-ink-faint">Loading dataset…</p>;
@@ -59,6 +62,12 @@ export default function FactionScreen() {
   const armyRuleId = faction.raw.faction_rule_id;
   const armyRule = armyRuleId ? byId(data.abilities, armyRuleId, factionId) : undefined;
 
+  const TABS: { id: Tab; label: string; detail?: string }[] = [
+    { id: "rule", label: "Army rule" },
+    { id: "detachments", label: "Detachments", detail: `${detachments.length}` },
+    { id: "units", label: "Units", detail: `${units.length}` },
+  ];
+
   return (
     <div className="space-y-3">
       <div className="flex items-baseline gap-2">
@@ -76,23 +85,39 @@ export default function FactionScreen() {
         </Link>
       </div>
 
-      {armyRule && (
-        <details className="rounded-md border border-edge">
-          <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">
-            Army rule <span className="text-xs font-normal text-ink-faint">· {armyRule.name}</span>
-          </summary>
-          <p className="mt-1 whitespace-pre-wrap px-3 pb-2 text-sm leading-snug">
-            {abilityText(armyRule)}
-          </p>
-        </details>
-      )}
+      <div className="sticky top-12 z-10 -mx-3 border-b border-edge bg-surface/95 px-3 py-1.5 backdrop-blur">
+        <div className="flex overflow-hidden rounded-md border border-edge">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${
+                tab === t.id ? "bg-panel text-ink" : "text-ink-dim hover:text-ink"
+              }`}
+            >
+              {t.label}
+              {t.detail && <span className="ml-1 font-normal text-ink-faint">{t.detail}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      {detachments.length > 0 && (
-        <details className="rounded-md border border-edge">
-          <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">
-            Detachments <span className="text-xs font-normal text-ink-faint">({detachments.length})</span>
-          </summary>
-          <ul className="divide-y divide-edge border-t border-edge">
+      {tab === "rule" &&
+        (armyRule ? (
+          <div className="rounded-md border border-edge px-3 py-2">
+            <p className="text-sm font-semibold">{armyRule.name}</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">
+              {abilityText(armyRule)}
+            </p>
+          </div>
+        ) : (
+          <p className="py-8 text-center text-xs text-ink-faint">No army rule recorded.</p>
+        ))}
+
+      {tab === "detachments" &&
+        (detachments.length > 0 ? (
+          <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
             {detachments.map((d) => (
               <li key={d.id}>
                 <Link
@@ -121,40 +146,47 @@ export default function FactionScreen() {
               </li>
             ))}
           </ul>
-        </details>
+        ) : (
+          <p className="py-8 text-center text-xs text-ink-faint">No detachments recorded.</p>
+        ))}
+
+      {tab === "units" && (
+        <>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filter units or keywords…"
+            className="w-full rounded-md border border-edge bg-panel px-3 py-2 text-sm"
+          />
+
+          {grouped.map(({ label, units: group }) => (
+            <div key={label}>
+              <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                {label}
+              </div>
+              <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
+                {group.map((u) => {
+                  const profile = u.raw.profiles[0];
+                  const fnp = fnpFromAbilityNames(u.abilities.map((a) => a.name));
+                  return (
+                    <li key={u.id}>
+                      <Link
+                        to={`/explore/${factionId}/${u.id}`}
+                        className="flex min-h-11 items-center gap-2 px-3 py-1.5 active:bg-panel"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {u.name}
+                        </span>
+                        {profile && <MicroStats profile={profile} fnp={fnp} />}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </>
       )}
-
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Filter units or keywords…"
-        className="sticky top-13 z-10 w-full rounded-md border border-edge bg-panel px-3 py-2 text-sm"
-      />
-
-      {grouped.map(({ label, units: group }) => (
-        <div key={label}>
-          <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-            {label}
-          </div>
-          <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
-            {group.map((u) => {
-              const profile = u.raw.profiles[0];
-              const fnp = fnpFromAbilityNames(u.abilities.map((a) => a.name));
-              return (
-                <li key={u.id}>
-                  <Link
-                    to={`/explore/${factionId}/${u.id}`}
-                    className="flex min-h-11 items-center gap-2 px-3 py-1.5 active:bg-panel"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{u.name}</span>
-                    {profile && <MicroStats profile={profile} fnp={fnp} />}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
     </div>
   );
 }

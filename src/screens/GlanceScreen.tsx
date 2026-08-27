@@ -8,6 +8,7 @@ import type { Data40k } from "../lib/data";
 import { dedupeRoster, unitKey, type DisplayEntry } from "../lib/dedupe";
 import { fnpFromAbilityNames } from "../lib/describe";
 import { byId } from "../lib/lookup";
+import { shareText } from "../lib/share";
 import { armyStratagems, sortStratagems } from "../lib/stratagems";
 import { useActiveList, useLists } from "../store/lists";
 
@@ -25,6 +26,15 @@ export default function GlanceScreen() {
   const activeSlot = useLists((s) => s.activeSlot);
   const data = useDataset();
   const [query, setQuery] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  /** Copy the shareable text (WTC-compact), same as the Lists screen's Share. */
+  async function share() {
+    if (!data || !list) return;
+    await navigator.clipboard.writeText(shareText(data, list));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   const entries = useMemo(
     () => (list ? dedupeRoster(list.roster) : []),
@@ -106,7 +116,13 @@ export default function GlanceScreen() {
 
   return (
     <div className="space-y-3">
-      <ArmyHeader data={data} roster={roster} listName={list.name} />
+      <ArmyHeader
+        data={data}
+        roster={roster}
+        listName={list.name}
+        onShare={data ? share : undefined}
+        copied={copied}
+      />
 
       {withEnhancements.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -193,20 +209,35 @@ function ArmyHeader({
   data,
   roster,
   listName,
+  onShare,
+  copied,
 }: {
   data: Data40k | null;
   roster: import("@alpaca-software/40kdc-data").Roster;
   listName: string;
+  onShare?: () => void;
+  copied?: boolean;
 }) {
   const faction = data && roster.faction_id ? data.factions.getAny(roster.faction_id) : undefined;
 
   return (
     <div className="rounded-md border border-edge bg-panel/50 px-3 py-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-sm font-bold">
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 flex-1 truncate text-sm font-bold">
           {faction?.name ?? roster.faction_id ?? "Unknown faction"}
         </span>
-        <span className="text-xs text-ink-dim">
+        {onShare && (
+          <button
+            type="button"
+            onClick={() => void onShare()}
+            className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+              copied ? "bg-accent/20 text-accent" : "bg-panel text-ink-dim"
+            }`}
+          >
+            {copied ? "✓ Copied" : "Share"}
+          </button>
+        )}
+        <span className="shrink-0 text-xs text-ink-dim">
           {roster.points.total_computed}
           {roster.points.declared_limit ? `/${roster.points.declared_limit}` : ""} pts
         </span>

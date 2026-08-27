@@ -90,7 +90,14 @@ export default function DetachmentCard({ det }: { det: EditableDetachment }) {
             {det.enhancements.map((enh, i) => (
               <div key={i} className="py-2 text-[13px] leading-snug">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-bold">{enh.name || "Unnamed enhancement"}</span>
+                  <span className="min-w-0 font-bold">
+                    {enh.name || "Unnamed enhancement"}
+                    {enh.upgrade && (
+                      <span className="ml-1.5 rounded bg-band-hi/20 px-1.5 py-px align-middle text-[10px] font-semibold uppercase tracking-wide text-band-hi">
+                        Upgrade
+                      </span>
+                    )}
+                  </span>
                   <span className="shrink-0 font-semibold tabular-nums text-band-hi">
                     {enh.cost > 0 ? `${enh.cost} pts` : "? pts"}
                   </span>
