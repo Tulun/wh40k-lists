@@ -10,12 +10,14 @@ import {
   addDetachment,
   addUnit,
   applyWargearOption,
+  blankSavedList,
   duplicateUnit,
   enhancementChoices,
   nextSize,
   removeDetachment,
   removeUnit,
   setEnhancement,
+  setFaction,
   setForceDisposition,
   setModelCount,
   setWarlord,
@@ -351,6 +353,26 @@ describe("detachments", () => {
     expect(next.roster.units[i].enhancement).toBeNull();
     expect(next.roster.units[i].enhancement_points).toBeNull();
     expect(next.roster.points.total_computed).toBe(total(next));
+  });
+});
+
+describe("from scratch", () => {
+  it("a blank list builds up through the normal editor ops", () => {
+    const list = blankSavedList("1.2.3");
+    expect(list.roster.units).toHaveLength(0);
+    expect(list.roster.faction_id).toBeNull();
+    let content: ListContent = {
+      roster: list.roster,
+      roleHints: list.roleHints,
+      attachments: list.attachments,
+    };
+    content = setFaction(content, "orks");
+    content = addDetachment(data40k, content, "war-horde");
+    content = addUnit(data40k, content, "boyz");
+    expect(content.roster.faction_id).toBe("orks");
+    expect(content.roster.detachments[0].ref.id).toBe("war-horde");
+    expect(content.roster.units[0].ref.id).toBe("boyz");
+    expect(content.roster.points.total_computed).toBeGreaterThan(0);
   });
 });
 

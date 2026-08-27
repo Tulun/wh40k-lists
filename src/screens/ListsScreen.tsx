@@ -2,9 +2,12 @@ import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { loadMergedData } from "../lib/data";
 import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
+import { blankSavedList } from "../lib/list-edit";
 import { shareText } from "../lib/share";
 import { useLists } from "../store/lists";
 import type { SavedList, Slot } from "../store/schema";
+
+declare const __DATA_PKG_VERSION__: string;
 
 export default function ListsScreen() {
   const lists = useLists((s) => s.lists);
@@ -13,6 +16,7 @@ export default function ListsScreen() {
   const assignSlot = useLists((s) => s.assignSlot);
   const setActiveSlot = useLists((s) => s.setActiveSlot);
   const deleteList = useLists((s) => s.deleteList);
+  const saveList = useLists((s) => s.saveList);
   const navigate = useNavigate();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -45,8 +49,19 @@ export default function ListsScreen() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">Saved lists</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="min-w-0 flex-1 truncate text-lg font-bold">Saved lists</h1>
+        <button
+          type="button"
+          onClick={() => {
+            const list = blankSavedList(__DATA_PKG_VERSION__);
+            saveList(list);
+            navigate(`/lists/${list.id}/edit`);
+          }}
+          className="rounded-md border border-accent/50 px-4 py-2 text-sm font-bold text-accent"
+        >
+          + New
+        </button>
         <Link to="/import" className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-surface">
           + Import
         </Link>

@@ -25,6 +25,7 @@ import type {
 import type { Data40k } from "./data";
 import type { RoleHints } from "./normalize";
 import { byId } from "./lookup";
+import type { SavedList } from "../store/schema";
 
 type LoadoutModels = Parameters<Data40k["baseLoadout"]>[3];
 type RosterLoadoutGroups = RosterUnit["loadout_groups"];
@@ -34,6 +35,56 @@ export interface ListContent {
   roster: Roster;
   roleHints: RoleHints;
   attachments: Record<string, number>;
+}
+
+/** An empty from-scratch list: the editor does the rest once a faction is picked. */
+export function blankSavedList(pkgVersion: string): SavedList {
+  return {
+    id: crypto.randomUUID(),
+    name: "New list",
+    rawText: "",
+    roster: {
+      name: "New list",
+      source: { format: "roster-json", generated_by: "40k-list-viewer" },
+      faction_id: null,
+      detachments: [],
+      battle_size: "strike-force",
+      force_disposition: null,
+      units: [],
+      points: {
+        declared_limit: 2000,
+        detachment_cap: 3,
+        total_reported: null,
+        total_computed: 0,
+      },
+      diagnostics: {
+        resolved_units: 0,
+        unresolved_units: 0,
+        resolved_weapons: 0,
+        unresolved_weapons: 0,
+        warnings: [],
+      },
+      game_version: { edition: "11th", dataslate: "launch" },
+    },
+    overrides: {},
+    notes: {},
+    roleHints: {},
+    attachments: {},
+    importedAt: new Date().toISOString(),
+    dataVersion: { edition: "11th", dataslate: "launch", pkg: pkgVersion },
+  };
+}
+
+/**
+ * Pick the army's faction — offered only while the roster is empty, so
+ * switching also clears any detachments picked under the old faction.
+ */
+export function setFaction(content: ListContent, factionId: string): ListContent {
+  const next = clone(content);
+  next.roster.faction_id = factionId;
+  next.roster.detachments = [];
+  next.roster.force_disposition = null;
+  return next;
 }
 
 function mkRef(id: string, name: string): ResolvedRef {

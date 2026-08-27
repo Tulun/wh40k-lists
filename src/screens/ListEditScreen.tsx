@@ -17,6 +17,7 @@ import {
   removeUnit,
   repriceAll,
   setEnhancement,
+  setFaction,
   setModelCount,
   setForceDisposition,
   setLeaderAttachment,
@@ -30,6 +31,7 @@ import {
   type ListContent,
 } from "../lib/list-edit";
 import { DISPOSITIONS } from "../lib/codex-model";
+import { EXPLORE_FACTION_IDS } from "../lib/flags";
 import { byId } from "../lib/lookup";
 import { useLists } from "../store/lists";
 
@@ -158,10 +160,25 @@ export default function ListEditScreen() {
       />
 
       <div className="rounded-md border border-edge bg-panel/50 px-3 py-2">
-        <div className="flex items-baseline justify-between">
-          <span className="text-sm font-bold">
-            {(factionId && data.factions.getAny(factionId)?.name) ?? "Unknown faction"}
-          </span>
+        <div className="flex items-baseline justify-between gap-2">
+          {factionId || roster.units.length > 0 ? (
+            <span className="text-sm font-bold">
+              {(factionId && data.factions.getAny(factionId)?.name) ?? "Unknown faction"}
+            </span>
+          ) : (
+            <div className="min-w-0 flex-1">
+              <Dropdown
+                value={null}
+                placeholder="Pick a faction to start"
+                options={(EXPLORE_FACTION_IDS ?? data.factions.all.map((f) => f.id))
+                  .map((id) => ({ value: id, label: data.factions.getAny(id)?.name ?? id }))
+                  .sort((a, b) => a.label.localeCompare(b.label))}
+                onChange={(id) => {
+                  if (id) apply(setFaction(content, id));
+                }}
+              />
+            </div>
+          )}
           <span className="text-sm font-bold text-accent">
             {roster.points.total_computed}
             {roster.points.declared_limit ? `/${roster.points.declared_limit}` : ""} pts
