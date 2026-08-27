@@ -264,7 +264,7 @@ export default function DetachmentEditScreen() {
               patch({
                 stratagems: [
                   ...det.stratagems,
-                  { id: "", name: "", cpCost: 1, phases: [], playerTurn: "your-turn", timing: "once-per-turn", text: "", requiredKeywords: [] },
+                  { id: "", name: "", cpCost: 1, phases: [], playerTurn: "your-turn", timing: "once-per-phase", text: "", requiredKeywords: [] },
                 ],
               })
             }

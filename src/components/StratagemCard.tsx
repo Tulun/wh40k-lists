@@ -53,7 +53,12 @@ export default function StratagemCard({ data, stratagem, factionId, listId }: Pr
           <span className="rounded bg-panel px-1 py-px">
             {TURN_LABEL[stratagem.player_turn] ?? dekebabLabel(stratagem.player_turn)}
           </span>
-          <span className="rounded bg-panel px-1 py-px">{dekebabLabel(stratagem.timing)}</span>
+          {/* Once-per-phase is the core rule for every stratagem — only
+              exceptional timings (Fire Overwatch's once per turn) get a chip,
+              matching how the printed cards only state exceptions. */}
+          {stratagem.timing !== "once-per-phase" && (
+            <span className="rounded bg-panel px-1 py-px">{dekebabLabel(stratagem.timing)}</span>
+          )}
           {stratagem.type && (
             <span className="rounded bg-panel px-1 py-px">{dekebabLabel(stratagem.type)}</span>
           )}

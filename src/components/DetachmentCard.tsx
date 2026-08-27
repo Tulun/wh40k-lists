@@ -15,7 +15,9 @@ function StratagemBox({ strat }: { strat: EditableStratagem }) {
   const meta = [
     TURN_LABELS[strat.playerTurn],
     strat.phases.length > 0 ? strat.phases.map(dekebabLabel).join(" / ") + " phase" : null,
-    dekebabLabel(strat.timing),
+    // Once per phase is the core rule for every stratagem — only exceptional
+    // timings are worth a chip, matching the printed cards.
+    strat.timing !== "once-per-phase" ? dekebabLabel(strat.timing) : null,
   ].filter(Boolean);
   return (
     <div className="overflow-hidden rounded-sm border border-edge border-l-4 border-l-band-hi bg-surface">
