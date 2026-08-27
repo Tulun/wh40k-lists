@@ -40,6 +40,46 @@ export function formatSave(sv: number | null | undefined, invuln = false): strin
   return `${sv}+${invuln ? "+" : ""}`;
 }
 
+/** 1 → "1st", 2 → "2nd", 11 → "11th"… */
+function ordinal(n: number): string {
+  const rem = n % 100;
+  if (rem >= 11 && rem <= 13) return `${n}th`;
+  return `${n}${{ 1: "st", 2: "nd", 3: "rd" }[n % 10] ?? "th"}`;
+}
+
+/** A cost tier in either the upstream or the editor shape, field names normalized. */
+export interface PointsTier {
+  models?: number | null;
+  cost: number;
+  /** 1-based first army copy this cost applies to (11e ordinal pricing). */
+  from?: number | null;
+  /** Inclusive last copy; null/absent = open-ended band. */
+  to?: number | null;
+}
+
+/** "1st unit" / "1st–2nd unit" / "3rd+ unit" — null when the tier prices every copy. */
+export function pointsBandLabel(t: PointsTier): string | null {
+  const from = t.from ?? (t.to != null ? 1 : null);
+  if (from == null) return null;
+  if (t.to == null) return from === 1 ? null : `${ordinal(from)}+ unit`;
+  if (t.to === from) return `${ordinal(from)} unit`;
+  return `${ordinal(from)}–${ordinal(t.to)} unit`;
+}
+
+/**
+ * Cost-tier labels with their conditions spelled out — the ordinal band
+ * ("2nd+ unit") that steps the price, and a model-count prefix only when the
+ * unit actually comes in more than one size.
+ */
+export function pointsTierLabels(tiers: readonly PointsTier[]): string[] {
+  const showModels = tiers.some((t) => (t.models ?? 1) !== 1);
+  return tiers.map((t) => {
+    const models = showModels ? `${t.models ?? "?"}× ` : "";
+    const band = pointsBandLabel(t);
+    return `${models}${t.cost}pts${band ? ` (${band})` : ""}`;
+  });
+}
+
 /**
  * Display text for an ability: overlay-authored `leak_text` prose wins over
  * the DSL renderer (overlay records carry only a placeholder effect).

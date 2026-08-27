@@ -1,21 +1,11 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { MicroStats } from "../components/StatLine";
+import UnitListPane from "../components/UnitListPane";
 import { useDataset } from "../hooks/useDataset";
 import { DISPOSITIONS } from "../lib/codex-model";
-import { abilityText, fnpFromAbilityNames } from "../lib/describe";
+import { abilityText } from "../lib/describe";
 import { byId } from "../lib/lookup";
 import { codexBadge, useCodex } from "../store/codex";
-
-const ROLE_ORDER: [string, string][] = [
-  ["epic-hero", "Epic Heroes"],
-  ["character", "Characters"],
-  ["battleline", "Battleline"],
-  ["", "Other"],
-  ["dedicated-transport", "Dedicated Transports"],
-  ["fortification", "Fortifications"],
-  ["allied", "Allied"],
-];
 
 type Tab = "rule" | "detachments" | "units";
 
@@ -23,7 +13,6 @@ export default function FactionScreen() {
   const { factionId } = useParams();
   const data = useDataset();
   const doc = useCodex((s) => s.doc);
-  const [query, setQuery] = useState("");
   const [tab, setTab] = useState<Tab>("units");
 
   if (!data) {
@@ -39,23 +28,7 @@ export default function FactionScreen() {
     );
   }
 
-  const q = query.trim().toLowerCase();
-  const units = data.units
-    .byFaction(factionId)
-    .filter(
-      (u) =>
-        !q ||
-        u.name.toLowerCase().includes(q) ||
-        (u.raw.keywords ?? []).some((k) => k.toLowerCase().includes(q)),
-    )
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const grouped = ROLE_ORDER.map(([role, label]) => ({
-    label,
-    units: units.filter((u) =>
-      role === "" ? !ROLE_ORDER.some(([r]) => r !== "" && r === u.raw.role) : u.raw.role === role,
-    ),
-  })).filter((g) => g.units.length > 0);
-
+  const unitCount = data.units.byFaction(factionId).length;
   const detachments = [...data.detachments.byFaction(factionId)].sort((a, b) =>
     a.name.localeCompare(b.name),
   );
@@ -65,7 +38,7 @@ export default function FactionScreen() {
   const TABS: { id: Tab; label: string; detail?: string }[] = [
     { id: "rule", label: "Army rule" },
     { id: "detachments", label: "Detachments", detail: `${detachments.length}` },
-    { id: "units", label: "Units", detail: `${units.length}` },
+    { id: "units", label: "Units", detail: `${unitCount}` },
   ];
 
   return (
@@ -151,41 +124,16 @@ export default function FactionScreen() {
         ))}
 
       {tab === "units" && (
-        <>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter units or keywords…"
-            className="w-full rounded-md border border-edge bg-panel px-3 py-2 text-sm"
-          />
-
-          {grouped.map(({ label, units: group }) => (
-            <div key={label}>
-              <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-                {label}
-              </div>
-              <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
-                {group.map((u) => {
-                  const profile = u.raw.profiles[0];
-                  const fnp = fnpFromAbilityNames(u.abilities.map((a) => a.name));
-                  return (
-                    <li key={u.id}>
-                      <Link
-                        to={`/explore/${factionId}/${u.id}`}
-                        className="flex min-h-11 items-center gap-2 px-3 py-1.5 hover:bg-panel active:bg-panel"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                          {u.name}
-                        </span>
-                        {profile && <MicroStats profile={profile} fnp={fnp} />}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </>
+        // Desktop two-pane: the unit list becomes a master column and the
+        // datasheet opens beside it (DatasheetScreen renders the same pane).
+        <div className="lg:flex lg:items-start lg:gap-4">
+          <div className="lg:w-80 lg:shrink-0">
+            <UnitListPane data={data} factionId={factionId} />
+          </div>
+          <div className="hidden min-h-64 flex-1 items-center justify-center rounded-md border border-dashed border-edge text-sm text-ink-faint lg:sticky lg:top-24 lg:flex">
+            Select a unit to see its datasheet
+          </div>
+        </div>
       )}
     </div>
   );

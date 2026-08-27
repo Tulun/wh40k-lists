@@ -4,7 +4,7 @@ import type {
   EditableWargearOption,
   EditableWeapon,
 } from "../lib/codex-model";
-import { formatRange } from "../lib/describe";
+import { formatRange, pointsTierLabels } from "../lib/describe";
 
 /** Paraphrased bullet for one wargear option (our wording, never the book's). */
 export function wargearOptionSentence(o: EditableWargearOption): string {
@@ -168,10 +168,15 @@ export default function DatasheetCard({
           </div>
           {sheet.points.length > 0 && (
             <div className="shrink-0 space-y-0.5 rounded-sm border border-band-hi/40 bg-surface/60 px-2 py-1 text-right text-[11px] font-semibold tabular-nums text-white">
-              {sheet.points.map((t, i) => (
-                <div key={i}>
-                  {t.models === 1 ? `${t.cost} pts` : `${t.models} models — ${t.cost} pts`}
-                </div>
+              {pointsTierLabels(
+                sheet.points.map((t) => ({
+                  models: t.models,
+                  cost: t.cost,
+                  from: t.fromUnit,
+                  to: t.toUnit,
+                })),
+              ).map((label, i) => (
+                <div key={i}>{label}</div>
               ))}
             </div>
           )}

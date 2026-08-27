@@ -3,12 +3,13 @@ import type { ResolvedRef } from "@alpaca-software/40kdc-data";
 import AbilityBlock from "../components/AbilityBlock";
 import BackBar from "../components/BackBar";
 import KeywordChips from "../components/KeywordChips";
+import UnitListPane from "../components/UnitListPane";
 import { isProvisional } from "./UnitDetailScreen";
 import StatLine from "../components/StatLine";
 import WeaponTable from "../components/WeaponTable";
 import { useDataset } from "../hooks/useDataset";
 import type { MergedWeapon } from "../lib/dedupe";
-import { abilityText } from "../lib/describe";
+import { abilityText, pointsTierLabels } from "../lib/describe";
 
 const ref = (id: string, name: string): ResolvedRef => ({
   id,
@@ -53,19 +54,38 @@ export default function DatasheetScreen() {
   const bodyguards = data.dataset.bodyguardsAttachableFrom(unit.id);
 
   return (
-    <div className="space-y-4">
+    // Desktop two-pane explore: the faction's unit list rides along on the
+    // left so sibling datasheets are one click away; mobile keeps the
+    // full-width sheet with the back arrow.
+    <div className="lg:flex lg:items-start lg:gap-5">
+      <aside className="hidden lg:sticky lg:top-14 lg:block lg:max-h-[calc(100dvh-4.5rem)] lg:w-80 lg:shrink-0 lg:overflow-y-auto lg:pr-1">
+        <UnitListPane data={data} factionId={factionId} selectedId={unit.id} />
+      </aside>
+
+      <div className="min-w-0 flex-1 space-y-4">
       <BackBar />
-      <div className="sticky top-12 z-10 -mx-3 flex items-center gap-1 border-b border-edge bg-surface/95 px-1 py-1.5 backdrop-blur">
+      <div className="sticky top-12 z-10 -mx-3 flex items-center gap-1 border-b border-edge bg-surface/95 px-1 py-1.5 backdrop-blur lg:mx-0 lg:rounded-md lg:border lg:px-2">
         <Link
           to={`/explore/${factionId}`}
           aria-label="Back to faction"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-lg text-accent hover:bg-panel active:bg-panel"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-lg text-accent hover:bg-panel active:bg-panel lg:hidden"
         >
           ←
         </Link>
         <h1 className="min-w-0 flex-1 truncate text-base font-bold leading-tight">{unit.name}</h1>
-        <span className="shrink-0 text-xs text-ink-dim">
-          {(raw.points ?? []).map((p) => `${p.models ?? "?"}× ${p.cost}pts`).join(" · ")}
+        <span className="shrink-0 text-right text-xs leading-tight text-ink-dim">
+          {/* One tier per line — banded units ("2nd+ unit") stay readable next
+              to the title on narrow screens. */}
+          {pointsTierLabels(
+            (raw.points ?? []).map((p) => ({
+              models: p.models,
+              cost: p.cost,
+              from: p.unit_count_min,
+              to: p.unit_count_max,
+            })),
+          ).map((label, i) => (
+            <div key={i}>{label}</div>
+          ))}
         </span>
         <Link
           to={`/editor/${factionId}/datasheet/${unit.id}`}
@@ -141,6 +161,7 @@ export default function DatasheetScreen() {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }
