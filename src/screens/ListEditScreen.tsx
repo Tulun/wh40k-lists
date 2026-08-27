@@ -34,6 +34,14 @@ import { DISPOSITIONS } from "../lib/codex-model";
 import { EXPLORE_FACTION_IDS } from "../lib/flags";
 import { byId } from "../lib/lookup";
 import { useLists } from "../store/lists";
+import { backState } from "../components/BackBar";
+
+/** Router state linking a reference page back to the edit screen it came from. */
+function useEditBackState() {
+  const { listId } = useParams();
+  const listName = useLists((s) => (listId ? s.lists[listId]?.name : undefined));
+  return listId ? backState(`/lists/${listId}/edit`, listName ?? "Edit list") : undefined;
+}
 
 const ROLE_ORDER: Record<string, number> = {
   "epic-hero": 0,
@@ -50,6 +58,7 @@ export default function ListEditScreen() {
   const updateListContent = useLists((s) => s.updateListContent);
   const data = useDataset();
   const [addQuery, setAddQuery] = useState("");
+  const editBack = useEditBackState();
 
   const issues = useMemo(
     () => (data && list ? legalityIssues(data, list.roster) : []),
@@ -191,8 +200,17 @@ export default function ListEditScreen() {
               key={d.ref.id ?? `${d.ref.raw_name}-${i}`}
               className="inline-flex items-center gap-1 rounded-full border border-edge bg-panel px-2.5 py-1 text-xs"
             >
-              {(d.ref.id && byId(data.detachments, d.ref.id, factionId)?.name) ??
-                d.ref.raw_name}
+              {d.ref.id && factionId ? (
+                <Link
+                  to={`/explore/${factionId}/detachment/${d.ref.id}`}
+                  state={editBack}
+                  className="hover:underline"
+                >
+                  {byId(data.detachments, d.ref.id, factionId)?.name ?? d.ref.raw_name}
+                </Link>
+              ) : (
+                d.ref.raw_name
+              )}
               {d.dp_cost != null && <span className="text-ink-faint">{d.dp_cost} DP</span>}
               <button
                 type="button"
@@ -391,14 +409,25 @@ function UnitRow({
   const name = unit?.name ?? u.ref.raw_name;
   const pts = (u.points ?? 0) + (u.enhancement_points ?? 0);
   const isCharacter = unit?.role === "character" || unit?.role === "epic-hero";
+  const editBack = useEditBackState();
 
   return (
     <div className="rounded-md border border-edge bg-panel/50 px-3 py-2">
       <div className="flex items-baseline gap-2">
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold">
-          {name}
-          {!unit && <span className="ml-1 text-[10px] text-opponent">unmatched</span>}
-        </span>
+        {unit && roster.faction_id ? (
+          <Link
+            to={`/explore/${roster.faction_id}/${unit.id}`}
+            state={editBack}
+            className="min-w-0 flex-1 truncate text-sm font-semibold hover:underline"
+          >
+            {name} <span className="font-normal text-ink-faint">›</span>
+          </Link>
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+            {name}
+            {!unit && <span className="ml-1 text-[10px] text-opponent">unmatched</span>}
+          </span>
+        )}
         <span className="shrink-0 text-xs text-ink-faint">
           {u.points == null ? "? pts" : `${pts} pts`}
         </span>

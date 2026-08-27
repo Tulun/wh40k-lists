@@ -199,6 +199,12 @@ function compileWargearOptions(sheet: EditableDatasheet, out: CompiledRecords): 
     const ids = names.map((n) => idsByName.get(n.trim().toLowerCase()));
     return ids.every((id): id is string[] => !!id) ? ids.flat() : null;
   };
+  // "count" on a single-model sheet means the ONE model takes the option N
+  // times ("this model can be equipped with up to 4 Big Shoota"), which is the
+  // package's any_number+max_count multi-take shape — plain max_count caps at
+  // once per model, i.e. 1. On multi-model sheets it stays "N models, once
+  // each" (Kommandos' up-to-2 Kustom Shootas).
+  const singleModel = (sheet.composition ?? []).reduce((sum, r) => sum + r.max, 0) === 1;
   (sheet.wargearOptions ?? []).forEach((opt, i) => {
     const replaces = resolve(opt.replaces);
     const branches = opt.choices.map(resolve);
@@ -207,7 +213,10 @@ function compileWargearOptions(sheet: EditableDatasheet, out: CompiledRecords): 
     if (opt.modelName?.trim()) constraint.model_name = opt.modelName.trim();
     if (opt.limit.kind === "any") constraint.any_number = true;
     else if (opt.limit.kind === "per-models") constraint.per_n_models = opt.limit.n;
-    else constraint.max_count = opt.limit.n;
+    else if (singleModel && opt.limit.n > 1) {
+      constraint.any_number = true;
+      constraint.max_count = opt.limit.n;
+    } else constraint.max_count = opt.limit.n;
     const record = {
       id: `${sheet.id}--wargear-option-${i + 1}`,
       unit_id: sheet.id,
