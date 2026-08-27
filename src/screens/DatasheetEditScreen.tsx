@@ -16,6 +16,7 @@ import { ModeToggle } from "../components/editor/fields";
 import RefImagePanel from "../components/editor/RefImagePanel";
 import { useDataset } from "../hooks/useDataset";
 import type {
+  EditableCompositionRow,
   EditableDatasheet,
   EditableWargearOption,
   EditableWeapon,
@@ -57,7 +58,10 @@ function blankWargearOption(): EditableWargearOption {
   return { replaces: [], choices: [[]], limit: { kind: "count", n: 1 } };
 }
 
-/** Removable weapon-name chips plus a picker to append one from the sheet. */
+/**
+ * Removable weapon-name chips plus a picker to append one from the sheet.
+ * Duplicates are allowed — "2 Dual Big Shoota" is two chips of the same name.
+ */
 function WeaponNamePicker({
   names,
   pool,
@@ -67,7 +71,7 @@ function WeaponNamePicker({
   pool: string[];
   onChange: (names: string[]) => void;
 }) {
-  const available = pool.filter((n) => !names.includes(n));
+  const available = pool;
   return (
     <div className="flex flex-wrap items-center gap-1">
       {names.map((n, i) => (
@@ -97,6 +101,68 @@ function WeaponNamePicker({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * "UNIT COMPOSITION" rows: model types with counts and default weapons.
+ * Recording this marks the loadout as authored — with no wargear options the
+ * unit's gear then renders fixed (nothing removable) in the list editor.
+ */
+function CompositionSection({
+  rows,
+  weaponNames,
+  onChange,
+}: {
+  rows: EditableCompositionRow[];
+  weaponNames: string[];
+  onChange: (rows: EditableCompositionRow[]) => void;
+}) {
+  const patchRow = (i: number, p: Partial<EditableCompositionRow>) =>
+    onChange(rows.map((r, j) => (j === i ? { ...r, ...p } : r)));
+  return (
+    <SectionCard
+      title="Composition"
+      actions={
+        <SmallButton
+          onClick={() => onChange([...rows, { name: "", min: 1, max: 1, weapons: [] }])}
+        >
+          + model type
+        </SmallButton>
+      }
+    >
+      {rows.length === 0 && (
+        <p className="text-xs text-ink-faint">
+          No composition recorded — the list editor offers free-form wargear until the
+          "every model is equipped with…" box is entered here.
+        </p>
+      )}
+      {rows.map((r, i) => (
+        <div key={i} className="space-y-2 rounded-md border border-edge p-2">
+          <div className="grid grid-cols-[1fr_4rem_4rem_auto] items-end gap-2">
+            <Field label="Model type">
+              <TextInput value={r.name} placeholder="Wartrakk" onChange={(e) => patchRow(i, { name: e.target.value })} />
+            </Field>
+            <Field label="Min">
+              <NumberInput value={r.min} fallback={1} onValue={(min) => patchRow(i, { min })} />
+            </Field>
+            <Field label="Max">
+              <NumberInput value={r.max} fallback={1} onValue={(max) => patchRow(i, { max })} />
+            </Field>
+            <SmallButton tone="danger" onClick={() => onChange(rows.filter((_, j) => j !== i))}>
+              ✕
+            </SmallButton>
+          </div>
+          <Field label="Each is equipped with">
+            <WeaponNamePicker
+              names={r.weapons}
+              pool={weaponNames}
+              onChange={(weapons) => patchRow(i, { weapons })}
+            />
+          </Field>
+        </div>
+      ))}
+    </SectionCard>
   );
 }
 
@@ -247,7 +313,7 @@ export default function DatasheetEditScreen() {
     const view = data.units.getInFaction(sheetId, factionId);
     if (!view) return null;
     const leads = data.dataset.bodyguardsAttachableFrom(sheetId).map((u) => u.id);
-    return seedDatasheetFromUpstream(view, leads);
+    return seedDatasheetFromUpstream(view, leads, data.dataset.unitCompositionOf(view.raw));
   }, [existing, sheetId, data, factionId]);
 
   const [sheet, setSheet] = useState<EditableDatasheet | null>(existing ?? seeded);
@@ -650,6 +716,12 @@ export default function DatasheetEditScreen() {
           </div>
         ))}
       </SectionCard>
+
+      <CompositionSection
+        rows={sheet.composition ?? []}
+        weaponNames={sheet.weapons.map((w) => w.name).filter((n) => n.trim())}
+        onChange={(composition) => patch({ composition })}
+      />
 
       <WargearOptionsSection
         options={sheet.wargearOptions ?? []}

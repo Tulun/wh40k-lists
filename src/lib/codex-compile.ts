@@ -19,6 +19,7 @@ import type {
   LeaderAttachment,
   Stratagem,
   Unit,
+  UnitComposition,
   WargearOption,
   Weapon,
   WeaponKeyword,
@@ -50,6 +51,7 @@ export interface CompiledRecords {
   stratagems: Stratagem[];
   leaderAttachments: LeaderAttachment[];
   wargearOptions: WargearOption[];
+  unitCompositions: UnitComposition[];
   /** Ad-hoc catalog entries for hand-typed weapon keywords unknown upstream. */
   weaponKeywords: WeaponKeyword[];
 }
@@ -192,9 +194,32 @@ function compileWargearOptions(sheet: EditableDatasheet, out: CompiledRecords): 
   });
 }
 
+function compileComposition(factionId: string, sheet: EditableDatasheet, out: CompiledRecords): void {
+  const rows = sheet.composition ?? [];
+  if (rows.length === 0) return;
+  const idByName = new Map(
+    sheet.weapons.map((w) => [w.name.trim().toLowerCase(), `${sheet.id}--${slugify(w.name)}`]),
+  );
+  const models = rows.map((r) => ({
+    name: r.name,
+    min: r.min,
+    max: r.max,
+    default_weapon_ids: r.weapons
+      .map((n) => idByName.get(n.trim().toLowerCase()))
+      .filter((id): id is string => !!id),
+  }));
+  out.unitCompositions.push({
+    unit_id: sheet.id,
+    faction_id: factionId,
+    models: models as UnitComposition["models"],
+    game_version: GV_REF,
+  });
+}
+
 function compileDatasheet(factionId: string, sheet: EditableDatasheet, out: CompiledRecords): void {
   const weaponIds = sheet.weapons.map((w) => compileWeapon(sheet.id, w, out));
   compileWargearOptions(sheet, out);
+  compileComposition(factionId, sheet, out);
   const wargearCosts = sheet.weapons
     .filter((w) => (w.cost ?? 0) > 0)
     .map((w) => ({ item_id: `${sheet.id}--${slugify(w.name)}`, cost: w.cost! }));
@@ -328,6 +353,7 @@ function emptyCompiled(factionId: string): CompiledRecords {
     stratagems: [],
     leaderAttachments: [],
     wargearOptions: [],
+    unitCompositions: [],
     weaponKeywords: [],
   };
 }

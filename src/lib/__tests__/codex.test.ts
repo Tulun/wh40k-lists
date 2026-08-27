@@ -311,6 +311,33 @@ describe("wargear options", () => {
     ]);
   });
 
+  it("compiles composition so a no-options unit reads as fixed, with defaults", () => {
+    const trakk: EditableDatasheet = {
+      ...dread,
+      id: "new-trakk",
+      name: "New Trakk",
+      wargearOptions: [],
+      composition: [
+        { name: "Wartrakk", min: 1, max: 2, weapons: ["Dual Big Shoota", "Buzzsaw"] },
+      ],
+    };
+    const out = compileFaction("orks", { ...REPLACE_ORKS, datasheets: [trakk] }, "Orks");
+    expect(out.unitCompositions).toHaveLength(1);
+    const merged = buildMergedRaw(syntheticBase(), out);
+    const ds = new mod.Dataset(merged);
+    const unit = ds.units.getInFaction("new-trakk", "orks")!.raw;
+    const comp = ds.unitCompositionOf(unit);
+    expect(comp?.models[0].default_weapon_ids).toEqual([
+      "new-trakk--dual-big-shoota",
+      "new-trakk--buzzsaw",
+    ]);
+    // Fixed loadout: every default weapon's bounds pin to the model count.
+    const base = mod.baseLoadout(unit, 2, [], comp?.models);
+    expect(base.counts.get("new-trakk--dual-big-shoota")).toBe(2);
+    const bounds = mod.weaponBounds(unit, 2, [], comp?.models);
+    expect(bounds.get("new-trakk--buzzsaw")).toEqual({ min: 2, max: 2 });
+  });
+
   it("gives same-named dual-mode weapons distinct ids so neither is dropped", () => {
     const wartrike: EditableDatasheet = {
       ...NEW_SHEET,

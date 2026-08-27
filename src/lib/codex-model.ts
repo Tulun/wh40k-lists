@@ -17,7 +17,13 @@
  * Only types come from the data package (erased at compile time), so this
  * module is safe in the eagerly-loaded shell.
  */
-import type { Detachment, Enhancement, Stratagem, UnitView } from "@alpaca-software/40kdc-data";
+import type {
+  Detachment,
+  Enhancement,
+  Stratagem,
+  UnitComposition,
+  UnitView,
+} from "@alpaca-software/40kdc-data";
 import { abilityText, weaponKeywordLabel } from "./describe";
 
 export interface EditableProfile {
@@ -76,6 +82,21 @@ export interface EditableWargearOption {
   modelName?: string;
 }
 
+/**
+ * One "UNIT COMPOSITION" row: "1-2 Wartrakk models", with each such model's
+ * default weapons by name. Recording composition marks the loadout as
+ * authored — a unit with composition but no wargear options is FIXED, so the
+ * list editor shows its gear read-only instead of free steppers.
+ */
+export interface EditableCompositionRow {
+  /** Model-type name ("Wartrakk", "Boss Nob"). */
+  name: string;
+  min: number;
+  max: number;
+  /** Default weapons carried by each model of this type, by weapon name. */
+  weapons: string[];
+}
+
 export interface EditableDatasheet {
   /** Slug id. In patch mode this is the upstream unit id — never change it. */
   id: string;
@@ -93,6 +114,8 @@ export interface EditableDatasheet {
   weapons: EditableWeapon[];
   /** Wargear-option bullets; absent on docs saved before the field existed. */
   wargearOptions?: EditableWargearOption[];
+  /** Unit-composition rows; absent on docs saved before the field existed. */
+  composition?: EditableCompositionRow[];
   abilities: EditableAbility[];
   /** Datasheet ids this character can lead. */
   leads: string[];
@@ -210,8 +233,13 @@ export function uniqueSlug(name: string, taken: Iterable<string>): string {
  * `leads` comes from the caller (`dataset.bodyguardsAttachableFrom(id)`) since
  * leader links live outside the unit record.
  */
-export function seedDatasheetFromUpstream(view: UnitView, leads: string[] = []): EditableDatasheet {
+export function seedDatasheetFromUpstream(
+  view: UnitView,
+  leads: string[] = [],
+  upstreamComposition?: UnitComposition,
+): EditableDatasheet {
   const raw = view.raw;
+  const weaponNameById = new Map(view.weapons.map((w) => [w.raw.id, w.name]));
   return {
     id: raw.id,
     name: raw.name,
@@ -250,6 +278,18 @@ export function seedDatasheetFromUpstream(view: UnitView, leads: string[] = []):
       })),
     })),
     wargearOptions: seedWargearOptions(view),
+    ...(upstreamComposition
+      ? {
+          composition: upstreamComposition.models.map((m) => ({
+            name: m.name,
+            min: m.min,
+            max: m.max,
+            weapons: (m.default_weapon_ids ?? [])
+              .map((id) => weaponNameById.get(id))
+              .filter((n): n is string => !!n),
+          })),
+        }
+      : {}),
     ...(raw.attachment_role === "support" ? { support: true } : {}),
     abilities: view.abilities.map((a) => ({
       name: a.name,

@@ -145,7 +145,10 @@ export function buildMergedRaw(base: RawData, compiled: CompiledRecords): RawDat
       ),
       ...compiled.leaderAttachments,
     ],
-    unitCompositions: base.unitCompositions.filter((c) => c.faction_id !== factionId),
+    unitCompositions: [
+      ...base.unitCompositions.filter((c) => c.faction_id !== factionId),
+      ...compiled.unitCompositions,
+    ],
     wargearOptions: [
       ...base.wargearOptions.filter((w) => w.faction_id !== factionId),
       ...compiled.wargearOptions,
@@ -208,12 +211,18 @@ export function applyRecordPatches(base: RawData, compiled: CompiledRecords): Ra
       ...compiled.leaderAttachments,
     ],
     // A patched unit's weapons get fresh `${unitId}--` ids, so its upstream
-    // options would dangle — swap them for the recompiled (seeded) ones.
+    // options/composition would dangle — swap them for the recompiled ones.
     wargearOptions: [
       ...base.wargearOptions.filter(
         (w) => !(w.faction_id === factionId && patchedUnitIds.has(w.unit_id)),
       ),
       ...compiled.wargearOptions,
+    ],
+    unitCompositions: [
+      ...base.unitCompositions.filter(
+        (c) => !(c.faction_id === factionId && patchedUnitIds.has(c.unit_id)),
+      ),
+      ...compiled.unitCompositions,
     ],
     phaseMappings: base.phaseMappings.filter((p) => !removedStratagemIds.has(p.source_id)),
   };
