@@ -112,7 +112,14 @@ function abilityRecord(
 }
 
 function compileWeapon(unitId: string, weapon: EditableWeapon, out: CompiledRecords): string {
-  const id = `${unitId}--${slugify(weapon.name)}`;
+  // Dual-mode weapons are transcribed as two same-named entries (Snagga Klaw
+  // 12" + Snagga Klaw melee). Slug collisions would give both the same id and
+  // the id lookup silently drops one — suffix by type, then ordinal.
+  let id = `${unitId}--${slugify(weapon.name)}`;
+  if (out.weapons.some((w) => w.id === id)) id = `${id}--${weapon.type}`;
+  for (let n = 2; out.weapons.some((w) => w.id === id); n++) {
+    id = `${unitId}--${slugify(weapon.name)}--${weapon.type}-${n}`;
+  }
   const knownNames = new Map<string, string>();
   const profiles = weapon.profiles.map((p) => {
     const stats: Record<string, number | string | null> = {

@@ -311,6 +311,31 @@ describe("wargear options", () => {
     ]);
   });
 
+  it("gives same-named dual-mode weapons distinct ids so neither is dropped", () => {
+    const wartrike: EditableDatasheet = {
+      ...NEW_SHEET,
+      id: "new-wartrike",
+      name: "New Wartrike",
+      abilities: [],
+      wargearOptions: [],
+      weapons: [
+        { name: "Snagga Klaw", type: "ranged", profiles: [{ range: 12, A: 1, skill: 5, S: 7, AP: -2, D: 2, keywords: [] }] },
+        { name: "Snagga Klaw", type: "melee", profiles: [{ range: "Melee", A: 6, skill: 2, S: 10, AP: -2, D: 2, keywords: [] }] },
+      ],
+    };
+    const out = compileFaction("orks", { ...REPLACE_ORKS, datasheets: [wartrike] }, "Orks");
+    const unit = out.units.find((u) => u.id === "new-wartrike")!;
+    expect(unit.weapon_ids).toEqual([
+      "new-wartrike--snagga-klaw",
+      "new-wartrike--snagga-klaw--melee",
+    ]);
+    const merged = buildMergedRaw(syntheticBase(), out);
+    const ds = new mod.Dataset(merged);
+    const view = ds.units.getInFaction("new-wartrike", "orks")!;
+    expect(view.weapons).toHaveLength(2);
+    expect(view.weapons.map((w) => w.raw.type).sort()).toEqual(["melee", "ranged"]);
+  });
+
   it("compiles ordinal-banded points tiers (the 3rd Meganobz squad pays more)", () => {
     const banded: EditableDatasheet = {
       ...NEW_SHEET,
