@@ -159,16 +159,35 @@ function compileWeapon(unitId: string, weapon: EditableWeapon, out: CompiledReco
 }
 
 /**
+ * Weapon name (lowercased) → the id(s) compileWeapon mints for it. Dual-mode
+ * weapons are two same-named entries with distinct ids; a name reference in
+ * composition or a wargear option means the physical weapon, i.e. every mode.
+ */
+function weaponIdsByName(sheet: EditableDatasheet): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  const minted = new Set<string>();
+  for (const w of sheet.weapons) {
+    let id = `${sheet.id}--${slugify(w.name)}`;
+    if (minted.has(id)) id = `${id}--${w.type}`;
+    for (let n = 2; minted.has(id); n++) id = `${sheet.id}--${slugify(w.name)}--${w.type}-${n}`;
+    minted.add(id);
+    const key = w.name.trim().toLowerCase();
+    map.set(key, [...(map.get(key) ?? []), id]);
+  }
+  return map;
+}
+
+/**
  * Name-based wargear options → normalized WargearOption records. Names resolve
- * against the sheet's own weapons (same `${unitId}--${slug}` ids compileWeapon
- * mints); an option naming an unknown weapon is skipped rather than emitting a
- * dangling ref.
+ * against the sheet's own weapons (same ids compileWeapon mints, all modes of a
+ * dual-mode weapon); an option naming an unknown weapon is skipped rather than
+ * emitting a dangling ref.
  */
 function compileWargearOptions(sheet: EditableDatasheet, out: CompiledRecords): void {
-  const idByName = new Map(sheet.weapons.map((w) => [w.name.trim().toLowerCase(), `${sheet.id}--${slugify(w.name)}`]));
+  const idsByName = weaponIdsByName(sheet);
   const resolve = (names: string[]): string[] | null => {
-    const ids = names.map((n) => idByName.get(n.trim().toLowerCase()));
-    return ids.every((id): id is string => !!id) ? ids : null;
+    const ids = names.map((n) => idsByName.get(n.trim().toLowerCase()));
+    return ids.every((id): id is string[] => !!id) ? ids.flat() : null;
   };
   (sheet.wargearOptions ?? []).forEach((opt, i) => {
     const replaces = resolve(opt.replaces);
@@ -197,16 +216,12 @@ function compileWargearOptions(sheet: EditableDatasheet, out: CompiledRecords): 
 function compileComposition(factionId: string, sheet: EditableDatasheet, out: CompiledRecords): void {
   const rows = sheet.composition ?? [];
   if (rows.length === 0) return;
-  const idByName = new Map(
-    sheet.weapons.map((w) => [w.name.trim().toLowerCase(), `${sheet.id}--${slugify(w.name)}`]),
-  );
+  const idsByName = weaponIdsByName(sheet);
   const models = rows.map((r) => ({
     name: r.name,
     min: r.min,
     max: r.max,
-    default_weapon_ids: r.weapons
-      .map((n) => idByName.get(n.trim().toLowerCase()))
-      .filter((id): id is string => !!id),
+    default_weapon_ids: r.weapons.flatMap((n) => idsByName.get(n.trim().toLowerCase()) ?? []),
   }));
   out.unitCompositions.push({
     unit_id: sheet.id,

@@ -740,6 +740,19 @@ function WargearEditor({
     .map((id) => ({ id, name: nameOf(id), count: counts.get(id) ?? 0, cost: surcharge(id) }))
     .filter((r) => freeform || r.count > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
+  // Multi-model-type units (Nob + Boyz) split into per-model groups so it's
+  // clear which gear — and which swap — belongs to the squad leader.
+  const gearGroups =
+    locked || freeform
+      ? null
+      : data.groupLoadout(
+          unit,
+          u.model_count,
+          optionStates.map((s) => s.option),
+          data.dataset.unitCompositionOf(unit)?.models,
+          counts,
+        );
+  const splitGroups = gearGroups && gearGroups.length > 1 ? gearGroups : null;
   if (rows.length === 0 && unresolvedGear.length === 0 && optionStates.length === 0) return null;
 
   return (
@@ -753,25 +766,44 @@ function WargearEditor({
         {violations.length > 0 && <span className="text-opponent"> ⚠ {violations.length}</span>}
       </summary>
       <div className="space-y-1 px-2 pb-2">
-        {rows.map((r) => (
-          <div key={r.id} className="flex items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-xs">
-              {r.name}
-              {r.cost > 0 && <span className="text-ink-faint"> +{r.cost} pts ea</span>}
-            </span>
-            {freeform ? (
-              <Stepper
-                label={r.name}
-                count={r.count}
-                canDown={r.count > 0}
-                canUp={r.count < u.model_count}
-                onStep={(d) => apply(setWeaponCount(data, content, index, r.id, r.count + d))}
-              />
-            ) : (
-              <span className="text-xs text-ink-faint">×{r.count}</span>
-            )}
-          </div>
-        ))}
+        {splitGroups
+          ? splitGroups.map((g, gi) => (
+              <div key={`grp-${gi}`} className={gi > 0 ? "border-t border-edge/40 pt-1" : ""}>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                  {g.count}× {g.model_name ?? "model"}
+                </p>
+                {g.weapons.map((w) => (
+                  <div key={`${gi}-${w.id}`} className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-xs">
+                      {nameOf(w.id)}
+                      {surcharge(w.id) > 0 && (
+                        <span className="text-ink-faint"> +{surcharge(w.id)} pts ea</span>
+                      )}
+                    </span>
+                    <span className="text-xs text-ink-faint">×{w.count}</span>
+                  </div>
+                ))}
+              </div>
+            ))
+          : rows.map((r) => (
+              <div key={r.id} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-xs">
+                  {r.name}
+                  {r.cost > 0 && <span className="text-ink-faint"> +{r.cost} pts ea</span>}
+                </span>
+                {freeform ? (
+                  <Stepper
+                    label={r.name}
+                    count={r.count}
+                    canDown={r.count > 0}
+                    canUp={r.count < u.model_count}
+                    onStep={(d) => apply(setWeaponCount(data, content, index, r.id, r.count + d))}
+                  />
+                ) : (
+                  <span className="text-xs text-ink-faint">×{r.count}</span>
+                )}
+              </div>
+            ))}
         {unresolvedGear.map((w, i) => (
           <div key={`raw-${i}`} className="flex items-center gap-2">
             <span className="min-w-0 flex-1 truncate text-xs text-ink-dim">
@@ -781,14 +813,18 @@ function WargearEditor({
           </div>
         ))}
 
-        {optionStates.length > 0 && (
-          <div className="mt-1 border-t border-edge/60 pt-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-              Wargear options
-            </p>
-            {optionStates.map((s) => {
+        {optionStates.length > 0 &&
+          (() => {
+            // Group swap rows by the model they apply to (Nob vs squad) so
+            // leader-only swaps read as such instead of blending into the list.
+            const byWho = new Map<string, typeof optionStates>();
+            for (const s of optionStates) {
+              const who = s.option.model_constraint?.model_name ?? "";
+              byWho.set(who, [...(byWho.get(who) ?? []), s]);
+            }
+            const showWho = byWho.size > 1 || !byWho.has("");
+            const renderState = (s: (typeof optionStates)[number]) => {
               const replaces = (s.option.replaces ?? []).map(nameOf).join(" + ");
-              const who = s.option.model_constraint?.model_name;
               const swapAvailable = (s.option.replaces ?? []).every(
                 (id) => (counts.get(id) ?? 0) > 0,
               );
@@ -797,10 +833,7 @@ function WargearEditor({
                 const label = replaces ? `${replaces} → ${added}` : `Add ${added}`;
                 return (
                   <div key={`${s.option.id}-${bi}`} className="flex items-center gap-2 py-0.5">
-                    <span className="min-w-0 flex-1 truncate text-xs">
-                      {who && <span className="text-ink-faint">{who}: </span>}
-                      {label}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate text-xs">{label}</span>
                     <span className="shrink-0 text-[10px] text-ink-faint">
                       {s.totalApplied}/{s.cap}
                     </span>
@@ -816,9 +849,25 @@ function WargearEditor({
                   </div>
                 );
               });
-            })}
-          </div>
-        )}
+            };
+            return (
+              <div className="mt-1 border-t border-edge/60 pt-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                  Wargear options
+                </p>
+                {[...byWho.entries()].map(([who, states]) => (
+                  <div key={who || "any"}>
+                    {showWho && (
+                      <p className="pt-0.5 text-[10px] font-semibold text-ink-dim">
+                        {who || "Any model"}
+                      </p>
+                    )}
+                    {states.map(renderState)}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
         {violations.map((v, i) => (
           <p key={`v-${i}`} className="text-[11px] text-opponent">
