@@ -283,9 +283,9 @@ export function nextSize(data: Data40k, unit: Unit, current: number, dir: 1 | -1
 }
 
 /**
- * Change a unit's model count. Existing weapon counts are clamped into the new
- * size's valid ranges — base weapons scale with the squad, optional swaps are
- * kept where the new size still allows them.
+ * Change a unit's model count. Each added model brings its default equipment
+ * (the base-loadout delta between the sizes); removed models give theirs back.
+ * Existing swaps are kept, clamped into the new size's valid ranges.
  */
 export function setModelCount(
   data: Data40k,
@@ -295,16 +295,19 @@ export function setModelCount(
 ): ListContent {
   const next = clone(content);
   const u = next.roster.units[index];
+  const oldCount = u.model_count;
   u.model_count = count;
   const unit = unitEntity(data, u.ref, next.roster.faction_id);
   if (unit && !loadoutDataMissing(data, unit)) {
     const { options, models } = loadoutCtx(data, unit);
     const bounds = data.weaponBounds(unit, count, options, models);
-    const base = data.baseLoadout(unit, count, options, models).counts;
+    const baseOld = data.baseLoadout(unit, oldCount, options, models).counts;
+    const baseNew = data.baseLoadout(unit, count, options, models).counts;
     const current = wargearCounts(u);
     const counts = new Map<string, number>();
-    for (const id of new Set([...bounds.keys(), ...current.keys()])) {
-      const wanted = current.get(id) ?? base.get(id) ?? 0;
+    for (const id of new Set([...bounds.keys(), ...current.keys(), ...baseNew.keys()])) {
+      const delta = (baseNew.get(id) ?? 0) - (baseOld.get(id) ?? 0);
+      const wanted = (current.get(id) ?? 0) + delta;
       counts.set(id, bounds.has(id) ? data.clampWeaponCount(bounds, id, wanted) : wanted);
     }
     u.wargear = wargearFromCounts(data, counts, next.roster.faction_id, u.wargear);

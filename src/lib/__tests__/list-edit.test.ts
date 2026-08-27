@@ -124,17 +124,14 @@ describe("setModelCount", () => {
     const resized = next.roster.units[i];
     expect(resized.model_count).toBe(bigger);
     expect(resized.points).toBe(data40k.baseUnitPoints(unit, bigger));
-    // Base weapons scale with the squad: every clamped count is within bounds.
-    const options = data40k.dataset.wargearOptionsOf(unit);
-    const models = data40k.dataset.unitCompositionOf(unit)?.models;
-    const bounds = data40k.weaponBounds(unit, bigger, options, models);
-    for (const [id, count] of wargearCounts(resized)) {
-      const b = bounds.get(id);
-      if (b) {
-        expect(count).toBeGreaterThanOrEqual(b.min);
-        expect(count).toBeLessThanOrEqual(b.max);
-      }
-    }
+    // Each added model brings its default gear (base-loadout delta), while
+    // the existing swap (the Boss Nob's power klaw) is kept as-is.
+    const counts = wargearCounts(resized);
+    const before = wargearCounts(u);
+    const added = bigger - u.model_count;
+    expect(counts.get("slugga")).toBe((before.get("slugga") ?? 0) + added);
+    expect(counts.get("choppa")).toBe((before.get("choppa") ?? 0) + added);
+    expect(counts.get("power-klaw")).toBe(before.get("power-klaw"));
     expect(next.roster.points.total_computed).toBe(total(next));
   });
 
