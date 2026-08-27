@@ -676,13 +676,8 @@ function EnhancementPicker({
             ...choices.map((c) => ({
               value: c.id,
               label: c.name,
-              detail:
-                c.missing.length > 0
-                  ? `needs ${c.missing.join(", ")}`
-                  : c.takenBy != null
-                    ? `${c.cost} pts · taken`
-                    : `${c.cost} pts`,
-              disabled: c.takenBy != null || c.missing.length > 0,
+              detail: c.takenBy != null ? `${c.cost} pts · taken` : `${c.cost} pts`,
+              disabled: c.takenBy != null,
             })),
           ]}
           onChange={(id) =>
@@ -829,54 +824,66 @@ function WargearEditor({
 
         {optionStates.length > 0 &&
           (() => {
-            // Group swap rows by the model they apply to (Nob vs squad) so
-            // leader-only swaps read as such instead of blending into the list.
-            const byWho = new Map<string, typeof optionStates>();
-            for (const s of optionStates) {
-              const who = s.option.model_constraint?.model_name ?? "";
-              byWho.set(who, [...(byWho.get(who) ?? []), s]);
-            }
-            const showWho = byWho.size > 1 || !byWho.has("");
-            const renderState = (s: (typeof optionStates)[number]) => {
+            // One row per takeable branch. A branch that is neither taken nor
+            // currently takeable (source weapon swapped away, or the option's
+            // allowance already spent on a sibling branch) is hidden — taken
+            // rows always stay so they can be stepped back down.
+            const rows = optionStates.flatMap((s) => {
               const replaces = (s.option.replaces ?? []).map(nameOf).join(" + ");
               const swapAvailable = (s.option.replaces ?? []).every(
                 (id) => (counts.get(id) ?? 0) > 0,
               );
-              return s.branches.map((b, bi) => {
+              return s.branches.flatMap((b, bi) => {
+                const canUp = s.totalApplied < s.cap && swapAvailable;
+                if (b.applied === 0 && !canUp) return [];
                 const added = b.ids.map(nameOf).join(" + ");
                 const label = replaces ? `${replaces} → ${added}` : `Add ${added}`;
-                return (
-                  <div key={`${s.option.id}-${bi}`} className="flex items-center gap-2 py-0.5">
-                    <span className="min-w-0 flex-1 truncate text-xs">{label}</span>
-                    <span className="shrink-0 text-[10px] text-ink-faint">
-                      {s.totalApplied}/{s.cap}
-                    </span>
-                    <Stepper
-                      label={label}
-                      count={b.applied}
-                      canDown={b.applied > 0}
-                      canUp={s.totalApplied < s.cap && swapAvailable}
-                      onStep={(d) =>
-                        apply(applyWargearOption(data, content, index, s.option.id, bi, d))
-                      }
-                    />
-                  </div>
-                );
+                return [
+                  {
+                    who: s.option.model_constraint?.model_name ?? "",
+                    node: (
+                      <div
+                        key={`${s.option.id}-${bi}`}
+                        className="flex items-center gap-2 py-0.5"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-xs">{label}</span>
+                        <span className="shrink-0 text-[10px] text-ink-faint">
+                          {s.totalApplied}/{s.cap}
+                        </span>
+                        <Stepper
+                          label={label}
+                          count={b.applied}
+                          canDown={b.applied > 0}
+                          canUp={canUp}
+                          onStep={(d) =>
+                            apply(applyWargearOption(data, content, index, s.option.id, bi, d))
+                          }
+                        />
+                      </div>
+                    ),
+                  },
+                ];
               });
-            };
+            });
+            if (rows.length === 0) return null;
+            // Group rows by the model they apply to (Nob vs squad) so
+            // leader-only swaps read as such instead of blending into the list.
+            const byWho = new Map<string, typeof rows>();
+            for (const r of rows) byWho.set(r.who, [...(byWho.get(r.who) ?? []), r]);
+            const showWho = byWho.size > 1 || !byWho.has("");
             return (
               <div className="mt-1 border-t border-edge/60 pt-1.5">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
                   Wargear options
                 </p>
-                {[...byWho.entries()].map(([who, states]) => (
+                {[...byWho.entries()].map(([who, group]) => (
                   <div key={who || "any"}>
                     {showWho && (
                       <p className="pt-0.5 text-[10px] font-semibold text-ink-dim">
                         {who || "Any model"}
                       </p>
                     )}
-                    {states.map(renderState)}
+                    {group.map((r) => r.node)}
                   </div>
                 ))}
               </div>

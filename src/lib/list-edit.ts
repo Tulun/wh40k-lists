@@ -632,17 +632,16 @@ export interface EnhancementChoice {
   cost: number;
   /** Index of another roster unit already carrying it (an army takes each once). */
   takenBy: number | null;
-  /** Restriction keywords the unit lacks — offered disabled, with the reason. */
-  missing: string[];
 }
 
 /**
- * Enhancements available to the unit at `index` from the roster's detachments.
- * Regular enhancements go to characters (not epic heroes); `upgrade_tag`
- * enhancements go to non-character units instead. The unit's own NAME counts
- * as a keyword — restrictions routinely name the datasheet ("Deffkilla
- * Wartrike"). Near-misses are returned with `missing` set so the UI can say
- * which keyword the unit lacks instead of silently hiding the row.
+ * Enhancements the unit at `index` can actually take, from the roster's
+ * detachments. Regular enhancements go to characters (not epic heroes);
+ * `upgrade_tag` enhancements go to non-character units instead. The unit's own
+ * NAME counts as a keyword — restrictions routinely name the datasheet
+ * ("Deffkilla Wartrike"). Enhancements whose keyword restrictions the unit
+ * fails are not offered at all; only ones already taken elsewhere remain
+ * listed (disabled) since the unit itself is eligible.
  */
 export function enhancementChoices(
   data: Data40k,
@@ -666,19 +665,16 @@ export function enhancementChoices(
     .filter((e) => detIds.has(e.detachment_id))
     .filter((e) => (e.upgrade_tag ? !characterish : unit.role === "character"))
     .filter((e) => !(e.exclusion_keywords ?? []).some((k) => keywords.has(k.toLowerCase())))
+    .filter((e) => (e.keyword_restrictions ?? []).every((k) => keywords.has(k.toLowerCase())))
     .map((e) => {
       const takenBy = roster.units.findIndex(
         (u, i) => i !== index && u.enhancement?.id === e.id,
-      );
-      const missing = (e.keyword_restrictions ?? []).filter(
-        (k) => !keywords.has(k.toLowerCase()),
       );
       return {
         id: e.id,
         name: e.name,
         cost: e.cost,
         takenBy: takenBy === -1 ? null : takenBy,
-        missing,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
