@@ -824,46 +824,59 @@ function WargearEditor({
 
         {optionStates.length > 0 &&
           (() => {
-            // One row per takeable branch. A branch that is neither taken nor
-            // currently takeable (source weapon swapped away, or the option's
-            // allowance already spent on a sibling branch) is hidden — taken
-            // rows always stay so they can be stepped back down.
+            // One block per option. A swap whose source weapon is gone (spent
+            // on another swap) is hidden; a branch blocked only by the
+            // option's shared allowance stays visible greyed out, and one-of
+            // groups get a "One of:" blurb, so siblings read as exclusive.
+            // Taken rows always render so they can be stepped back down.
             const rows = optionStates.flatMap((s) => {
               const replaces = (s.option.replaces ?? []).map(nameOf).join(" + ");
               const swapAvailable = (s.option.replaces ?? []).every(
                 (id) => (counts.get(id) ?? 0) > 0,
               );
-              return s.branches.flatMap((b, bi) => {
-                const canUp = s.totalApplied < s.cap && swapAvailable;
-                if (b.applied === 0 && !canUp) return [];
+              const canUp = s.totalApplied < s.cap && swapAvailable;
+              const branchRows = s.branches.flatMap((b, bi) => {
+                if (b.applied === 0 && !swapAvailable) return [];
+                const dimmed = b.applied === 0 && !canUp;
                 const added = b.ids.map(nameOf).join(" + ");
                 const label = replaces ? `${replaces} → ${added}` : `Add ${added}`;
                 return [
-                  {
-                    who: s.option.model_constraint?.model_name ?? "",
-                    node: (
-                      <div
-                        key={`${s.option.id}-${bi}`}
-                        className="flex items-center gap-2 py-0.5"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-xs">{label}</span>
-                        <span className="shrink-0 text-[10px] text-ink-faint">
-                          {s.totalApplied}/{s.cap}
-                        </span>
-                        <Stepper
-                          label={label}
-                          count={b.applied}
-                          canDown={b.applied > 0}
-                          canUp={canUp}
-                          onStep={(d) =>
-                            apply(applyWargearOption(data, content, index, s.option.id, bi, d))
-                          }
-                        />
-                      </div>
-                    ),
-                  },
+                  <div
+                    key={`${s.option.id}-${bi}`}
+                    className={`flex items-center gap-2 py-0.5${dimmed ? " opacity-40" : ""}`}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-xs">{label}</span>
+                    <span className="shrink-0 text-[10px] text-ink-faint">
+                      {s.totalApplied}/{s.cap}
+                    </span>
+                    <Stepper
+                      label={label}
+                      count={b.applied}
+                      canDown={b.applied > 0}
+                      canUp={canUp}
+                      onStep={(d) =>
+                        apply(applyWargearOption(data, content, index, s.option.id, bi, d))
+                      }
+                    />
+                  </div>,
                 ];
               });
+              if (branchRows.length === 0) return [];
+              return [
+                {
+                  who: s.option.model_constraint?.model_name ?? "",
+                  node: (
+                    <div key={s.option.id}>
+                      {branchRows.length > 1 && (
+                        <p className="pt-0.5 text-[10px] italic text-ink-faint">
+                          {s.cap === 1 ? "One of:" : `Up to ${s.cap} of:`}
+                        </p>
+                      )}
+                      {branchRows}
+                    </div>
+                  ),
+                },
+              ];
             });
             if (rows.length === 0) return null;
             // Group rows by the model they apply to (Nob vs squad) so
