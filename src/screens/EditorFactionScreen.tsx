@@ -214,7 +214,7 @@ export default function EditorFactionScreen() {
         <div className="overflow-hidden rounded-md border border-edge">
           <Link
             to={`/editor/${factionId}/datasheet/new`}
-            className="flex min-h-11 items-center justify-center border-b border-edge bg-panel/50 text-sm font-semibold text-accent active:bg-panel"
+            className="flex min-h-11 items-center justify-center border-b border-edge bg-panel/50 text-sm font-semibold text-accent hover:bg-panel active:bg-panel"
           >
             + New datasheet
           </Link>
@@ -223,7 +223,7 @@ export default function EditorFactionScreen() {
               <Link
                 key={d.id}
                 to={`/editor/${factionId}/datasheet/${d.id}`}
-                className="flex min-h-11 items-center gap-2 text-sm active:bg-panel"
+                className="flex min-h-11 items-center gap-2 text-sm hover:bg-panel active:bg-panel"
               >
                 <span className="min-w-0 flex-1 truncate font-medium">{d.name}</span>
                 <span className="shrink-0 text-xs text-ink-faint">›</span>
@@ -240,7 +240,7 @@ export default function EditorFactionScreen() {
         <div className="overflow-hidden rounded-md border border-edge">
           <Link
             to={`/editor/${factionId}/detachment/new`}
-            className="flex min-h-11 items-center justify-center border-b border-edge bg-panel/50 text-sm font-semibold text-accent active:bg-panel"
+            className="flex min-h-11 items-center justify-center border-b border-edge bg-panel/50 text-sm font-semibold text-accent hover:bg-panel active:bg-panel"
           >
             + New detachment
           </Link>
@@ -249,7 +249,7 @@ export default function EditorFactionScreen() {
               <Link
                 key={d.id}
                 to={`/editor/${factionId}/detachment/${d.id}`}
-                className="flex min-h-11 items-center gap-2 py-1.5 text-sm active:bg-panel"
+                className="flex min-h-11 items-center gap-2 py-1.5 text-sm hover:bg-panel active:bg-panel"
               >
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{d.name}</span>
@@ -276,7 +276,7 @@ export default function EditorFactionScreen() {
               <Link
                 key={u.id}
                 to={`/editor/${factionId}/datasheet/${u.id}`}
-                className="flex min-h-11 items-center gap-2 text-sm active:bg-panel"
+                className="flex min-h-11 items-center gap-2 text-sm hover:bg-panel active:bg-panel"
               >
                 <span className="min-w-0 flex-1 truncate">{u.name}</span>
                 {editedSheetIds.has(u.id) && (
@@ -301,7 +301,7 @@ export default function EditorFactionScreen() {
               <Link
                 key={d.id}
                 to={`/editor/${factionId}/detachment/${d.id}`}
-                className="flex min-h-11 items-center gap-2 text-sm active:bg-panel"
+                className="flex min-h-11 items-center gap-2 text-sm hover:bg-panel active:bg-panel"
               >
                 <span className="min-w-0 flex-1 truncate">{d.name}</span>
                 {editedDetIds.has(d.id) && (

@@ -184,7 +184,7 @@ export default function EditorHomeScreen() {
           const mode = factionMode(id);
           return (
             <li key={id}>
-              <Link to={`/editor/${id}`} className="flex min-h-11 items-center gap-2 px-3 py-2 active:bg-panel">
+              <Link to={`/editor/${id}`} className="flex min-h-11 items-center gap-2 px-3 py-2 hover:bg-panel active:bg-panel">
                 <span className="flex-1 text-sm font-medium">{name}</span>
                 {badge && (
                   <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent">

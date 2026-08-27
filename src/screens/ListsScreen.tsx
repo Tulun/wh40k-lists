@@ -71,13 +71,13 @@ export default function ListsScreen() {
         <p className="py-12 text-center text-sm text-ink-dim">No lists yet — import one to get started.</p>
       )}
 
-      <ul className="space-y-2">
+      <ul className="grid gap-2 lg:grid-cols-2">
         {all.map((list) => (
           <li key={list.id} className="rounded-md border border-edge bg-panel/50 px-3 py-2">
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="min-w-0 flex-1 truncate text-left text-sm font-semibold active:text-accent"
+                className="min-w-0 flex-1 truncate text-left text-sm font-semibold hover:text-accent active:text-accent"
                 onClick={() => open(list)}
               >
                 {list.name}

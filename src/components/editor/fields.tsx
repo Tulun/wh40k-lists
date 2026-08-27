@@ -186,7 +186,7 @@ export function TabBar({
           aria-selected={active === t.id}
           onClick={() => onSelect(t.id)}
           className={`min-h-11 flex-1 px-2 ${
-            active === t.id ? "bg-accent/20 text-accent" : "text-ink-dim active:bg-panel"
+            active === t.id ? "bg-accent/20 text-accent" : "text-ink-dim hover:bg-panel active:bg-panel"
           }`}
         >
           {t.label}
@@ -212,7 +212,7 @@ export function ModeToggle({
           type="button"
           onClick={() => onChange(m)}
           className={`px-3 py-1.5 capitalize ${
-            mode === m ? "bg-accent/20 text-accent" : "text-ink-faint active:bg-panel"
+            mode === m ? "bg-accent/20 text-accent" : "text-ink-faint hover:bg-panel active:bg-panel"
           }`}
         >
           {m}
@@ -241,7 +241,7 @@ export function SmallButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-md border px-2 py-1 text-xs font-semibold active:bg-panel ${toneClass}`}
+      className={`rounded-md border px-2 py-1 text-xs font-semibold hover:bg-panel active:bg-panel ${toneClass}`}
     >
       {children}
     </button>

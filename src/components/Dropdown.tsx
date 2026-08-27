@@ -142,8 +142,8 @@ function Row({
             : selected
               ? "bg-accent/10 text-accent"
               : muted
-                ? "text-ink-dim active:bg-surface"
-                : "active:bg-surface"
+                ? "text-ink-dim hover:bg-surface active:bg-surface"
+                : "hover:bg-surface active:bg-surface"
         }`}
       >
         <span className={`w-3 shrink-0 ${selected ? "" : "opacity-0"}`}>✓</span>

@@ -29,7 +29,7 @@ export default function ExploreScreen() {
           <li key={f.id}>
             <Link
               to={`/explore/${f.id}`}
-              className="flex min-h-11 items-center px-3 py-2 text-sm font-medium active:bg-panel"
+              className="flex min-h-11 items-center px-3 py-2 text-sm font-medium hover:bg-panel active:bg-panel"
             >
               <span className="flex-1">{f.name}</span>
               {codexBadge(doc, f.id) && (

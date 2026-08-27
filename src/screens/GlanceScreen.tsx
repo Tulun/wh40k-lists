@@ -162,7 +162,7 @@ export default function GlanceScreen() {
             <li key={index} className={inGroup && !q ? "border-l-2 border-accent/50" : ""}>
               <Link
                 to={`/unit/${encodeURIComponent(unitKey(ru))}`}
-                className={`block min-h-11 px-3 py-1.5 active:bg-panel ${isLed && !q ? "pl-6" : ""}`}
+                className={`block min-h-11 px-3 py-1.5 hover:bg-panel active:bg-panel ${isLed && !q ? "pl-6" : ""}`}
               >
                 <div className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">
@@ -267,7 +267,7 @@ function ArmyHeader({
               key={detachment.ref.id ?? `${detachment.ref.raw_name}-${i}`}
               to={`/explore/${roster.faction_id}/detachment/${entity.id}`}
               state={backState("/", listName)}
-              className="block active:bg-panel"
+              className="block hover:bg-panel active:bg-panel"
             >
               {header}
               {data &&
@@ -314,16 +314,20 @@ function StratagemSection({
           ({detachment.length} detachment · {core.length} core)
         </span>
       </summary>
-      <div className="space-y-2 px-2 pb-2">
-        {sortStratagems(detachment).map((s) => (
-          <StratagemCard key={s.id} data={data} stratagem={s} factionId={roster.faction_id} listId={listId} />
-        ))}
-        <div className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+      <div className="px-2 pb-2">
+        <div className="grid gap-2 lg:grid-cols-2">
+          {sortStratagems(detachment).map((s) => (
+            <StratagemCard key={s.id} data={data} stratagem={s} factionId={roster.faction_id} listId={listId} />
+          ))}
+        </div>
+        <div className="pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
           Core
         </div>
-        {sortStratagems(core).map((s) => (
-          <StratagemCard key={s.id} data={data} stratagem={s} factionId={roster.faction_id} listId={listId} />
-        ))}
+        <div className="grid gap-2 lg:grid-cols-2">
+          {sortStratagems(core).map((s) => (
+            <StratagemCard key={s.id} data={data} stratagem={s} factionId={roster.faction_id} listId={listId} />
+          ))}
+        </div>
       </div>
     </details>
   );

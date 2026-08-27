@@ -18,7 +18,7 @@ export default function BackBar() {
   return (
     <Link
       to={back.to}
-      className="flex min-h-9 items-center gap-1.5 text-sm text-accent active:opacity-70"
+      className="flex min-h-9 items-center gap-1.5 text-sm text-accent hover:opacity-70 active:opacity-70"
     >
       <span aria-hidden>←</span>
       <span className="min-w-0 truncate">{back.label}</span>

@@ -291,7 +291,7 @@ export default function ListEditScreen() {
               <li key={u.id}>
                 <button
                   type="button"
-                  className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left active:bg-panel"
+                  className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-panel active:bg-panel"
                   onClick={() => {
                     apply(addUnit(data, content, u.id));
                     setAddQuery("");

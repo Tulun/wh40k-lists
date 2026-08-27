@@ -43,4 +43,11 @@ body {
   summary {
     cursor: pointer;
   }
+
+  /* Keyboard navigation on desktop: a visible accent ring, without giving
+     pointer clicks an outline. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
 }

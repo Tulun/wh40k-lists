@@ -93,7 +93,7 @@ export default function UnitDetailScreen() {
         <Link
           to="/"
           aria-label="Back to army"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-lg text-accent active:bg-panel"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-lg text-accent hover:bg-panel active:bg-panel"
         >
           ←
         </Link>
@@ -175,7 +175,7 @@ export default function UnitDetailScreen() {
 
       {linkedStratagems.length > 0 && (
         <Section title={`Stratagems targeting this unit (${linkedStratagems.length})`}>
-          <div className="space-y-2">
+          <div className="grid gap-2 lg:grid-cols-2">
             {linkedStratagems.map((s) => (
               <StratagemCard
                 key={s.id}
@@ -191,7 +191,7 @@ export default function UnitDetailScreen() {
 
       {otherDetachmentStratagems.length > 0 && (
         <Section title={`Detachment stratagems (${otherDetachmentStratagems.length})`}>
-          <div className="space-y-2">
+          <div className="grid gap-2 lg:grid-cols-2">
             {otherDetachmentStratagems.map((s) => (
               <StratagemCard
                 key={s.id}
@@ -207,7 +207,7 @@ export default function UnitDetailScreen() {
 
       {coreStratagems.length > 0 && (
         <Section title={`Core stratagems for this unit (${coreStratagems.length})`}>
-          <div className="space-y-2">
+          <div className="grid gap-2 lg:grid-cols-2">
             {coreStratagems.map((s) => (
               <StratagemCard
                 key={s.id}

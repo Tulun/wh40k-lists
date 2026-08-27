@@ -122,7 +122,7 @@ export default function FactionScreen() {
               <li key={d.id}>
                 <Link
                   to={`/explore/${factionId}/detachment/${d.id}`}
-                  className="flex min-h-11 items-center gap-2 px-3 py-1.5 active:bg-panel"
+                  className="flex min-h-11 items-center gap-2 px-3 py-1.5 hover:bg-panel active:bg-panel"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="text-sm font-medium">
@@ -172,7 +172,7 @@ export default function FactionScreen() {
                     <li key={u.id}>
                       <Link
                         to={`/explore/${factionId}/${u.id}`}
-                        className="flex min-h-11 items-center gap-2 px-3 py-1.5 active:bg-panel"
+                        className="flex min-h-11 items-center gap-2 px-3 py-1.5 hover:bg-panel active:bg-panel"
                       >
                         <span className="min-w-0 flex-1 truncate text-sm font-medium">
                           {u.name}

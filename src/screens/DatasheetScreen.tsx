@@ -59,7 +59,7 @@ export default function DatasheetScreen() {
         <Link
           to={`/explore/${factionId}`}
           aria-label="Back to faction"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-lg text-accent active:bg-panel"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-lg text-accent hover:bg-panel active:bg-panel"
         >
           ←
         </Link>
@@ -70,7 +70,7 @@ export default function DatasheetScreen() {
         <Link
           to={`/editor/${factionId}/datasheet/${unit.id}`}
           aria-label="Edit this datasheet"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-sm text-accent active:bg-panel"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-sm text-accent hover:bg-panel active:bg-panel"
         >
           ✎
         </Link>
