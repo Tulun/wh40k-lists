@@ -126,8 +126,8 @@ export default function FactionScreen() {
       {tab === "units" && (
         // Desktop two-pane: the unit list becomes a master column and the
         // datasheet opens beside it (DatasheetScreen renders the same pane).
-        <div className="lg:flex lg:items-start lg:gap-4">
-          <div className="lg:w-80 lg:shrink-0">
+        <div className="lg:flex lg:items-start lg:gap-6">
+          <div className="lg:w-64 lg:shrink-0">
             <UnitListPane data={data} factionId={factionId} />
           </div>
           <div className="hidden min-h-64 flex-1 items-center justify-center rounded-md border border-dashed border-edge text-sm text-ink-faint lg:sticky lg:top-24 lg:flex">

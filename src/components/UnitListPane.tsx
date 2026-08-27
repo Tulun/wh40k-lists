@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { MicroStats } from "./StatLine";
 import type { Data40k } from "../lib/data";
@@ -29,6 +29,14 @@ export default function UnitListPane({
   selectedId?: string;
 }) {
   const [query, setQuery] = useState("");
+
+  // Keep the open datasheet visible in the pane's own scrollbox — matters when
+  // landing directly on a unit deep in the list. "nearest" leaves the scroll
+  // alone once it's already on screen.
+  const selectedRef = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView({ block: "nearest" });
+  }, [selectedId]);
 
   const q = query.trim().toLowerCase();
   const units = data.units
@@ -70,13 +78,17 @@ export default function UnitListPane({
                 <li key={u.id}>
                   <Link
                     to={`/explore/${factionId}/${u.id}`}
+                    ref={selected ? selectedRef : undefined}
                     aria-current={selected ? "page" : undefined}
-                    className={`flex min-h-11 items-center gap-2 px-3 py-1.5 hover:bg-panel active:bg-panel ${
+                    // Desktop side pane is narrow, so rows stack: full-width
+                    // name with the micro-stats beneath. Mobile keeps the
+                    // single-line row.
+                    className={`flex min-h-11 items-center gap-2 px-3 py-1.5 hover:bg-panel active:bg-panel lg:flex-wrap lg:gap-y-0.5 lg:py-2 ${
                       selected ? "border-l-2 border-accent bg-panel pl-2.5" : ""
                     }`}
                   >
                     <span
-                      className={`min-w-0 flex-1 truncate text-sm font-medium ${
+                      className={`min-w-0 flex-1 truncate text-sm font-medium lg:basis-full ${
                         selected ? "text-accent" : ""
                       }`}
                     >

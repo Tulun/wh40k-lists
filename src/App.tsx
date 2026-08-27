@@ -16,7 +16,7 @@ export default function App() {
 
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 border-b border-edge bg-surface/95 backdrop-blur">
-          <div className="mx-auto flex h-12 w-full max-w-3xl items-center gap-2 px-3 lg:max-w-4xl xl:max-w-5xl">
+          <div className="mx-auto flex h-12 w-full max-w-3xl items-center gap-2 px-3 lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
             <Sidebar />
             <div className="flex-1">
               <SlotToggle />
@@ -31,7 +31,7 @@ export default function App() {
         </header>
 
         <main className="flex-1 px-3 pb-6 pt-3">
-          <div className="mx-auto w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl">
+          <div className="mx-auto w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
             <SyncManager />
             <Outlet />
           </div>

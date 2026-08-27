@@ -57,8 +57,8 @@ export default function DatasheetScreen() {
     // Desktop two-pane explore: the faction's unit list rides along on the
     // left so sibling datasheets are one click away; mobile keeps the
     // full-width sheet with the back arrow.
-    <div className="lg:flex lg:items-start lg:gap-5">
-      <aside className="hidden lg:sticky lg:top-14 lg:block lg:max-h-[calc(100dvh-4.5rem)] lg:w-80 lg:shrink-0 lg:overflow-y-auto lg:pr-1">
+    <div className="lg:flex lg:items-start lg:gap-6">
+      <aside className="hidden lg:sticky lg:top-14 lg:block lg:max-h-[calc(100dvh-4.5rem)] lg:w-64 lg:shrink-0 lg:overflow-y-auto lg:pr-1">
         <UnitListPane data={data} factionId={factionId} selectedId={unit.id} />
       </aside>
 
