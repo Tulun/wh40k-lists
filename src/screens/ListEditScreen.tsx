@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { RosterUnit, Unit } from "@alpaca-software/40kdc-data";
-import ConfirmButton from "../components/ConfirmButton";
 import Dropdown from "../components/Dropdown";
 import FilterInput from "../components/FilterInput";
 import { useDataset } from "../hooks/useDataset";
@@ -386,6 +385,20 @@ function UnitGroups({
   apply: (next: ListContent) => void;
 }) {
   const [addOpen, setAddOpen] = useState<string | null>(null);
+  // A tap outside the open add-picker (its header and filter included) folds
+  // it away — same manners as the wargear block. Unmounting also resets the
+  // picker's filter for next time.
+  const openPickerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (addOpen == null) return;
+    const onDown = (e: PointerEvent) => {
+      if (openPickerRef.current && !openPickerRef.current.contains(e.target as Node)) {
+        setAddOpen(null);
+      }
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [addOpen]);
   const roster = content.roster;
   const factionId = roster.faction_id;
   const bodyguardOf = new Map<number, number>();
@@ -412,16 +425,33 @@ function UnitGroups({
   const ptsOf = (i: number) =>
     (roster.units[i].points ?? 0) + (roster.units[i].enhancement_points ?? 0);
 
-  // One entry per rendered block: a lone unit, or an attached pair anchored
-  // at the led unit. Entries bucket into the section of their anchor.
-  const entries: { key: string; section: string; points: number; node: React.ReactNode }[] = [];
+  // One entry per rendered block. An attached block sits in the HIGHEST
+  // section any of its members belongs to — a character leading Warbikers
+  // stays up under Characters rather than being pulled down to Battleline.
+  const sectionRank = (key: string) => SECTIONS.findIndex((s) => s.key === key);
+  const nameAt = (i: number) => {
+    const id = roster.units[i].ref.id;
+    return (id && byId(data.units, id, factionId)?.name) || roster.units[i].ref.raw_name;
+  };
+  const entries: {
+    key: string;
+    section: string;
+    points: number;
+    attached: boolean;
+    sortName: string;
+    node: React.ReactNode;
+  }[] = [];
   roster.units.forEach((u, i) => {
     const key = `${u.ref.id ?? u.ref.raw_name}-${i}`;
     if (leadersOf.has(i)) {
       const leaders = leadersOf.get(i)!;
       entries.push({
         key,
-        section: sectionAt(i),
+        section: [i, ...leaders]
+          .map(sectionAt)
+          .reduce((a, b) => (sectionRank(a) <= sectionRank(b) ? a : b)),
+        attached: true,
+        sortName: nameAt(leaders[0]),
         points: ptsOf(i) + leaders.reduce((s, li) => s + ptsOf(li), 0),
         node: (
           <li key={key} className="space-y-1 rounded-lg border border-accent/40 p-1">
@@ -441,6 +471,8 @@ function UnitGroups({
     entries.push({
       key,
       section: sectionAt(i),
+      attached: false,
+      sortName: nameAt(i),
       points: ptsOf(i),
       node: (
         <li key={key}>
@@ -462,34 +494,42 @@ function UnitGroups({
   return (
     <div className="space-y-3">
       {SECTIONS.map((section) => {
-        const own = entries.filter((e) => e.section === section.key);
+        // Attached blocks first, then everything alphabetically.
+        const own = entries
+          .filter((e) => e.section === section.key)
+          .sort(
+            (a, b) =>
+              Number(b.attached) - Number(a.attached) || a.sortName.localeCompare(b.sortName),
+          );
         if (own.length === 0 && !addable.has(section.key)) return null;
         const pts = own.reduce((s, e) => s + e.points, 0);
         const open = addOpen === section.key;
         return (
           <div key={section.key} className="space-y-2">
-            <div className="flex min-h-9 items-center gap-2 rounded-md bg-panel px-3 py-1.5">
-              <h2 className="min-w-0 flex-1 truncate text-xs font-bold uppercase tracking-wide">
-                {section.label}
-              </h2>
-              <span className="shrink-0 text-xs tabular-nums text-ink-dim">{pts} pts</span>
-              {addable.has(section.key) && (
-                <button
-                  type="button"
-                  aria-label={`Add ${section.label}`}
-                  aria-expanded={open}
-                  onClick={() => setAddOpen(open ? null : section.key)}
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-base leading-none ${
-                    open
-                      ? "border-accent bg-accent/15 text-accent"
-                      : "border-edge text-ink-dim hover:text-ink"
-                  }`}
-                >
-                  {open ? "✕" : "+"}
-                </button>
-              )}
+            <div ref={open ? openPickerRef : undefined} className="space-y-2">
+              <div className="flex min-h-9 items-center gap-2 rounded-md bg-panel px-3 py-1.5">
+                <h2 className="min-w-0 flex-1 truncate text-xs font-bold uppercase tracking-wide">
+                  {section.label}
+                </h2>
+                <span className="shrink-0 text-xs tabular-nums text-ink-dim">{pts} pts</span>
+                {addable.has(section.key) && (
+                  <button
+                    type="button"
+                    aria-label={`Add ${section.label}`}
+                    aria-expanded={open}
+                    onClick={() => setAddOpen(open ? null : section.key)}
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-base leading-none ${
+                      open
+                        ? "border-accent bg-accent/15 text-accent"
+                        : "border-edge text-ink-dim hover:text-ink"
+                    }`}
+                  >
+                    {open ? "✕" : "+"}
+                  </button>
+                )}
+              </div>
+              {open && <AddSection data={data} content={content} apply={apply} section={section} />}
             </div>
-            {open && <AddSection data={data} content={content} apply={apply} section={section} />}
             {own.length > 0 && <ul className="space-y-2">{own.map((e) => e.node)}</ul>}
           </div>
         );
@@ -606,13 +646,14 @@ function UnitRow({
         >
           Copy
         </button>
-        <ConfirmButton
-          label="Delete"
-          confirmLabel="Sure?"
-          onConfirm={() => apply(removeUnit(data, content, index))}
+        <button
+          type="button"
+          title="Remove unit"
+          onClick={() => apply(removeUnit(data, content, index))}
           className="ml-1 rounded-md bg-panel px-3 py-1.5 text-xs text-opponent"
-          armedClassName="ml-1 rounded-md bg-opponent/20 px-3 py-1.5 text-xs font-semibold text-opponent"
-        />
+        >
+          Delete
+        </button>
       </div>
 
       <EnhancementPicker data={data} content={content} index={index} apply={apply} />
@@ -649,18 +690,22 @@ function AttachPicker({
   const eligible = new Set(data.dataset.bodyguardsAttachableFrom(unit.id).map((v) => v.id));
   const current = content.attachments[String(index)] ?? null;
   if (eligible.size === 0 && current == null) return null;
-  // A unit takes at most 1 leader and 1 support: a unit that already has an
-  // attached character of this character's role class stays listed but greyed
-  // out (naming its leader), so the choices don't shift around as pairs form.
+  // A unit takes at most 1 leader and 1 support. Each option names whichever
+  // it already has ("Leader: Big Mek · Support: Mek"); it greys out only when
+  // this character's own role class is the one taken, so a support can still
+  // join a led unit and vice versa.
   const roleOf = (i: number) => {
     const u = roster.units[i];
     const ent = u.ref.id ? byId(data.units, u.ref.id, roster.faction_id)?.raw : undefined;
     return ent?.attachment_role === "support" ? "support" : "leader";
   };
-  const occupiedBy = new Map<number, number>();
+  const attachedTo = new Map<number, { leader?: number; support?: number }>();
   for (const [l, b] of Object.entries(content.attachments)) {
     const li = Number(l);
-    if (li !== index && roleOf(li) === roleOf(index)) occupiedBy.set(b, li);
+    if (li === index) continue; // this character's own pick shows as the ✓
+    const rec = attachedTo.get(b) ?? {};
+    rec[roleOf(li)] = li;
+    attachedTo.set(b, rec);
   }
   const candidates = roster.units
     .map((u, i) => ({ u, i }))
@@ -698,12 +743,21 @@ function AttachPicker({
     const n = (nth.get(u.ref.id!) ?? 0) + 1;
     nth.set(u.ref.id!, n);
     const dup = candidates.filter((c) => c.u.ref.id === u.ref.id).length > 1;
-    const leader = occupiedBy.get(i);
+    const rec = attachedTo.get(i);
+    const attachSub = rec
+      ? [
+          rec.leader != null ? `Leader: ${nameOf(rec.leader)}` : null,
+          rec.support != null ? `Support: ${nameOf(rec.support)}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : null;
     return {
       value: String(i),
       label: dup ? `${nameOf(i)} #${n}` : nameOf(i),
       ...describe(i),
-      ...(leader != null && { disabled: true, sub: `led by ${nameOf(leader)}` }),
+      ...(attachSub ? { sub: attachSub } : {}),
+      ...(rec?.[roleOf(index)] != null ? { disabled: true } : {}),
     };
   });
   // The current pick may have become ineligible (unit swapped) — keep it visible.
@@ -864,6 +918,19 @@ function WargearEditor({
   unit: Unit;
   apply: (next: ListContent) => void;
 }) {
+  // The open block is tall; a tap anywhere outside it folds it back up so it
+  // doesn't keep eating the screen once the user moves on.
+  const [open, setOpen] = useState(false);
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (detailsRef.current && !detailsRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [open]);
+
   const u = content.roster.units[index];
   const counts = wargearCounts(u);
   const factionId = content.roster.faction_id;
@@ -924,7 +991,12 @@ function WargearEditor({
   if (rows.length === 0 && unresolvedGear.length === 0 && optionStates.length === 0) return null;
 
   return (
-    <details className="mt-2 rounded-lg border border-edge">
+    <details
+      ref={detailsRef}
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+      className="mt-2 rounded-lg border border-edge"
+    >
       <summary className="cursor-pointer px-2 py-1.5 text-xs text-ink-dim">
         Wargear{" "}
         <span className="text-ink-faint">
