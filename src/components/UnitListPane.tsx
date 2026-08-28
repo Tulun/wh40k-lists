@@ -4,7 +4,7 @@ import { MicroStats } from "./StatLine";
 import type { Data40k } from "../lib/data";
 import { fnpFromAbilityNames } from "../lib/describe";
 
-const ROLE_ORDER: [string, string][] = [
+export const ROLE_GROUPS: [string, string][] = [
   ["epic-hero", "Epic Heroes"],
   ["character", "Characters"],
   ["battleline", "Battleline"],
@@ -13,6 +13,16 @@ const ROLE_ORDER: [string, string][] = [
   ["fortification", "Fortifications"],
   ["allied", "Allied"],
 ];
+
+/** Bucket units under the ROLE_GROUPS headers, dropping empty groups. */
+export function groupByRole<T extends { raw: { role?: string | null } }>(units: T[]) {
+  return ROLE_GROUPS.map(([role, label]) => ({
+    label,
+    units: units.filter((u) =>
+      role === "" ? !ROLE_GROUPS.some(([r]) => r !== "" && r === u.raw.role) : u.raw.role === role,
+    ),
+  })).filter((g) => g.units.length > 0);
+}
 
 /**
  * Filterable, role-grouped unit list for a faction. Full-width on the faction
@@ -48,12 +58,7 @@ export default function UnitListPane({
         (u.raw.keywords ?? []).some((k) => k.toLowerCase().includes(q)),
     )
     .sort((a, b) => a.name.localeCompare(b.name));
-  const grouped = ROLE_ORDER.map(([role, label]) => ({
-    label,
-    units: units.filter((u) =>
-      role === "" ? !ROLE_ORDER.some(([r]) => r !== "" && r === u.raw.role) : u.raw.role === role,
-    ),
-  })).filter((g) => g.units.length > 0);
+  const grouped = groupByRole(units);
 
   return (
     <div className="space-y-3">

@@ -3,7 +3,7 @@ import { useDataset } from "../hooks/useDataset";
 import { EXPLORE_FACTION_IDS } from "../lib/flags";
 import { codexBadge, useCodex } from "../store/codex";
 
-const BADGE_LABEL = { replace: "Leaked codex", patched: "Edited" } as const;
+const BADGE_LABEL = { replace: "Codex", patched: "Edited" } as const;
 
 export default function ExploreScreen() {
   const data = useDataset();

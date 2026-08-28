@@ -509,18 +509,26 @@ describe("against the real dataset", () => {
     expect(ds!.units.byFaction("grey-knights").length).toBe(mod.units.byFaction("grey-knights").length);
   });
 
-  it("applyCodex returns null for an empty or contentless doc", () => {
-    expect(applyCodex(mod, { version: 1, updated: "x", factions: {} })).toBeNull();
-    expect(
-      applyCodex(mod, {
-        version: 1,
-        updated: "x",
-        factions: {
-          orks: { mode: "replace", name: "Orks", armyRule: null, datasheets: [], detachments: [] },
-          aeldari: { mode: "patch", datasheets: {}, detachments: {} },
-        },
-      }),
-    ).toBeNull();
+  it("applyCodex strips replace-faction upstream data even from an empty doc", () => {
+    // The superseded old-edition Orks records must never show, doc or no doc.
+    const ds = applyCodex(mod, { version: 1, updated: "x", factions: {} });
+    expect(ds).not.toBeNull();
+    expect(ds!.units.byFaction("orks")).toEqual([]);
+    expect(ds!.detachments.byFaction("orks")).toEqual([]);
+    expect(ds!.factions.getAny("orks")?.name).toBe("Orks");
+    expect(ds!.units.byFaction("aeldari").length).toBe(mod.units.byFaction("aeldari").length);
+
+    const ds2 = applyCodex(mod, {
+      version: 1,
+      updated: "x",
+      factions: {
+        orks: { mode: "replace", name: "Orks", armyRule: null, datasheets: [], detachments: [] },
+        aeldari: { mode: "patch", datasheets: {}, detachments: {} },
+      },
+    });
+    expect(ds2).not.toBeNull();
+    expect(ds2!.units.byFaction("orks")).toEqual([]);
+    expect(ds2!.units.byFaction("aeldari").length).toBe(mod.units.byFaction("aeldari").length);
   });
 });
 

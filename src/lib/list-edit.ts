@@ -380,13 +380,27 @@ export function wargearOptionStates(
   const counts = wargearCounts(rosterUnit);
   const base = data.baseLoadout(unit, rosterUnit.model_count, options, models).counts;
   return options.map((option) => {
+    // A branch's adds alone can't identify the option when another option adds
+    // the same item (Deff Dread: two different swaps both grant an Extra Klaw).
+    // The swap also removes `replaces`, so cap by how many are actually gone.
+    const replaces = option.replaces ?? [];
+    const removedCap =
+      replaces.length > 0
+        ? Math.max(
+            0,
+            Math.min(...replaces.map((id) => (base.get(id) ?? 0) - (counts.get(id) ?? 0))),
+          )
+        : Infinity;
     const branches = optionBranches(option).map((ids) => ({
       ids,
       applied:
         ids.length > 0
           ? Math.max(
               0,
-              Math.min(...ids.map((id) => (counts.get(id) ?? 0) - (base.get(id) ?? 0))),
+              Math.min(
+                removedCap,
+                ...ids.map((id) => (counts.get(id) ?? 0) - (base.get(id) ?? 0)),
+              ),
             )
           : 0,
     }));

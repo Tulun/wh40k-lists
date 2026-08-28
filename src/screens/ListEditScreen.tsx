@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { RosterUnit, Unit } from "@alpaca-software/40kdc-data";
 import Dropdown from "../components/Dropdown";
+import { groupByRole } from "../components/UnitListPane";
 import { useDataset } from "../hooks/useDataset";
 import type { Data40k } from "../lib/data";
 import {
@@ -42,15 +43,6 @@ function useEditBackState() {
   const listName = useLists((s) => (listId ? s.lists[listId]?.name : undefined));
   return listId ? backState(`/lists/${listId}/edit`, listName ?? "Edit list") : undefined;
 }
-
-const ROLE_ORDER: Record<string, number> = {
-  "epic-hero": 0,
-  character: 1,
-  battleline: 2,
-  "dedicated-transport": 4,
-  fortification: 5,
-  allied: 6,
-};
 
 export default function ListEditScreen() {
   const { listId } = useParams();
@@ -116,22 +108,19 @@ export default function ListEditScreen() {
     });
 
   const q = addQuery.trim().toLowerCase();
-  const addResults =
-    factionId && q
-      ? data.units
+  const addGroups = factionId
+    ? groupByRole(
+        data.units
           .byFaction(factionId)
           .filter(
             (u) =>
+              !q ||
               u.name.toLowerCase().includes(q) ||
               (u.raw.keywords ?? []).some((k) => k.toLowerCase().includes(q)),
           )
-          .sort((a, b) => {
-            const ra = ROLE_ORDER[a.raw.role ?? ""] ?? 3;
-            const rb = ROLE_ORDER[b.raw.role ?? ""] ?? 3;
-            return ra !== rb ? ra - rb : a.name.localeCompare(b.name);
-          })
-          .slice(0, 20)
-      : [];
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      )
+    : [];
 
   const detachmentPool = factionId
     ? [...data.detachments.byFaction(factionId)]
@@ -282,35 +271,39 @@ export default function ListEditScreen() {
         <input
           value={addQuery}
           onChange={(e) => setAddQuery(e.target.value)}
-          placeholder="Search datasheets or keywords…"
+          placeholder="Filter datasheets or keywords…"
           className="mt-2 w-full rounded-md border border-edge bg-panel px-3 py-2 text-sm"
         />
-        {addResults.length > 0 && (
-          <ul className="mt-2 divide-y divide-edge overflow-hidden rounded-md border border-edge">
-            {addResults.map((u) => (
-              <li key={u.id}>
-                <button
-                  type="button"
-                  className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-panel active:bg-panel"
-                  onClick={() => {
-                    apply(addUnit(data, content, u.id));
-                    setAddQuery("");
-                  }}
-                >
-                  <span className="min-w-0 flex-1 truncate text-sm">{u.name}</span>
-                  <span className="text-xs text-ink-faint">
-                    {u.raw.points?.[0]
-                      ? `${u.raw.points[0].models}m · ${u.raw.points[0].cost} pts`
-                      : "? pts"}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {q && addResults.length === 0 && (
-          <p className="mt-2 text-xs text-ink-faint">No datasheets match.</p>
-        )}
+        <div className="mt-2 max-h-80 space-y-2 overflow-y-auto lg:max-h-112">
+          {addGroups.map(({ label, units }) => (
+            <div key={label}>
+              <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                {label}
+              </div>
+              <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
+                {units.map((u) => (
+                  <li key={u.id}>
+                    <button
+                      type="button"
+                      className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-panel active:bg-panel"
+                      onClick={() => apply(addUnit(data, content, u.id))}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-sm">{u.name}</span>
+                      <span className="text-xs text-ink-faint">
+                        {u.raw.points?.[0]
+                          ? `${u.raw.points[0].models}m · ${u.raw.points[0].cost} pts`
+                          : "? pts"}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          {addGroups.length === 0 && (
+            <p className="py-4 text-center text-xs text-ink-faint">No datasheets match.</p>
+          )}
+        </div>
       </div>
 
       <Link to={`/import?edit=${list.id}`} className="block text-xs text-ink-faint underline">
@@ -883,7 +876,9 @@ function WargearEditor({
                     key={`${s.option.id}-${bi}`}
                     className={`flex items-center gap-2 py-0.5${dimmed ? " opacity-40" : ""}`}
                   >
-                    <span className="min-w-0 flex-1 truncate text-xs">{label}</span>
+                    {/* Wraps rather than truncates — cutting the label off can
+                        hide what the swap actually gives you. */}
+                    <span className="min-w-0 flex-1 text-xs leading-snug">{label}</span>
                     <span className="shrink-0 text-[10px] text-ink-faint">
                       {s.totalApplied}/{s.cap}
                     </span>

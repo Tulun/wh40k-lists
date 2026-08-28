@@ -8,7 +8,7 @@
  * into the package's normalized record shapes for the merge layer.
  *
  * Two faction modes:
- * - "replace": a whole new codex (the leaked Orks book) that supersedes the
+ * - "replace": a whole new codex (the 11e Orks book) that supersedes the
  *   upstream faction entirely.
  * - "patch": sparse record-level overrides on an upstream faction (fix stale
  *   points on a Grey Knights sheet) — each edited record is a full editable

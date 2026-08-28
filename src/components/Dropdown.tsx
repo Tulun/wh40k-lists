@@ -137,8 +137,11 @@ function Row({
         disabled={disabled}
         onClick={onPick}
         className={`flex min-h-10 w-full items-center gap-2 border-b border-edge/60 px-3 py-1.5 text-left text-xs last:border-b-0 ${
+          // Plain `opacity` rather than a color alpha modifier — Tailwind
+          // compiles `text-ink-faint/60` to color-mix(), which older iOS
+          // Safari ignores, silently dropping the grey-out on phones.
           disabled
-            ? "text-ink-faint/60"
+            ? "text-ink-faint opacity-60"
             : selected
               ? "bg-accent/10 text-accent"
               : muted

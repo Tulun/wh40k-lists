@@ -293,6 +293,20 @@ describe("wargear options (swaps)", () => {
     const refused = applyWargearOption(data40k, base, i, s.option.id, branch, 1);
     expect(refused).toBe(base);
   });
+
+  it("doesn't read a swap as taken while the replaced weapon is still carried", () => {
+    // A power klaw in the bag with the big choppa STILL present means the swap
+    // wasn't made — the klaw came from elsewhere (e.g. another option adding
+    // the same item, like the Deff Dread's two Extra Klaw swaps).
+    const { s, branch } = klawState(base);
+    const unswapped = applyWargearOption(data40k, base, i, s.option.id, branch, -1);
+    unswapped.roster.units[i].wargear.push({
+      ref: { id: "power-klaw", raw_name: "Power Klaw", resolved: true, candidates: [] },
+      count: 1,
+    });
+    const { s: after, branch: b } = klawState(unswapped);
+    expect(after.branches[b].applied).toBe(0);
+  });
 });
 
 describe("setWarlord", () => {

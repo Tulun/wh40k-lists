@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useDataset } from "../hooks/useDataset";
 import { loadMergedData } from "../lib/data";
 import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
 import { blankSavedList } from "../lib/list-edit";
@@ -30,9 +31,30 @@ export default function ListsScreen() {
     copiedTimer.current = setTimeout(() => setCopiedId(null), 2000);
   }
 
+  const data = useDataset();
   const all = Object.values(lists).sort(
     (a, b) => b.importedAt.localeCompare(a.importedAt),
   );
+
+  // Group by faction, newest first within each group. Only lists with a
+  // recorded faction get a subheader; the rest render unlabeled at the end.
+  const groups = new Map<string, { label: string | null; lists: SavedList[] }>();
+  for (const list of all) {
+    const fid = list.roster.faction_id;
+    const key = fid ?? "";
+    if (!groups.has(key)) {
+      groups.set(key, {
+        label: fid ? (data?.factions.getAny(fid)?.name ?? fid) : null,
+        lists: [],
+      });
+    }
+    groups.get(key)!.lists.push(list);
+  }
+  const grouped = [...groups.values()].sort((a, b) => {
+    if (a.label == null) return 1;
+    if (b.label == null) return -1;
+    return a.label.localeCompare(b.label);
+  });
 
   function use(slot: Slot, id: string) {
     assignSlot(slot, id);
@@ -71,8 +93,15 @@ export default function ListsScreen() {
         <p className="py-12 text-center text-sm text-ink-dim">No lists yet — import one to get started.</p>
       )}
 
-      <ul className="grid gap-2 lg:grid-cols-2">
-        {all.map((list) => (
+      {grouped.map((group) => (
+        <div key={group.label ?? "·no-faction"}>
+          {group.label && (
+            <div className="mb-2 mt-2 px-1 text-sm font-bold uppercase tracking-wide text-ink-dim">
+              {group.label}
+            </div>
+          )}
+          <ul className="grid gap-2 lg:grid-cols-2">
+            {group.lists.map((list) => (
           <li key={list.id} className="rounded-md border border-edge bg-panel/50 px-3 py-2">
             <div className="flex items-center gap-2">
               <button
@@ -165,8 +194,10 @@ export default function ListsScreen() {
               </button>
             </div>
           </li>
-        ))}
-      </ul>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }

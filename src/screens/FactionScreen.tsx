@@ -47,7 +47,7 @@ export default function FactionScreen() {
         <h1 className="flex-1 text-lg font-bold">{faction.name}</h1>
         {codexBadge(doc, factionId) && (
           <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent">
-            {codexBadge(doc, factionId) === "replace" ? "Leaked codex" : "Edited"}
+            {codexBadge(doc, factionId) === "replace" ? "Codex" : "Edited"}
           </span>
         )}
         <Link to={`/editor/${factionId}`} className="text-xs text-accent underline">

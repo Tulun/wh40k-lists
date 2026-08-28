@@ -12,11 +12,11 @@
  * this file stays out of the lazy 40kdc chunk.
  */
 import type { Dataset, RawData } from "@alpaca-software/40kdc-data";
-import type { CodexDoc } from "./codex-model";
-import { docIsEmpty } from "./codex-model";
+import type { CodexDoc, ReplaceFaction } from "./codex-model";
 import type { CompiledRecords } from "./codex-compile";
 import { compileFaction, compilePatches, dedupeWeaponKeywords } from "./codex-compile";
 import type { Data40k } from "./data";
+import { REPLACE_FACTION_IDS } from "./flags";
 
 /** Collections whose `.all` returns wrapper views carrying `.raw`. */
 const rawOf = <T>(entry: T | { raw: T }): T =>
@@ -233,24 +233,36 @@ export function applyRecordPatches(base: RawData, compiled: CompiledRecords): Ra
 }
 
 /**
- * The whole doc → one linked Dataset, or null when the doc changes nothing.
- * Replace-mode entries with no content yet are skipped (creating the faction
- * entry in the editor must not nuke the upstream faction before any data is
- * typed in).
+ * The whole doc → one linked Dataset, or null when nothing changes.
+ *
+ * REPLACE_FACTION_IDS factions are stripped from the upstream data
+ * unconditionally — their superseded (old-edition) records must never show,
+ * even on a device where the codex doc hasn't synced yet. Until the doc
+ * arrives, such a faction is simply empty.
  */
 export function applyCodex(mod: Data40k, doc: CodexDoc): Dataset | null {
-  if (docIsEmpty(doc)) return null;
   let raw = rawFromDataset(mod.dataset);
   const knownKeywordIds = new Set(mod.weaponKeywords.all.map((k) => k.id));
   let changed = false;
+  const replaceIds = new Set([
+    ...REPLACE_FACTION_IDS,
+    ...Object.keys(doc.factions).filter((id) => doc.factions[id].mode === "replace"),
+  ]);
+  for (const factionId of replaceIds) {
+    const docEntry = doc.factions[factionId];
+    const entry: ReplaceFaction =
+      docEntry?.mode === "replace"
+        ? docEntry
+        : { mode: "replace", name: "", armyRule: null, datasheets: [], detachments: [] };
+    const compiled = compileFaction(factionId, entry, mod.factions.getAny(factionId)?.name);
+    dedupeWeaponKeywords(compiled, knownKeywordIds);
+    for (const k of compiled.weaponKeywords) knownKeywordIds.add(k.id);
+    raw = buildMergedRaw(raw, compiled);
+    changed = true;
+  }
   for (const [factionId, entry] of Object.entries(doc.factions)) {
     if (entry.mode === "replace") {
-      if (entry.datasheets.length === 0 && entry.detachments.length === 0 && !entry.armyRule) continue;
-      const compiled = compileFaction(factionId, entry, mod.factions.getAny(factionId)?.name);
-      dedupeWeaponKeywords(compiled, knownKeywordIds);
-      for (const k of compiled.weaponKeywords) knownKeywordIds.add(k.id);
-      raw = buildMergedRaw(raw, compiled);
-      changed = true;
+      continue; // handled above
     } else {
       const compiled = compilePatches(factionId, entry);
       if (
