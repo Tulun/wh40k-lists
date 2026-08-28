@@ -14,11 +14,61 @@ export function shareText(data: Data40k, list: SavedList): string {
   // The serializer reports the roster's own totals; after in-app edits only
   // total_computed is current.
   roster.points = { ...roster.points, total_reported: roster.points.total_computed };
+  // The editor's index-keyed attachments map is the in-app source of truth;
+  // project it onto `leader_attachment` so the export carries the pairings.
+  const attachments = list.attachments ?? {};
+  roster.units.forEach((u, i) => {
+    const body = roster.units[attachments[String(i)]];
+    u.leader_attachment = body
+      ? { bodyguard_ref: structuredClone(body.ref), role: u.leader_attachment?.role ?? "leader" }
+      : null;
+  });
   // Characters first (stable within each group) — the WTC convention, and how
-  // every other view in the app orders the army.
-  roster.units = [...roster.units].sort((a, b) => charRank(data, roster, a) - charRank(data, roster, b));
+  // every other view in the app orders the army — with each led unit hoisted
+  // up to ride directly behind its leader(s), like the glance and edit views.
+  roster.units = attachedOrder(data, roster, attachments).map((i) => roster.units[i]);
   const out = data.exportRoster(roster, "newrecruit-wtc-compact");
   return spaceUnitBlocks(remarkCharacters(out, data, roster));
+}
+
+/** Unit indices: characters first, bodyguards pulled up behind their leaders. */
+function attachedOrder(
+  data: Data40k,
+  roster: Roster,
+  attachments: Record<string, number>,
+): number[] {
+  const bodyguardOf = new Map<number, number>();
+  const leadersOf = new Map<number, number[]>();
+  for (const [l, b] of Object.entries(attachments)) {
+    const li = Number(l);
+    if (!roster.units[li] || !roster.units[b]) continue;
+    bodyguardOf.set(li, b);
+    leadersOf.set(b, [...(leadersOf.get(b) ?? []), li]);
+  }
+  for (const leaders of leadersOf.values()) leaders.sort((a, b) => a - b);
+
+  const sorted = roster.units
+    .map((_, i) => i)
+    .sort((a, b) => charRank(data, roster, roster.units[a]) - charRank(data, roster, roster.units[b]) || a - b);
+  const out: number[] = [];
+  const emitted = new Set<number>();
+  const emit = (i: number) => {
+    if (!emitted.has(i)) {
+      emitted.add(i);
+      out.push(i);
+    }
+  };
+  for (const i of sorted) {
+    if (emitted.has(i)) continue;
+    if (leadersOf.has(i)) continue; // a led unit rides with its (first) leader
+    emit(i);
+    const body = bodyguardOf.get(i);
+    if (body != null) {
+      for (const li of leadersOf.get(body)!) emit(li); // co-leaders stay adjacent
+      emit(body);
+    }
+  }
+  return out;
 }
 
 function charRank(data: Data40k, roster: Roster, u: Roster["units"][number]): number {

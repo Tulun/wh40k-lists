@@ -13,6 +13,7 @@ import {
   blankSavedList,
   duplicateUnit,
   enhancementChoices,
+  legalityIssues,
   nextSize,
   removeDetachment,
   removeUnit,
@@ -306,6 +307,39 @@ describe("wargear options (swaps)", () => {
     });
     const { s: after, branch: b } = klawState(unswapped);
     expect(after.branches[b].applied).toBe(0);
+  });
+});
+
+describe("legalityIssues attachments", () => {
+  // A Support character (Painboy) attached via the app's index-keyed
+  // attachments map — the roster's own leader_attachment stays null, so the
+  // check must read the map or it wrongly demands the character attach.
+  function mkUnit(id: string, name: string): ListContent["roster"]["units"][number] {
+    return {
+      ref: { id, raw_name: name, resolved: true, candidates: [] },
+      model_count: 1,
+      points: null,
+      is_warlord: false,
+      enhancement: null,
+      enhancement_points: null,
+      wargear: [],
+      leader_attachment: null,
+    };
+  }
+  const roster: ListContent["roster"] = {
+    ...base.roster,
+    units: [mkUnit("painboy", "Painboy"), mkUnit("boyz", "Boyz")],
+  };
+
+  it("demands attachment when the map has none", () => {
+    expect(legalityIssues(data40k, roster, {})).toContainEqual(
+      expect.stringContaining("must attach"),
+    );
+  });
+
+  it("honours the app-level attachments map", () => {
+    const issues = legalityIssues(data40k, roster, { "0": 1 });
+    expect(issues.find((i) => i.includes("must attach"))).toBeUndefined();
   });
 });
 

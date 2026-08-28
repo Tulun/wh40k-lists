@@ -582,8 +582,34 @@ export function repriceAll(data: Data40k, content: ListContent): ListContent {
  *   the unit's own datasheet name ("DEFFKILLA WARTRIKE model only") — the
  *   package matches printed keywords only, the app treats the name as one.
  */
-export function legalityIssues(data: Data40k, roster: Roster): string[] {
-  const legality = data.checkRoster(roster, data.dataset);
+export function legalityIssues(
+  data: Data40k,
+  roster: Roster,
+  attachments?: Record<string, number>,
+): string[] {
+  // The editor's index-keyed attachments map is the in-app source of truth;
+  // the roster's own `leader_attachment` is only the import-time seed and goes
+  // stale as pairs are changed in the editor. Project the map onto a copy so
+  // the package's checker (which reads `leader_attachment`) sees reality —
+  // otherwise an attached Support character still flags "must attach".
+  const checked = attachments
+    ? {
+        ...roster,
+        units: roster.units.map((u, i) => {
+          const bodyRef = roster.units[attachments[String(i)]]?.ref;
+          return {
+            ...u,
+            leader_attachment: bodyRef
+              ? {
+                  bodyguard_ref: structuredClone(bodyRef),
+                  role: u.leader_attachment?.role ?? ("leader" as const),
+                }
+              : null,
+          };
+        }),
+      }
+    : roster;
+  const legality = data.checkRoster(checked, data.dataset);
   const factionId = roster.faction_id;
   const issues: string[] = [];
 

@@ -53,7 +53,7 @@ export default function ListEditScreen() {
   const editBack = useEditBackState();
 
   const issues = useMemo(
-    () => (data && list ? legalityIssues(data, list.roster) : []),
+    () => (data && list ? legalityIssues(data, list.roster, list.attachments) : []),
     [data, list],
   );
 
@@ -108,6 +108,15 @@ export default function ListEditScreen() {
     });
 
   const q = addQuery.trim().toLowerCase();
+  // Copies of each datasheet already in the list, and the conventional cap on
+  // adding more (rule of three; battleline/transports six, epic heroes one).
+  // Advisory only — the dataset records no per-datasheet limit to check against.
+  const inList = new Map<string, number>();
+  for (const u of roster.units) {
+    if (u.ref.id) inList.set(u.ref.id, (inList.get(u.ref.id) ?? 0) + 1);
+  }
+  const capFor = (role: string | null | undefined) =>
+    role === "epic-hero" ? 1 : role === "battleline" || role === "dedicated-transport" ? 6 : 3;
   const addGroups = factionId
     ? groupByRole(
         data.units
@@ -281,22 +290,34 @@ export default function ListEditScreen() {
                 {label}
               </div>
               <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
-                {units.map((u) => (
-                  <li key={u.id}>
-                    <button
-                      type="button"
-                      className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-panel active:bg-panel"
-                      onClick={() => apply(addUnit(data, content, u.id))}
-                    >
-                      <span className="min-w-0 flex-1 truncate text-sm">{u.name}</span>
-                      <span className="text-xs text-ink-faint">
-                        {u.raw.points?.[0]
-                          ? `${u.raw.points[0].models}m · ${u.raw.points[0].cost} pts`
-                          : "? pts"}
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                {units.map((u) => {
+                  const taken = inList.get(u.id) ?? 0;
+                  const left = Math.max(0, capFor(u.raw.role) - taken);
+                  return (
+                    <li key={u.id}>
+                      <button
+                        type="button"
+                        disabled={left === 0}
+                        className={`flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left ${
+                          left === 0 ? "opacity-40" : "hover:bg-panel active:bg-panel"
+                        }`}
+                        onClick={() => apply(addUnit(data, content, u.id))}
+                      >
+                        <span className="min-w-0 flex-1 truncate text-sm">{u.name}</span>
+                        {taken > 0 && (
+                          <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                            ×{taken}{left > 0 ? ` · ${left} left` : " · max"}
+                          </span>
+                        )}
+                        <span className="shrink-0 text-xs text-ink-faint">
+                          {u.raw.points?.[0]
+                            ? `${u.raw.points[0].models}m · ${u.raw.points[0].cost} pts`
+                            : "? pts"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
@@ -535,24 +556,22 @@ function AttachPicker({
   const eligible = new Set(data.dataset.bodyguardsAttachableFrom(unit.id).map((v) => v.id));
   const current = content.attachments[String(index)] ?? null;
   if (eligible.size === 0 && current == null) return null;
-  // A unit takes at most 1 leader and 1 support: hide units that already have
-  // an attached character of this character's role class.
+  // A unit takes at most 1 leader and 1 support: a unit that already has an
+  // attached character of this character's role class stays listed but greyed
+  // out (naming its leader), so the choices don't shift around as pairs form.
   const roleOf = (i: number) => {
     const u = roster.units[i];
     const ent = u.ref.id ? byId(data.units, u.ref.id, roster.faction_id)?.raw : undefined;
     return ent?.attachment_role === "support" ? "support" : "leader";
   };
-  const occupied = new Set<number>();
+  const occupiedBy = new Map<number, number>();
   for (const [l, b] of Object.entries(content.attachments)) {
     const li = Number(l);
-    if (li !== index && roleOf(li) === roleOf(index)) occupied.add(b);
+    if (li !== index && roleOf(li) === roleOf(index)) occupiedBy.set(b, li);
   }
   const candidates = roster.units
     .map((u, i) => ({ u, i }))
-    .filter(
-      ({ u, i }) =>
-        i !== index && u.ref.id != null && eligible.has(u.ref.id) && !occupied.has(i),
-    );
+    .filter(({ u, i }) => i !== index && u.ref.id != null && eligible.has(u.ref.id));
   if (candidates.length === 0 && current == null) return null;
 
   const nameOf = (i: number) => {
@@ -586,10 +605,12 @@ function AttachPicker({
     const n = (nth.get(u.ref.id!) ?? 0) + 1;
     nth.set(u.ref.id!, n);
     const dup = candidates.filter((c) => c.u.ref.id === u.ref.id).length > 1;
+    const leader = occupiedBy.get(i);
     return {
       value: String(i),
       label: dup ? `${nameOf(i)} #${n}` : nameOf(i),
       ...describe(i),
+      ...(leader != null && { disabled: true, sub: `led by ${nameOf(leader)}` }),
     };
   });
   // The current pick may have become ineligible (unit swapped) — keep it visible.
@@ -855,23 +876,22 @@ function WargearEditor({
 
         {optionStates.length > 0 &&
           (() => {
-            // One block per option. A swap whose source weapon is gone (spent
-            // on another swap) is hidden; a branch blocked only by the
-            // option's shared allowance stays visible greyed out, and one-of
+            // One block per option. Every branch always renders — a blocked
+            // swap (allowance spent, or its source weapon gone to another
+            // swap) greys out rather than disappearing, so the block keeps a
+            // stable height instead of reflowing as options are taken. One-of
             // groups get a "One of:" blurb, so siblings read as exclusive.
-            // Taken rows always render so they can be stepped back down.
             const rows = optionStates.flatMap((s) => {
               const replaces = (s.option.replaces ?? []).map(nameOf).join(" + ");
               const swapAvailable = (s.option.replaces ?? []).every(
                 (id) => (counts.get(id) ?? 0) > 0,
               );
               const canUp = s.totalApplied < s.cap && swapAvailable;
-              const branchRows = s.branches.flatMap((b, bi) => {
-                if (b.applied === 0 && !swapAvailable) return [];
+              const branchRows = s.branches.map((b, bi) => {
                 const dimmed = b.applied === 0 && !canUp;
                 const added = b.ids.map(nameOf).join(" + ");
                 const label = replaces ? `${replaces} → ${added}` : `Add ${added}`;
-                return [
+                return (
                   <div
                     key={`${s.option.id}-${bi}`}
                     className={`flex items-center gap-2 py-0.5${dimmed ? " opacity-40" : ""}`}
@@ -891,8 +911,8 @@ function WargearEditor({
                         apply(applyWargearOption(data, content, index, s.option.id, bi, d))
                       }
                     />
-                  </div>,
-                ];
+                  </div>
+                );
               });
               if (branchRows.length === 0) return [];
               return [

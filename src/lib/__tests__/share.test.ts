@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import * as data40k from "@alpaca-software/40kdc-data";
 import { shareText } from "../share";
+import { normalizeImportedRoster } from "../normalize";
 import type { SavedList } from "../../store/schema";
 
 const text = readFileSync(join(import.meta.dirname, "gw-11e-attached.txt"), "utf8");
@@ -47,6 +48,20 @@ describe("shareText", () => {
     const warlordSlot = out.match(/\+ WARLORD: Char(\d+): Beastboss on Squigosaur/)?.[1];
     expect(warlordSlot).toBeDefined();
     expect(out).toContain(`Char${warlordSlot}: 1x Beastboss on Squigosaur`);
+  });
+
+  it("hoists a led unit directly behind its leader", () => {
+    // The fixture attaches the Beastboss (a character, pulled to the top) to
+    // Squighog Boyz (mid-roster) — the pair must stay adjacent in the export.
+    const { attachmentSeeds } = normalizeImportedRoster(result.roster, data40k as never, text);
+    const withAtt = shareText(data40k as never, { ...list, attachments: attachmentSeeds });
+    const units = withAtt
+      .slice(withAtt.lastIndexOf("+++"))
+      .split("\n")
+      .filter((l) => /^\S.*\(\d+ pts\)/.test(l));
+    const leader = units.findIndex((l) => l.includes("Beastboss on Squigosaur"));
+    expect(leader).toBeGreaterThanOrEqual(0);
+    expect(units[leader + 1]).toContain("Squighog Boyz");
   });
 
   it("puts a blank line between unit blocks, keeping Enhancement lines attached", () => {

@@ -1,14 +1,19 @@
-import { Outlet, useLocation } from "react-router-dom";
+import { matchPath, Outlet, useLocation } from "react-router-dom";
 import Sidebar, { DesktopNav } from "./components/Sidebar";
 import SlotToggle from "./components/SlotToggle";
 import PoweredBy from "./components/PoweredBy";
 import SyncManager from "./components/SyncManager";
-import { useActiveList } from "./store/lists";
+import { useActiveList, useLists } from "./store/lists";
 
 export default function App() {
   const active = useActiveList();
   const { pathname } = useLocation();
-  const points = active?.roster.points.total_computed;
+  // Mid-edit, the list being edited is the one whose name and running total
+  // matter — not the starred army the rest of the app centres on.
+  const editingId = matchPath("/lists/:listId/edit", pathname)?.params.listId;
+  const editing = useLists((s) => (editingId ? s.lists[editingId] : undefined));
+  const shown = editing ?? active;
+  const points = shown?.roster.points.total_computed;
 
   return (
     <div className="min-h-dvh lg:flex">
@@ -21,9 +26,9 @@ export default function App() {
             <div className="flex-1">
               <SlotToggle />
             </div>
-            {active && pathname !== "/import" && (
+            {shown && pathname !== "/import" && (
               <div className="flex min-w-0 shrink items-baseline justify-end gap-1.5 text-right text-xs">
-                <span className="min-w-0 truncate font-semibold">{active.name}</span>
+                <span className="min-w-0 truncate font-semibold">{shown.name}</span>
                 <span className="shrink-0 text-ink-dim">{points} pts</span>
               </div>
             )}
