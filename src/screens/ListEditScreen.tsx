@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { RosterUnit, Unit } from "@alpaca-software/40kdc-data";
+import ConfirmButton from "../components/ConfirmButton";
 import Dropdown from "../components/Dropdown";
+import FilterInput from "../components/FilterInput";
 import { groupByRole } from "../components/UnitListPane";
 import { useDataset } from "../hooks/useDataset";
 import type { Data40k } from "../lib/data";
@@ -277,11 +279,11 @@ export default function ListEditScreen() {
 
       <div className="rounded-md border border-edge bg-panel/50 p-3">
         <h2 className="text-sm font-semibold">Add unit</h2>
-        <input
+        <FilterInput
           value={addQuery}
-          onChange={(e) => setAddQuery(e.target.value)}
+          onChange={setAddQuery}
           placeholder="Filter datasheets or keywords…"
-          className="mt-2 w-full rounded-md border border-edge bg-panel px-3 py-2 text-sm"
+          className="mt-2"
         />
         <div className="mt-2 max-h-80 space-y-2 overflow-y-auto lg:max-h-112">
           {addGroups.map(({ label, units }) => (
@@ -292,21 +294,22 @@ export default function ListEditScreen() {
               <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
                 {units.map((u) => {
                   const taken = inList.get(u.id) ?? 0;
-                  const left = Math.max(0, capFor(u.raw.role) - taken);
+                  const cap = capFor(u.raw.role);
+                  const full = taken >= cap;
                   return (
                     <li key={u.id}>
                       <button
                         type="button"
-                        disabled={left === 0}
+                        disabled={full}
                         className={`flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left ${
-                          left === 0 ? "opacity-40" : "hover:bg-panel active:bg-panel"
+                          full ? "opacity-40" : "hover:bg-panel active:bg-panel"
                         }`}
                         onClick={() => apply(addUnit(data, content, u.id))}
                       >
                         <span className="min-w-0 flex-1 truncate text-sm">{u.name}</span>
                         {taken > 0 && (
-                          <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-                            ×{taken}{left > 0 ? ` · ${left} left` : " · max"}
+                          <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-accent">
+                            {taken}/{cap}
                           </span>
                         )}
                         <span className="shrink-0 text-xs text-ink-faint">
@@ -497,7 +500,7 @@ function UnitRow({
           <Link
             to={`/explore/${roster.faction_id}/${unit.id}`}
             state={editBack}
-            className="rounded-md bg-panel px-2.5 py-1 text-xs font-semibold text-ink-dim"
+            className="rounded-md bg-panel px-2.5 py-1.5 text-xs font-semibold text-ink-dim"
           >
             Datasheet
           </Link>
@@ -506,20 +509,17 @@ function UnitRow({
           type="button"
           title="Duplicate unit"
           onClick={() => apply(duplicateUnit(data, content, index))}
-          className="rounded-md bg-panel px-2.5 py-1 text-xs text-ink-dim"
+          className="rounded-md bg-panel px-3 py-1.5 text-xs text-ink-dim"
         >
-          ⧉
+          Copy
         </button>
-        <button
-          type="button"
-          title="Remove unit"
-          onClick={() => {
-            if (confirm(`Remove ${name}?`)) apply(removeUnit(data, content, index));
-          }}
-          className="rounded-md bg-panel px-2.5 py-1 text-xs text-opponent"
-        >
-          ✕
-        </button>
+        <ConfirmButton
+          label="Delete"
+          confirmLabel="Sure?"
+          onConfirm={() => apply(removeUnit(data, content, index))}
+          className="ml-1 rounded-md bg-panel px-3 py-1.5 text-xs text-opponent"
+          armedClassName="ml-1 rounded-md bg-opponent/20 px-3 py-1.5 text-xs font-semibold text-opponent"
+        />
       </div>
 
       <EnhancementPicker data={data} content={content} index={index} apply={apply} />

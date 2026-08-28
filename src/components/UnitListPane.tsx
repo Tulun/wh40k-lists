@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import FilterInput from "./FilterInput";
 import { MicroStats } from "./StatLine";
 import type { Data40k } from "../lib/data";
 import { fnpFromAbilityNames } from "../lib/describe";
@@ -62,12 +63,7 @@ export default function UnitListPane({
 
   return (
     <div className="space-y-3">
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Filter units or keywords…"
-        className="w-full rounded-md border border-edge bg-panel px-3 py-2 text-sm"
-      />
+      <FilterInput value={query} onChange={setQuery} placeholder="Filter units or keywords…" />
 
       {grouped.map(({ label, units: group }) => (
         <div key={label}>
@@ -100,6 +96,13 @@ export default function UnitListPane({
                       {u.name}
                     </span>
                     {profile && <MicroStats profile={profile} fnp={fnp} />}
+                    {/* First points tier only — the full size/cost table (and
+                        any size picking) lives on the datasheet itself. */}
+                    {u.raw.points?.[0] && (
+                      <span className="shrink-0 text-xs tabular-nums text-ink-faint lg:ml-auto">
+                        {u.raw.points[0].cost} pts
+                      </span>
+                    )}
                   </Link>
                 </li>
               );

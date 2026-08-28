@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { backState } from "../components/BackBar";
 import CardColumns from "../components/CardColumns";
+import FilterInput from "../components/FilterInput";
 import StratagemCard from "../components/StratagemCard";
 import { MicroStats } from "../components/StatLine";
 import { useDataset } from "../hooks/useDataset";
@@ -139,11 +140,11 @@ export default function GlanceScreen() {
         </div>
       )}
 
-      <input
+      <FilterInput
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={setQuery}
         placeholder="Filter units or keywords…"
-        className="sticky top-13 z-10 w-full rounded-md border border-edge bg-panel px-3 py-2 text-sm"
+        className="sticky top-13 z-10"
       />
 
       <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">

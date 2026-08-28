@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import ConfirmButton from "../components/ConfirmButton";
 import { useDataset } from "../hooks/useDataset";
 import { loadMergedData } from "../lib/data";
 import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
@@ -183,15 +184,13 @@ export default function ListsScreen() {
               >
                 {copiedId === list.id ? "✓ Copied" : "Share"}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm(`Delete "${list.name}"?`)) deleteList(list.id);
-                }}
+              <ConfirmButton
+                label="Delete"
+                confirmLabel="Sure?"
+                onConfirm={() => deleteList(list.id)}
                 className="rounded-md bg-panel px-3 py-1.5 text-xs text-opponent transition-colors hover:bg-opponent/15"
-              >
-                Delete
-              </button>
+                armedClassName="rounded-md bg-opponent/20 px-3 py-1.5 text-xs font-semibold text-opponent"
+              />
             </div>
           </li>
             ))}
