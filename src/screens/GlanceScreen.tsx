@@ -147,8 +147,8 @@ export default function GlanceScreen() {
         className="sticky top-13 z-10"
       />
 
-      <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
-        {filtered.map(({ index, inGroup, isLed }) => {
+      {(() => {
+        const row = (index: number, isLed: boolean) => {
           const ru = roster.units[index];
           const view = resolveAt(index);
           const profile = view?.raw.profiles[0];
@@ -161,36 +161,82 @@ export default function GlanceScreen() {
               : ru.enhancement.raw_name
             : null;
           return (
-            <li key={index} className={inGroup && !q ? "border-l-2 border-accent/50" : ""}>
-              <Link
-                to={`/unit/${encodeURIComponent(unitKey(ru))}`}
-                className={`block min-h-11 px-3 py-1.5 hover:bg-panel active:bg-panel ${isLed && !q ? "pl-6" : ""}`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                    {isLed && !q && <span className="text-ink-faint">↳ </span>}
-                    {ru.is_warlord && <span title="Warlord">⭐ </span>}
-                    {view?.name ?? ru.ref.raw_name}
-                    {ru.enhancement && <span className="text-accent"> ✦</span>}
-                    {!ru.ref.id && (
-                      <span className="ml-1 text-[10px] text-opponent">unmatched</span>
-                    )}
-                  </span>
-                  {profile ? (
-                    <MicroStats profile={profile} fnp={fnp} />
-                  ) : (
-                    <span className="text-xs text-ink-faint">{pts} pts</span>
+            <Link
+              key={index}
+              to={`/unit/${encodeURIComponent(unitKey(ru))}`}
+              className={`block min-h-11 px-3 py-2 hover:bg-panel active:bg-panel ${isLed && !q ? "pl-6" : ""}`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {isLed && !q && <span className="text-ink-faint">↳ </span>}
+                  {ru.is_warlord && <span title="Warlord">⭐ </span>}
+                  {view?.name ?? ru.ref.raw_name}
+                  {ru.enhancement && <span className="text-accent"> ✦</span>}
+                  {!ru.ref.id && (
+                    <span className="ml-1 text-[10px] text-opponent">unmatched</span>
                   )}
-                </div>
-                <div className="mt-0.5 truncate text-[11px] text-ink-faint">
-                  {ru.model_count} model{ru.model_count === 1 ? "" : "s"} · {pts} pts
-                  {enhName && <span className="text-accent/80"> · ✦ {enhName}</span>}
-                </div>
-              </Link>
-            </li>
+                </span>
+                {profile ? (
+                  <MicroStats profile={profile} fnp={fnp} />
+                ) : (
+                  <span className="text-xs text-ink-faint">{pts} pts</span>
+                )}
+              </div>
+              <div className="mt-0.5 truncate text-[11px] text-ink-faint">
+                {ru.model_count} model{ru.model_count === 1 ? "" : "s"} · {pts} pts
+                {enhName && <span className="text-accent/80"> · ✦ {enhName}</span>}
+              </div>
+            </Link>
           );
-        })}
-      </ul>
+        };
+
+        // Filtering breaks pairs apart, so matches render as single cards;
+        // otherwise an attached group is one rounded block, with air between
+        // blocks instead of one wall-to-wall table.
+        const blocks: { key: string; attached: boolean; rows: React.ReactNode[] }[] = [];
+        if (q) {
+          for (const e of filtered) blocks.push({ key: String(e.index), attached: false, rows: [row(e.index, false)] });
+        } else {
+          for (let i = 0; i < filtered.length; ) {
+            const e = filtered[i];
+            if (!e.inGroup) {
+              blocks.push({ key: String(e.index), attached: false, rows: [row(e.index, false)] });
+              i += 1;
+              continue;
+            }
+            const rows: React.ReactNode[] = [];
+            let j = i;
+            for (; j < filtered.length && filtered[j].inGroup; j += 1) {
+              rows.push(row(filtered[j].index, filtered[j].isLed));
+              if (filtered[j].isLed) {
+                j += 1;
+                break; // the led unit closes its group
+              }
+            }
+            blocks.push({ key: `g-${e.index}`, attached: true, rows });
+            i = j;
+          }
+        }
+        return (
+          <ul className="space-y-2">
+            {blocks.map((b) => (
+              <li
+                key={b.key}
+                className={`overflow-hidden rounded-lg border ${
+                  b.attached ? "border-accent/40" : "border-edge"
+                }`}
+              >
+                {b.attached && (
+                  <p className="px-3 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                    Attached unit
+                  </p>
+                )}
+                <div className="divide-y divide-edge/60">{b.rows}</div>
+              </li>
+            ))}
+          </ul>
+        );
+      })()}
 
       <StratagemSection data={data} roster={roster} listId={list.id} />
     </div>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import BackBar from "../components/BackBar";
+import RuleText from "../components/RuleText";
 import UnitListPane from "../components/UnitListPane";
 import { useDataset } from "../hooks/useDataset";
 import { DISPOSITIONS } from "../lib/codex-model";
@@ -80,11 +81,11 @@ export default function FactionScreen() {
 
       {tab === "rule" &&
         (armyRule ? (
-          <div className="rounded-md border border-edge px-3 py-2">
-            <p className="text-sm font-semibold">{armyRule.name}</p>
-            <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">
-              {abilityText(armyRule)}
+          <div className="rounded-lg border border-edge px-3 py-2.5">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-accent">
+              {armyRule.name}
             </p>
+            <RuleText text={abilityText(armyRule)} />
           </div>
         ) : (
           <p className="py-8 text-center text-xs text-ink-faint">No army rule recorded.</p>
@@ -92,12 +93,12 @@ export default function FactionScreen() {
 
       {tab === "detachments" &&
         (detachments.length > 0 ? (
-          <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
+          <ul className="space-y-2">
             {detachments.map((d) => (
-              <li key={d.id}>
+              <li key={d.id} className="overflow-hidden rounded-lg border border-edge">
                 <Link
                   to={`/explore/${factionId}/detachment/${d.id}`}
-                  className="flex min-h-11 items-center gap-2 px-3 py-1.5 hover:bg-panel active:bg-panel"
+                  className="flex min-h-11 items-center gap-2 px-3 py-2 hover:bg-panel active:bg-panel"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="text-sm font-medium">
