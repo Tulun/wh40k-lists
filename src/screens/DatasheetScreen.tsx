@@ -68,7 +68,7 @@ export default function DatasheetScreen() {
         <Link
           to={`/explore/${factionId}`}
           aria-label="Back to faction"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-lg text-accent hover:bg-panel active:bg-panel lg:hidden"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-lg text-accent hover:bg-panel active:bg-panel"
         >
           ←
         </Link>

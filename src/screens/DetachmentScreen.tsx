@@ -27,7 +27,7 @@ export default function DetachmentScreen() {
 
   return (
     <div className="space-y-3">
-      <BackBar />
+      <BackBar fallback={{ to: `/explore/${factionId}`, label: factionName }} />
       <div className="flex items-baseline gap-2">
         <h1 className="min-w-0 flex-1 truncate text-lg font-bold">{det.name}</h1>
         <Link to={`/explore/${factionId}`} className="shrink-0 text-xs text-ink-faint underline">

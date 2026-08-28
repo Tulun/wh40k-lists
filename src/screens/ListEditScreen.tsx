@@ -4,7 +4,6 @@ import type { RosterUnit, Unit } from "@alpaca-software/40kdc-data";
 import ConfirmButton from "../components/ConfirmButton";
 import Dropdown from "../components/Dropdown";
 import FilterInput from "../components/FilterInput";
-import { groupByRole } from "../components/UnitListPane";
 import { useDataset } from "../hooks/useDataset";
 import type { Data40k } from "../lib/data";
 import {
@@ -52,7 +51,6 @@ export default function ListEditScreen() {
   const list = useLists((s) => (listId ? (s.lists[listId] ?? null) : null));
   const updateListContent = useLists((s) => s.updateListContent);
   const data = useDataset();
-  const [addQuery, setAddQuery] = useState("");
   const editBack = useEditBackState();
 
   const issues = useMemo(
@@ -109,30 +107,6 @@ export default function ListEditScreen() {
       ...next,
       rawText: data.exportRoster(next.roster, "roster-json"),
     });
-
-  const q = addQuery.trim().toLowerCase();
-  // Copies of each datasheet already in the list, and the conventional cap on
-  // adding more (rule of three; battleline/transports six, epic heroes one).
-  // Advisory only — the dataset records no per-datasheet limit to check against.
-  const inList = new Map<string, number>();
-  for (const u of roster.units) {
-    if (u.ref.id) inList.set(u.ref.id, (inList.get(u.ref.id) ?? 0) + 1);
-  }
-  const capFor = (role: string | null | undefined) =>
-    role === "epic-hero" ? 1 : role === "battleline" || role === "dedicated-transport" ? 6 : 3;
-  const addGroups = factionId
-    ? groupByRole(
-        data.units
-          .byFaction(factionId)
-          .filter(
-            (u) =>
-              !q ||
-              u.name.toLowerCase().includes(q) ||
-              (u.raw.keywords ?? []).some((k) => k.toLowerCase().includes(q)),
-          )
-          .sort((a, b) => a.name.localeCompare(b.name)),
-      )
-    : [];
 
   const detachmentPool = factionId
     ? [...data.detachments.byFaction(factionId)]
@@ -278,59 +252,6 @@ export default function ListEditScreen() {
 
       <UnitGroups data={data} content={content} apply={apply} />
 
-      <div className="rounded-md border border-edge bg-panel/50 p-3">
-        <h2 className="text-sm font-semibold">Add unit</h2>
-        <FilterInput
-          value={addQuery}
-          onChange={setAddQuery}
-          placeholder="Filter datasheets or keywords…"
-          className="mt-2"
-        />
-        <div className="mt-2 max-h-80 space-y-2 overflow-y-auto lg:max-h-112">
-          {addGroups.map(({ label, units }) => (
-            <div key={label}>
-              <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-                {label}
-              </div>
-              <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
-                {units.map((u) => {
-                  const taken = inList.get(u.id) ?? 0;
-                  const cap = capFor(u.raw.role);
-                  const full = taken >= cap;
-                  return (
-                    <li key={u.id}>
-                      <button
-                        type="button"
-                        disabled={full}
-                        className={`flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left ${
-                          full ? "opacity-40" : "hover:bg-panel active:bg-panel"
-                        }`}
-                        onClick={() => apply(addUnit(data, content, u.id))}
-                      >
-                        <span className="min-w-0 flex-1 truncate text-sm">{u.name}</span>
-                        {taken > 0 && (
-                          <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-accent">
-                            {taken}/{cap}
-                          </span>
-                        )}
-                        <span className="shrink-0 text-xs text-ink-faint">
-                          {u.raw.points?.[0]
-                            ? `${u.raw.points[0].models}m · ${u.raw.points[0].cost} pts`
-                            : "? pts"}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-          {addGroups.length === 0 && (
-            <p className="py-4 text-center text-xs text-ink-faint">No datasheets match.</p>
-          )}
-        </div>
-      </div>
-
       <Link to={`/import?edit=${list.id}`} className="block text-xs text-ink-faint underline">
         Edit as text (re-import) →
       </Link>
@@ -339,9 +260,116 @@ export default function ListEditScreen() {
 }
 
 /**
- * Units in roster order, with attached pairings grouped into one bordered
- * block anchored at the CHARACTER's position — the led unit moves up to its
- * leader, not the other way around.
+ * GW-app-style list sections: one header per role category with its points
+ * subtotal and a + that expands an add-picker in place — no scrolling to a
+ * single add box at the bottom, on any screen size.
+ */
+const SECTIONS: { key: string; label: string; roles: string[] }[] = [
+  { key: "characters", label: "Characters", roles: ["epic-hero", "character"] },
+  { key: "battleline", label: "Battleline", roles: ["battleline"] },
+  { key: "transports", label: "Dedicated Transports", roles: ["dedicated-transport"] },
+  { key: "fortifications", label: "Fortifications", roles: ["fortification"] },
+  { key: "allied", label: "Allied", roles: ["allied"] },
+  { key: "other", label: "Other Datasheets", roles: [] }, // catch-all
+];
+const KNOWN_ROLES = new Set(SECTIONS.flatMap((s) => s.roles));
+const sectionKeyOf = (role: string | null | undefined) =>
+  (role && SECTIONS.find((s) => s.roles.includes(role))?.key) ?? "other";
+
+/** Copies of each datasheet in the list, keyed by datasheet id. */
+function countsInList(roster: ListContent["roster"]): Map<string, number> {
+  const inList = new Map<string, number>();
+  for (const u of roster.units) {
+    if (u.ref.id) inList.set(u.ref.id, (inList.get(u.ref.id) ?? 0) + 1);
+  }
+  return inList;
+}
+
+// The conventional cap on copies of a datasheet (rule of three;
+// battleline/transports six, epic heroes one). Advisory only — the dataset
+// records no per-datasheet limit to check against.
+const capFor = (role: string | null | undefined) =>
+  role === "epic-hero" ? 1 : role === "battleline" || role === "dedicated-transport" ? 6 : 3;
+
+/** Inline add-picker for one section: filter box + that category's datasheets. */
+function AddSection({
+  data,
+  content,
+  apply,
+  section,
+}: {
+  data: Data40k;
+  content: ListContent;
+  apply: (next: ListContent) => void;
+  section: (typeof SECTIONS)[number];
+}) {
+  const [query, setQuery] = useState("");
+  const factionId = content.roster.faction_id;
+  if (!factionId) return null;
+  const q = query.trim().toLowerCase();
+  const inList = countsInList(content.roster);
+  const units = data.units
+    .byFaction(factionId)
+    .filter((u) =>
+      section.roles.length > 0
+        ? section.roles.includes(u.raw.role ?? "")
+        : !KNOWN_ROLES.has(u.raw.role ?? ""),
+    )
+    .filter(
+      (u) =>
+        !q ||
+        u.name.toLowerCase().includes(q) ||
+        (u.raw.keywords ?? []).some((k) => k.toLowerCase().includes(q)),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div className="rounded-md border border-edge bg-panel/50 p-2">
+      <FilterInput value={query} onChange={setQuery} placeholder="Filter datasheets…" />
+      <ul className="mt-2 max-h-72 divide-y divide-edge overflow-y-auto rounded-md border border-edge lg:max-h-96">
+        {units.map((u) => {
+          const taken = inList.get(u.id) ?? 0;
+          const cap = capFor(u.raw.role);
+          const full = taken >= cap;
+          return (
+            <li key={u.id}>
+              <button
+                type="button"
+                disabled={full}
+                className={`flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left ${
+                  full ? "opacity-40" : "hover:bg-panel active:bg-panel"
+                }`}
+                onClick={() => apply(addUnit(data, content, u.id))}
+              >
+                <span className="min-w-0 flex-1 truncate text-sm">{u.name}</span>
+                {taken > 0 && (
+                  <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-accent">
+                    {taken}/{cap}
+                  </span>
+                )}
+                <span className="shrink-0 text-xs text-ink-faint">
+                  {u.raw.points?.[0]
+                    ? `${u.raw.points[0].models}m · ${u.raw.points[0].cost} pts`
+                    : "? pts"}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+        {units.length === 0 && (
+          <li className="py-4 text-center text-xs text-ink-faint">No datasheets match.</li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * The army as GW-app-style role sections (Characters, Battleline, …), each
+ * with a points subtotal and a + that expands an add-picker in place.
+ * Attached pairings render as one bordered block — leaders ride with their
+ * unit, and the block lives in the LED UNIT's section (a Warboss leading
+ * Boyz shows under Battleline, like the official app).
  */
 function UnitGroups({
   data,
@@ -352,7 +380,9 @@ function UnitGroups({
   content: ListContent;
   apply: (next: ListContent) => void;
 }) {
+  const [addOpen, setAddOpen] = useState<string | null>(null);
   const roster = content.roster;
+  const factionId = roster.faction_id;
   const bodyguardOf = new Map<number, number>();
   const leadersOf = new Map<number, number[]>();
   for (const [l, b] of Object.entries(content.attachments)) {
@@ -364,48 +394,92 @@ function UnitGroups({
   }
   for (const leaders of leadersOf.values()) leaders.sort((a, b) => a - b);
 
-  // Characters first (like the glance view), attached pairs anchored at the
-  // character; stable within each rank so roster order still breaks ties.
-  const rankOf = (i: number) => {
-    const u = roster.units[i];
-    const role = u.ref.id
-      ? byId(data.units, u.ref.id, roster.faction_id)?.raw.role
+  const roleOf = (i: number) =>
+    roster.units[i].ref.id
+      ? byId(data.units, roster.units[i].ref.id, factionId)?.raw.role
       : undefined;
-    return role === "character" || role === "epic-hero" ? 0 : 1;
-  };
-  const displayOrder = roster.units
-    .map((_, i) => i)
-    .sort((a, b) => rankOf(a) - rankOf(b) || a - b);
+  const ptsOf = (i: number) =>
+    (roster.units[i].points ?? 0) + (roster.units[i].enhancement_points ?? 0);
 
-  return (
-    <ul className="space-y-2">
-      {displayOrder.map((i) => {
-        const u = roster.units[i];
-        const key = `${u.ref.id ?? u.ref.raw_name}-${i}`;
-        if (leadersOf.has(i)) return null; // moves up to its (first) leader's slot
-        const body = bodyguardOf.get(i);
-        if (body != null) {
-          const leaders = leadersOf.get(body)!;
-          if (leaders[0] !== i) return null; // co-leader, rendered with the first
-          return (
-            <li key={key} className="space-y-1 rounded-lg border border-accent/40 p-1">
-              <p className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
-                Attached unit
-              </p>
-              {leaders.map((li) => (
-                <UnitRow key={li} data={data} content={content} index={li} apply={apply} />
-              ))}
-              <UnitRow data={data} content={content} index={body} apply={apply} />
-            </li>
-          );
-        }
-        return (
-          <li key={key}>
+  // One entry per rendered block: a lone unit, or an attached pair anchored
+  // at the led unit. Entries bucket into the section of their anchor.
+  const entries: { key: string; section: string; points: number; node: React.ReactNode }[] = [];
+  roster.units.forEach((u, i) => {
+    const key = `${u.ref.id ?? u.ref.raw_name}-${i}`;
+    if (leadersOf.has(i)) {
+      const leaders = leadersOf.get(i)!;
+      entries.push({
+        key,
+        section: sectionKeyOf(roleOf(i)),
+        points: ptsOf(i) + leaders.reduce((s, li) => s + ptsOf(li), 0),
+        node: (
+          <li key={key} className="space-y-1 rounded-lg border border-accent/40 p-1">
+            <p className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
+              Attached unit
+            </p>
+            {leaders.map((li) => (
+              <UnitRow key={li} data={data} content={content} index={li} apply={apply} />
+            ))}
             <UnitRow data={data} content={content} index={i} apply={apply} />
           </li>
+        ),
+      });
+      return;
+    }
+    if (bodyguardOf.has(i)) return; // renders inside its unit's block
+    entries.push({
+      key,
+      section: sectionKeyOf(roleOf(i)),
+      points: ptsOf(i),
+      node: (
+        <li key={key}>
+          <UnitRow data={data} content={content} index={i} apply={apply} />
+        </li>
+      ),
+    });
+  });
+
+  // A section shows when it holds units or has datasheets to add.
+  const addable = new Set(
+    factionId ? data.units.byFaction(factionId).map((u) => sectionKeyOf(u.raw.role)) : [],
+  );
+
+  return (
+    <div className="space-y-3">
+      {SECTIONS.map((section) => {
+        const own = entries.filter((e) => e.section === section.key);
+        if (own.length === 0 && !addable.has(section.key)) return null;
+        const pts = own.reduce((s, e) => s + e.points, 0);
+        const open = addOpen === section.key;
+        return (
+          <div key={section.key} className="space-y-2">
+            <div className="flex min-h-9 items-center gap-2 rounded-md bg-panel px-3 py-1.5">
+              <h2 className="min-w-0 flex-1 truncate text-xs font-bold uppercase tracking-wide">
+                {section.label}
+              </h2>
+              <span className="shrink-0 text-xs tabular-nums text-ink-dim">{pts} pts</span>
+              {addable.has(section.key) && (
+                <button
+                  type="button"
+                  aria-label={`Add ${section.label}`}
+                  aria-expanded={open}
+                  onClick={() => setAddOpen(open ? null : section.key)}
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-base leading-none ${
+                    open
+                      ? "border-accent bg-accent/15 text-accent"
+                      : "border-edge text-ink-dim hover:text-ink"
+                  }`}
+                >
+                  {open ? "✕" : "+"}
+                </button>
+              )}
+            </div>
+            {open && <AddSection data={data} content={content} apply={apply} section={section} />}
+            {own.length > 0 && <ul className="space-y-2">{own.map((e) => e.node)}</ul>}
+          </div>
         );
       })}
-    </ul>
+    </div>
   );
 }
 

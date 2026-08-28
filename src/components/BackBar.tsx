@@ -2,8 +2,9 @@ import { Link, useLocation } from "react-router-dom";
 
 /**
  * Contextual back row for reference pages (detachment/datasheet rules).
- * Renders only when the navigation passed `state.back` — e.g. arriving from
- * the army view — so deep links and Explore browsing stay unchanged.
+ * Navigation state (`state.back` — e.g. arriving from the army view) names
+ * the exact origin; `fallback` is the page's natural parent, so deep links
+ * and Explore browsing still get a back button instead of nothing.
  *
  * Usage: <Link to="…" state={backState("/", list.name)}>
  */
@@ -11,9 +12,9 @@ export function backState(to: string, label: string) {
   return { back: { to, label } };
 }
 
-export default function BackBar() {
+export default function BackBar({ fallback }: { fallback?: { to: string; label: string } }) {
   const { state } = useLocation() as { state?: { back?: { to: string; label: string } } };
-  const back = state?.back;
+  const back = state?.back ?? fallback;
   if (!back) return null;
   return (
     <Link

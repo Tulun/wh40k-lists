@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import BackBar from "../components/BackBar";
 import UnitListPane from "../components/UnitListPane";
 import { useDataset } from "../hooks/useDataset";
 import { DISPOSITIONS } from "../lib/codex-model";
@@ -43,6 +44,7 @@ export default function FactionScreen() {
 
   return (
     <div className="space-y-3">
+      <BackBar fallback={{ to: "/explore", label: "All factions" }} />
       <div className="flex items-baseline gap-2">
         <h1 className="flex-1 text-lg font-bold">{faction.name}</h1>
         {codexBadge(doc, factionId) && (
