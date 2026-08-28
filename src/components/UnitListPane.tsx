@@ -70,13 +70,18 @@ export default function UnitListPane({
           <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
             {label}
           </div>
-          <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
+          <ul className="space-y-1.5">
             {group.map((u) => {
               const profile = u.raw.profiles[0];
               const fnp = fnpFromAbilityNames(u.abilities.map((a) => a.name));
               const selected = u.id === selectedId;
               return (
-                <li key={u.id}>
+                <li
+                  key={u.id}
+                  className={`overflow-hidden rounded-lg border ${
+                    selected ? "border-accent/60" : "border-edge"
+                  }`}
+                >
                   <Link
                     to={`/explore/${factionId}/${u.id}`}
                     ref={selected ? selectedRef : undefined}
@@ -85,7 +90,7 @@ export default function UnitListPane({
                     // name with the micro-stats beneath. Mobile keeps the
                     // single-line row.
                     className={`flex min-h-11 items-center gap-2 px-3 py-1.5 hover:bg-panel active:bg-panel lg:flex-wrap lg:gap-y-0.5 lg:py-2 ${
-                      selected ? "border-l-2 border-accent bg-panel pl-2.5" : ""
+                      selected ? "bg-panel" : ""
                     }`}
                   >
                     <span

@@ -105,7 +105,7 @@ export default function DatasheetScreen() {
       <KeywordChips coreTags={coreTags.map((a) => a.name)} keywords={raw.keywords ?? []} />
 
       {allWeapons.length > 0 && (
-        <details open className="rounded-md border border-edge">
+        <details open className="rounded-lg border border-edge">
           <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">
             Weapon options
           </summary>
@@ -116,7 +116,7 @@ export default function DatasheetScreen() {
       )}
 
       {textAbilities.length > 0 && (
-        <details open className="rounded-md border border-edge">
+        <details open className="rounded-lg border border-edge">
           <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">Abilities</summary>
           <div className="space-y-2 px-2 pb-2">
             {textAbilities.map((a) => (

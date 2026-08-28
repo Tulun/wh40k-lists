@@ -46,13 +46,17 @@ export default function StatLine({ profile, showName }: { profile: Profile; show
 
 /** Compact inline stats for glance rows: T4 · 3+/4++ · FNP 5+ · W12 · OC3 */
 export function MicroStats({ profile, fnp }: { profile: Profile; fnp?: string | null }) {
-  const save =
-    profile.invuln_sv != null
-      ? `${profile.Sv}+/${profile.invuln_sv}++`
-      : `${profile.Sv}+`;
+  // Save chain in the common shorthand: armour/invuln/FNP → "3+/4++/5+++".
+  const save = [
+    `${profile.Sv}+`,
+    profile.invuln_sv != null ? `${profile.invuln_sv}++` : null,
+    fnp ?? null,
+  ]
+    .filter(Boolean)
+    .join("/");
   return (
     <span className="whitespace-nowrap text-xs tabular-nums text-ink-dim">
-      T{profile.T} · {save} · {fnp ? `${fnp} · ` : ""}W{profile.W} · OC{profile.OC}
+      T{profile.T} · {save} · W{profile.W} · OC{profile.OC}
     </span>
   );
 }

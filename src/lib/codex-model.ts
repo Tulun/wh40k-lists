@@ -172,9 +172,25 @@ export interface EditableDetachment {
   dispositions: string[];
   ruleName: string;
   ruleText: string;
+  /**
+   * Datasheet names (or keywords) this detachment promotes to Battleline
+   * (Kult of Speed → Warbikers). Compiles into the canonical rule sentence
+   * the app parses, so display text and behaviour can't drift apart.
+   */
+  battlelineUnits?: string[];
   enhancements: EditableEnhancement[];
   stratagems: EditableStratagem[];
 }
+
+/**
+ * The canonical rule sentence for a detachment Battleline grant. The compiler
+ * emits it; `battlelineGrants` (list-edit) parses it back out of rule text.
+ * Share with `String.matchAll` only — it clones the regex, so the global flag
+ * is safe here.
+ */
+export const BATTLELINE_GRANT_RE = /friendly (.+?) units gain the battleline keyword/gi;
+export const battlelineGrantSentence = (name: string) =>
+  `Friendly ${name} units gain the Battleline keyword.`;
 
 export interface ReplaceFaction {
   mode: "replace";
@@ -358,6 +374,9 @@ export function seedDetachmentFromUpstream(
     dispositions: [...(detachment.force_dispositions ?? [])],
     ruleName: ruleName ?? "",
     ruleText: ruleText ?? "",
+    // Pre-fill from grants already written in the rule text, so an existing
+    // detachment's grants show (and survive) in the structured field.
+    battlelineUnits: [...(ruleText ?? "").matchAll(BATTLELINE_GRANT_RE)].map((m) => m[1].trim()),
     enhancements: enhancements.map(({ record, text }) => ({
       id: record.id,
       name: record.name,

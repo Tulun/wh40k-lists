@@ -231,6 +231,19 @@ describe("compileFaction", () => {
     const stratRule = compiled.abilities.find((a) => a.ability_id === "new-strat--rule");
     expect(stratRule?.leak_text).toBe("Stratagem prose.");
   });
+
+  it("compiles structured Battleline grants into the canonical rule sentence, without duplicating", () => {
+    const det = {
+      ...REPLACE_ORKS.detachments[0],
+      // One grant already written in the prose, one only structured.
+      ruleText: "Detachment rule prose.\nFriendly New Ladz units gain the Battleline keyword.",
+      battlelineUnits: ["New Ladz", "Stormboyz"],
+    };
+    const out = compileFaction("orks", { ...REPLACE_ORKS, detachments: [det] }, "Orks");
+    const text = out.abilities.find((a) => a.ability_id === "new-det--rule")?.leak_text ?? "";
+    expect(text).toContain("Friendly Stormboyz units gain the Battleline keyword.");
+    expect(text.match(/New Ladz units gain the Battleline/g)).toHaveLength(1);
+  });
 });
 
 describe("buildMergedRaw (replace mode)", () => {

@@ -14,7 +14,7 @@ import {
 import RefImagePanel from "../components/editor/RefImagePanel";
 import { useDataset } from "../hooks/useDataset";
 import type { EditableDetachment, EditableStratagem } from "../lib/codex-model";
-import { DISPOSITIONS, slugify, uniqueSlug } from "../lib/codex-model";
+import { BATTLELINE_GRANT_RE, DISPOSITIONS, slugify, uniqueSlug } from "../lib/codex-model";
 import { detachmentView } from "../lib/detachment-view";
 import { refImageKey } from "../lib/ref-images";
 import { useCodex } from "../store/codex";
@@ -50,9 +50,19 @@ export default function DetachmentEditScreen() {
 
   const entry = doc.factions[factionId];
   const existing = useMemo(() => {
-    if (!entry) return null;
-    if (entry.mode === "replace") return entry.detachments.find((d) => d.id === detId) ?? null;
-    return entry.detachments[detId] ?? null;
+    const found =
+      entry == null
+        ? null
+        : entry.mode === "replace"
+          ? (entry.detachments.find((d) => d.id === detId) ?? null)
+          : (entry.detachments[detId] ?? null);
+    if (!found || found.battlelineUnits) return found;
+    // Doc entries saved before the structured field existed: pre-fill it from
+    // grants already written in the rule text.
+    return {
+      ...found,
+      battlelineUnits: [...found.ruleText.matchAll(BATTLELINE_GRANT_RE)].map((m) => m[1].trim()),
+    };
   }, [entry, detId]);
 
   // Editing an untouched upstream detachment in patch mode seeds a copy —
@@ -166,6 +176,20 @@ export default function DetachmentEditScreen() {
             value={det.ruleText}
             placeholder="Paraphrased rule text — never verbatim from the book."
             onChange={(e) => patch({ ruleText: e.target.value })}
+          />
+        </Field>
+        <Field label="Grants Battleline to (comma-separated unit names)">
+          <TextInput
+            value={(det.battlelineUnits ?? []).join(", ")}
+            placeholder="e.g. Warbikers, Stormboyz"
+            onChange={(e) =>
+              patch({
+                battlelineUnits: e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              })
+            }
           />
         </Field>
       </SectionCard>

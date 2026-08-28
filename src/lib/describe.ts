@@ -89,11 +89,11 @@ export function abilityText(ability: { describe(): string; raw: unknown }): stri
   return typeof leak === "string" && leak.length > 0 ? leak : ability.describe();
 }
 
-/** "Feel No Pain 5+" among ability names → "FNP 5+" for micro-statlines. */
+/** "Feel No Pain 5+" among ability names → "5+++" (the x+++ convention). */
 export function fnpFromAbilityNames(names: readonly string[]): string | null {
   for (const name of names) {
-    const m = /^feel no pain (\d\+)/i.exec(name);
-    if (m) return `FNP ${m[1]}`;
+    const m = /^feel no pain (\d)\+/i.exec(name);
+    if (m) return `${m[1]}+++`;
   }
   return null;
 }

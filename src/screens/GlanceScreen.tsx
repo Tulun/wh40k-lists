@@ -10,6 +10,7 @@ import type { Data40k } from "../lib/data";
 import { dedupeRoster, unitKey, type DisplayEntry } from "../lib/dedupe";
 import { fnpFromAbilityNames } from "../lib/describe";
 import { byId } from "../lib/lookup";
+import { battlelineGrants } from "../lib/list-edit";
 import { shareText } from "../lib/share";
 import { armyStratagems, sortStratagems } from "../lib/stratagems";
 import { useActiveList, useLists } from "../store/lists";
@@ -76,6 +77,13 @@ export default function GlanceScreen() {
   }
   for (const leaders of leadersOf.values()) leaders.sort((a, b) => a - b);
 
+  // Detachment-granted Battleline (Kult of Speed's Warbikers…) sorts as such.
+  const granted = data ? battlelineGrants(data, roster) : new Set<string>();
+  const rankAt = (i: number) => {
+    const id = roster.units[i].ref.id;
+    if (id && granted.has(id)) return ROLE_ORDER.battleline;
+    return ROLE_ORDER[resolveAt(i)?.raw.role ?? ""] ?? 3;
+  };
   const anchors = roster.units
     .map((_, i) => i)
     .filter((i) => {
@@ -84,8 +92,8 @@ export default function GlanceScreen() {
       return b == null || leadersOf.get(b)![0] === i; // co-leaders ride with the first
     })
     .sort((a, b) => {
-      const ra = ROLE_ORDER[resolveAt(a)?.raw.role ?? ""] ?? 3;
-      const rb = ROLE_ORDER[resolveAt(b)?.raw.role ?? ""] ?? 3;
+      const ra = rankAt(a);
+      const rb = rankAt(b);
       if (ra !== rb) return ra - rb;
       return roster.units[a].ref.raw_name.localeCompare(roster.units[b].ref.raw_name);
     });
@@ -269,7 +277,7 @@ function ArmyHeader({
   const faction = data && roster.faction_id ? data.factions.getAny(roster.faction_id) : undefined;
 
   return (
-    <div className="rounded-md border border-edge bg-panel/50 px-3 py-2">
+    <div className="rounded-lg border border-edge bg-panel/50 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 flex-1 truncate text-sm font-bold">
           {faction?.name ?? roster.faction_id ?? "Unknown faction"}
@@ -355,7 +363,7 @@ function StratagemSection({
   const { detachment, core } = armyStratagems(data.stratagems.all, detachmentIds);
 
   return (
-    <details className="rounded-md border border-edge">
+    <details className="rounded-lg border border-edge">
       <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold">
         Stratagems{" "}
         <span className="text-xs font-normal text-ink-faint">

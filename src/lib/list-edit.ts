@@ -23,6 +23,8 @@ import type {
   WargearOption,
 } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "./data";
+import { BATTLELINE_GRANT_RE } from "./codex-model";
+import { abilityText } from "./describe";
 import type { RoleHints } from "./normalize";
 import { byId } from "./lookup";
 import type { SavedList } from "../store/schema";
@@ -659,6 +661,42 @@ export function legalityIssues(
     for (const v of ul.violations) issues.push(`${unitLabel(ul.unitIndex)}: ${v.message}`);
   }
   return issues;
+}
+
+/**
+ * Datasheet ids the roster's chosen detachments promote to Battleline —
+ * parsed from the detachment rule's "Friendly X units gain the Battleline
+ * keyword" sentence (Kult of Speed's Warbikers, Runt Swarm's Gretchin, …).
+ * X matches a datasheet name or a keyword its datasheet carries.
+ */
+export function battlelineGrants(data: Data40k, roster: Roster): Set<string> {
+  const ids = new Set<string>();
+  if (!roster.faction_id) return ids;
+  const pool = data.units.byFaction(roster.faction_id);
+  for (const d of roster.detachments) {
+    const det = d.ref.id ? byId(data.detachments, d.ref.id, roster.faction_id) : undefined;
+    const ruleIds = det?.detachment_rule_ids?.length
+      ? det.detachment_rule_ids
+      : det?.detachment_rule_id
+        ? [det.detachment_rule_id]
+        : [];
+    for (const rid of ruleIds) {
+      const ability = byId(data.abilities, rid, roster.faction_id);
+      const text = ability ? abilityText(ability) : "";
+      for (const m of text.matchAll(BATTLELINE_GRANT_RE)) {
+        const term = m[1].trim().toLowerCase();
+        for (const u of pool) {
+          if (
+            u.name.toLowerCase() === term ||
+            (u.raw.keywords ?? []).some((k) => k.toLowerCase() === term)
+          ) {
+            ids.add(u.id);
+          }
+        }
+      }
+    }
+  }
+  return ids;
 }
 
 /** Declare (or clear) which unit the character at `leaderIndex` is attached to. */

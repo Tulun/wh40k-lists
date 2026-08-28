@@ -32,7 +32,7 @@ import type {
   ReplaceFaction,
 } from "./codex-model";
 import type { RawData } from "@alpaca-software/40kdc-data";
-import { slugify } from "./codex-model";
+import { battlelineGrantSentence, slugify } from "./codex-model";
 
 export const CODEX_GAME_VERSION = { edition: "11th", dataslate: "leak-provisional" } as const;
 type GV = Unit["game_version"];
@@ -318,11 +318,23 @@ function compileDatasheet(factionId: string, sheet: EditableDatasheet, out: Comp
 }
 
 function compileDetachment(factionId: string, det: EditableDetachment, out: CompiledRecords): void {
+  // Structured Battleline grants compile into the canonical sentence (skipped
+  // when the author already wrote it), so the displayed rule text carries the
+  // grant and the app's parser finds it — one source of truth.
+  let ruleText = det.ruleText;
+  for (const raw of det.battlelineUnits ?? []) {
+    const name = raw.trim();
+    if (!name) continue;
+    const sentence = `friendly ${name.toLowerCase()} units gain the battleline keyword`;
+    if (!ruleText.toLowerCase().includes(sentence)) {
+      ruleText = `${ruleText.trimEnd()}\n${battlelineGrantSentence(name)}`.trim();
+    }
+  }
   const ruleIds: string[] = [];
-  if (det.ruleName.trim() || det.ruleText.trim()) {
+  if (det.ruleName.trim() || ruleText.trim()) {
     const ruleId = `${det.id}--rule`;
     out.abilities.push(
-      abilityRecord(ruleId, det.ruleName.trim() || det.name, det.ruleText, "detachment", {
+      abilityRecord(ruleId, det.ruleName.trim() || det.name, ruleText, "detachment", {
         detachment_id: det.id,
       }),
     );

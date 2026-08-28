@@ -103,7 +103,7 @@ export default function ListsScreen() {
           )}
           <ul className="grid gap-2 lg:grid-cols-2">
             {group.lists.map((list) => (
-          <li key={list.id} className="rounded-md border border-edge bg-panel/50 px-3 py-2">
+          <li key={list.id} className="rounded-lg border border-edge bg-panel/50 px-3 py-2">
             <div className="flex items-center gap-2">
               <button
                 type="button"

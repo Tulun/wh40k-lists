@@ -24,9 +24,9 @@ export default function ExploreScreen() {
         Datasheets for the armies in play, list or no list. Handy for checking what a unit does —
         and for spotting data gaps worth reporting upstream.
       </p>
-      <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
+      <ul className="space-y-2">
         {factions.map((f) => (
-          <li key={f.id}>
+          <li key={f.id} className="overflow-hidden rounded-lg border border-edge">
             <Link
               to={`/explore/${f.id}`}
               className="flex min-h-11 items-center px-3 py-2 text-sm font-medium hover:bg-panel active:bg-panel"

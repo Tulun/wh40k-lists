@@ -10,6 +10,7 @@ import {
   addDetachment,
   addUnit,
   applyWargearOption,
+  battlelineGrants,
   duplicateUnit,
   enhancementChoices,
   legalityIssues,
@@ -143,7 +144,7 @@ export default function ListEditScreen() {
         className="w-full rounded-md border border-edge bg-panel px-3 py-2 text-sm font-semibold"
       />
 
-      <div className="rounded-md border border-edge bg-panel/50 px-3 py-2">
+      <div className="rounded-lg border border-edge bg-panel/50 px-3 py-2">
         <div className="flex items-baseline justify-between gap-2">
           {factionId || roster.units.length > 0 ? (
             <span className="text-sm font-bold">
@@ -238,7 +239,7 @@ export default function ListEditScreen() {
       </div>
 
       {issues.length > 0 && (
-        <details className="rounded-md border border-opponent/40 bg-opponent/10">
+        <details className="rounded-lg border border-opponent/40 bg-opponent/10">
           <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-opponent">
             ⚠ {issues.length} legality issue{issues.length === 1 ? "" : "s"}
           </summary>
@@ -308,12 +309,16 @@ function AddSection({
   if (!factionId) return null;
   const q = query.trim().toLowerCase();
   const inList = countsInList(content.roster);
+  // Detachment-granted Battleline units list (and cap) as Battleline.
+  const granted = battlelineGrants(data, content.roster);
+  const roleFor = (u: { id: string; raw: { role?: string | null } }) =>
+    granted.has(u.id) ? "battleline" : u.raw.role;
   const units = data.units
     .byFaction(factionId)
     .filter((u) =>
       section.roles.length > 0
-        ? section.roles.includes(u.raw.role ?? "")
-        : !KNOWN_ROLES.has(u.raw.role ?? ""),
+        ? section.roles.includes(roleFor(u) ?? "")
+        : !KNOWN_ROLES.has(roleFor(u) ?? ""),
     )
     .filter(
       (u) =>
@@ -324,12 +329,12 @@ function AddSection({
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <div className="rounded-md border border-edge bg-panel/50 p-2">
+    <div className="rounded-lg border border-edge bg-panel/50 p-2">
       <FilterInput value={query} onChange={setQuery} placeholder="Filter datasheets…" />
       <ul className="mt-2 max-h-72 divide-y divide-edge overflow-y-auto rounded-md border border-edge lg:max-h-96">
         {units.map((u) => {
           const taken = inList.get(u.id) ?? 0;
-          const cap = capFor(u.raw.role);
+          const cap = capFor(roleFor(u));
           const full = taken >= cap;
           return (
             <li key={u.id}>
@@ -394,10 +399,16 @@ function UnitGroups({
   }
   for (const leaders of leadersOf.values()) leaders.sort((a, b) => a - b);
 
-  const roleOf = (i: number) =>
-    roster.units[i].ref.id
-      ? byId(data.units, roster.units[i].ref.id, factionId)?.raw.role
-      : undefined;
+  // Detachment rules can promote datasheets to Battleline (Kult of Speed's
+  // Warbikers, Runt Swarm's Gretchin) — those units section as Battleline.
+  const granted = battlelineGrants(data, roster);
+  const sectionAt = (i: number) => {
+    const id = roster.units[i].ref.id;
+    if (id && granted.has(id)) return "battleline";
+    return sectionKeyOf(
+      id ? byId(data.units, id, factionId)?.raw.role : undefined,
+    );
+  };
   const ptsOf = (i: number) =>
     (roster.units[i].points ?? 0) + (roster.units[i].enhancement_points ?? 0);
 
@@ -410,7 +421,7 @@ function UnitGroups({
       const leaders = leadersOf.get(i)!;
       entries.push({
         key,
-        section: sectionKeyOf(roleOf(i)),
+        section: sectionAt(i),
         points: ptsOf(i) + leaders.reduce((s, li) => s + ptsOf(li), 0),
         node: (
           <li key={key} className="space-y-1 rounded-lg border border-accent/40 p-1">
@@ -429,7 +440,7 @@ function UnitGroups({
     if (bodyguardOf.has(i)) return; // renders inside its unit's block
     entries.push({
       key,
-      section: sectionKeyOf(roleOf(i)),
+      section: sectionAt(i),
       points: ptsOf(i),
       node: (
         <li key={key}>
@@ -441,7 +452,11 @@ function UnitGroups({
 
   // A section shows when it holds units or has datasheets to add.
   const addable = new Set(
-    factionId ? data.units.byFaction(factionId).map((u) => sectionKeyOf(u.raw.role)) : [],
+    factionId
+      ? data.units
+          .byFaction(factionId)
+          .map((u) => (granted.has(u.id) ? "battleline" : sectionKeyOf(u.raw.role)))
+      : [],
   );
 
   return (
@@ -504,7 +519,7 @@ function UnitRow({
   const editBack = useEditBackState();
 
   return (
-    <div className="rounded-md border border-edge bg-panel/50 px-3 py-2">
+    <div className="rounded-lg border border-edge bg-panel/50 px-3 py-2">
       <div className="flex items-baseline gap-2">
         {unit && roster.faction_id ? (
           <Link
@@ -909,7 +924,7 @@ function WargearEditor({
   if (rows.length === 0 && unresolvedGear.length === 0 && optionStates.length === 0) return null;
 
   return (
-    <details className="mt-2 rounded-md border border-edge">
+    <details className="mt-2 rounded-lg border border-edge">
       <summary className="cursor-pointer px-2 py-1.5 text-xs text-ink-dim">
         Wargear{" "}
         <span className="text-ink-faint">

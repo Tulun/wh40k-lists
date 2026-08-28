@@ -126,7 +126,7 @@ export default function UnitDetailScreen() {
       {entry.count > 1 && (
         <div className="flex flex-wrap gap-1.5">
           {entry.instances.map((inst, i) => (
-            <span key={i} className="rounded-md border border-edge bg-panel/50 px-2 py-1 text-xs text-ink-dim">
+            <span key={i} className="rounded-lg border border-edge bg-panel/50 px-2 py-1 text-xs text-ink-dim">
               #{i + 1}: {inst.modelCount} models
               {inst.points != null && ` · ${inst.points} pts`}
               {inst.isWarlord && " · ⭐"}
@@ -239,7 +239,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <details open={open} className="rounded-md border border-edge">
+    <details open={open} className="rounded-lg border border-edge">
       <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">{title}</summary>
       <div className="px-2 pb-2">{children}</div>
     </details>

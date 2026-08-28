@@ -119,7 +119,7 @@ export default function ImportScreen() {
     return (
       <div className="space-y-3">
         <h1 className="text-lg font-bold">{editing ? "Review changes" : "Review import"}</h1>
-        <div className="rounded-md border border-edge bg-panel/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-edge bg-panel/50 px-3 py-2 text-sm">
           <span className="font-medium">
             {(patched.faction_id && review.data.factions.getAny(patched.faction_id)?.name) ??
               patched.faction_id ??
@@ -168,7 +168,7 @@ export default function ImportScreen() {
         )}
 
         {gearRows.length > 0 && (
-          <details className="rounded-md border border-edge">
+          <details className="rounded-lg border border-edge">
             <summary className="cursor-pointer px-3 py-2 text-sm text-ink-dim">
               Unmatched wargear ({gearRows.length}) — kept as text
             </summary>

@@ -177,13 +177,13 @@ export default function EditorHomeScreen() {
         )}
       </SectionCard>
 
-      <ul className="divide-y divide-edge overflow-hidden rounded-md border border-edge">
+      <ul className="space-y-2">
         {(EXPLORE_FACTION_IDS ?? []).map((id) => {
           const name = data?.factions.getAny(id)?.name ?? id;
           const badge = codexBadge(doc, id);
           const mode = factionMode(id);
           return (
-            <li key={id}>
+            <li key={id} className="overflow-hidden rounded-lg border border-edge">
               <Link to={`/editor/${id}`} className="flex min-h-11 items-center gap-2 px-3 py-2 hover:bg-panel active:bg-panel">
                 <span className="flex-1 text-sm font-medium">{name}</span>
                 {badge && (
