@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { backState } from "../components/BackBar";
+import CardColumns from "../components/CardColumns";
 import StratagemCard from "../components/StratagemCard";
 import { MicroStats } from "../components/StatLine";
 import { useDataset } from "../hooks/useDataset";
@@ -315,19 +316,19 @@ function StratagemSection({
         </span>
       </summary>
       <div className="px-2 pb-2">
-        <div className="grid gap-2 lg:grid-cols-2">
+        <CardColumns>
           {sortStratagems(detachment).map((s) => (
             <StratagemCard key={s.id} data={data} stratagem={s} factionId={roster.faction_id} listId={listId} />
           ))}
-        </div>
+        </CardColumns>
         <div className="pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
           Core
         </div>
-        <div className="grid gap-2 lg:grid-cols-2">
+        <CardColumns>
           {sortStratagems(core).map((s) => (
             <StratagemCard key={s.id} data={data} stratagem={s} factionId={roster.faction_id} listId={listId} />
           ))}
-        </div>
+        </CardColumns>
       </div>
     </details>
   );

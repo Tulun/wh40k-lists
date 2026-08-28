@@ -4,6 +4,7 @@ import type { Enhancement } from "@alpaca-software/40kdc-data";
 import AbilityBlock from "../components/AbilityBlock";
 import KeywordChips from "../components/KeywordChips";
 import StatLine from "../components/StatLine";
+import CardColumns from "../components/CardColumns";
 import StratagemCard from "../components/StratagemCard";
 import WeaponTable from "../components/WeaponTable";
 import { useDataset } from "../hooks/useDataset";
@@ -175,7 +176,7 @@ export default function UnitDetailScreen() {
 
       {linkedStratagems.length > 0 && (
         <Section title={`Stratagems targeting this unit (${linkedStratagems.length})`}>
-          <div className="grid gap-2 lg:grid-cols-2">
+          <CardColumns>
             {linkedStratagems.map((s) => (
               <StratagemCard
                 key={s.id}
@@ -185,13 +186,13 @@ export default function UnitDetailScreen() {
                 listId={list.id}
               />
             ))}
-          </div>
+          </CardColumns>
         </Section>
       )}
 
       {otherDetachmentStratagems.length > 0 && (
         <Section title={`Detachment stratagems (${otherDetachmentStratagems.length})`}>
-          <div className="grid gap-2 lg:grid-cols-2">
+          <CardColumns>
             {otherDetachmentStratagems.map((s) => (
               <StratagemCard
                 key={s.id}
@@ -201,13 +202,13 @@ export default function UnitDetailScreen() {
                 listId={list.id}
               />
             ))}
-          </div>
+          </CardColumns>
         </Section>
       )}
 
       {coreStratagems.length > 0 && (
         <Section title={`Core stratagems for this unit (${coreStratagems.length})`}>
-          <div className="grid gap-2 lg:grid-cols-2">
+          <CardColumns>
             {coreStratagems.map((s) => (
               <StratagemCard
                 key={s.id}
@@ -217,7 +218,7 @@ export default function UnitDetailScreen() {
                 listId={list.id}
               />
             ))}
-          </div>
+          </CardColumns>
         </Section>
       )}
 
