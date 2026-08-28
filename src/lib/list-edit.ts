@@ -603,6 +603,8 @@ export function legalityIssues(
               ? {
                   bodyguard_ref: structuredClone(bodyRef),
                   role: u.leader_attachment?.role ?? ("leader" as const),
+                  // The user picked it in the editor — not an import inference.
+                  provisional: false,
                 }
               : null,
           };
@@ -629,6 +631,17 @@ export function legalityIssues(
     );
   };
 
+  // Duplicate datasheets get the same #N ordinal the editor's dropdowns use —
+  // "Mek: must attach" with two Meks reads as one stale error, not the other Mek.
+  const unitLabel = (idx: number): string | null => {
+    const ru = roster.units[idx];
+    if (!ru) return null;
+    const id = ru.ref.id;
+    if (!id || roster.units.filter((u) => u.ref.id === id).length < 2) return ru.ref.raw_name;
+    const ordinal = roster.units.slice(0, idx + 1).filter((u) => u.ref.id === id).length;
+    return `${ru.ref.raw_name} #${ordinal}`;
+  };
+
   for (const v of legality.army) {
     if (
       v.code === "enhancement-keyword-mismatch" &&
@@ -636,14 +649,14 @@ export function legalityIssues(
       nameSatisfiesRestriction(v.unitIndex)
     )
       continue;
-    const unitName = v.unitIndex != null ? roster.units[v.unitIndex]?.ref.raw_name : null;
+    const unitName = v.unitIndex != null ? unitLabel(v.unitIndex) : null;
     issues.push(unitName ? `${unitName}: ${v.message}` : v.message);
   }
   for (const ul of legality.units) {
     const ru = roster.units[ul.unitIndex];
     const unit = ru ? unitEntity(data, ru.ref, factionId) : undefined;
     if (unit && loadoutDataMissing(data, unit)) continue;
-    for (const v of ul.violations) issues.push(`${ru?.ref.raw_name}: ${v.message}`);
+    for (const v of ul.violations) issues.push(`${unitLabel(ul.unitIndex)}: ${v.message}`);
   }
   return issues;
 }

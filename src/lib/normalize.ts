@@ -287,6 +287,29 @@ export function normalizeImportedRoster(
       wargear.push(item);
     }
 
+    // A datasheet can carry two weapon records with the same display name (a
+    // ranged and a melee profile printed as separate lines — Nazdreg's Kustom
+    // Blasta X). The importer resolves every such line to the same record and
+    // double-counts it; spill the excess into the unclaimed same-name siblings.
+    for (const item of [...wargear]) {
+      if (!item.ref.id || item.count < 2) continue;
+      const name = nn(item.ref.raw_name);
+      const siblings = unitWeapons.filter(
+        (w) =>
+          w.id !== item.ref.id &&
+          nn(w.name) === name &&
+          !wargear.some((o) => o.ref.id === w.id),
+      );
+      for (const sib of siblings) {
+        if (item.count < 2) break;
+        item.count -= 1;
+        wargear.push({
+          ref: { id: sib.id, raw_name: sib.name, resolved: true, candidates: [] },
+          count: 1,
+        });
+      }
+    }
+
     // Rebuild per-model loadout groups from the raw text's ◦ nesting when the
     // parser didn't provide them (keeps "carried by the Nob" tags working).
     const occurrence = occurrenceByName.get(unit.ref.raw_name) ?? 0;

@@ -20,7 +20,12 @@ export function shareText(data: Data40k, list: SavedList): string {
   roster.units.forEach((u, i) => {
     const body = roster.units[attachments[String(i)]];
     u.leader_attachment = body
-      ? { bodyguard_ref: structuredClone(body.ref), role: u.leader_attachment?.role ?? "leader" }
+      ? {
+          bodyguard_ref: structuredClone(body.ref),
+          role: u.leader_attachment?.role ?? "leader",
+          // Deliberate editor state, not an import inference.
+          provisional: false,
+        }
       : null;
   });
   // Characters first (stable within each group) — the WTC convention, and how

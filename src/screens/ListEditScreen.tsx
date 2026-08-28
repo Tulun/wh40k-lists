@@ -34,6 +34,7 @@ import {
   type ListContent,
 } from "../lib/list-edit";
 import { DISPOSITIONS } from "../lib/codex-model";
+import { abilityText } from "../lib/describe";
 import { EXPLORE_FACTION_IDS } from "../lib/flags";
 import { byId } from "../lib/lookup";
 import { useLists } from "../store/lists";
@@ -507,9 +508,12 @@ function UnitRow({
         )}
         <button
           type="button"
-          title="Duplicate unit"
+          title={unit?.role === "epic-hero" ? "Epic heroes are unique" : "Duplicate unit"}
+          disabled={unit?.role === "epic-hero"}
           onClick={() => apply(duplicateUnit(data, content, index))}
-          className="rounded-md bg-panel px-3 py-1.5 text-xs text-ink-dim"
+          className={`rounded-md bg-panel px-3 py-1.5 text-xs text-ink-dim ${
+            unit?.role === "epic-hero" ? "opacity-40" : ""
+          }`}
         >
           Copy
         </button>
@@ -693,6 +697,14 @@ function EnhancementPicker({
   const u = content.roster.units[index];
   const choices = enhancementChoices(data, content.roster, index);
   if (choices.length === 0 && !u.enhancement) return null;
+  /** The enhancement's rules text, resolved through its linked ability. */
+  const enhText = (id: string | null | undefined): string | null => {
+    const enh = id ? byId(data.enhancements, id, content.roster.faction_id) : undefined;
+    const ability = enh?.ability_id
+      ? byId(data.abilities, enh.ability_id, content.roster.faction_id)
+      : undefined;
+    return ability ? abilityText(ability) : null;
+  };
   // An unmatched enhancement (text-only import) isn't in the choice list; show
   // it as its own row so the trigger names it and picking anything replaces it.
   const unmatched = u.enhancement && !u.enhancement.id ? u.enhancement.raw_name : null;
@@ -712,31 +724,40 @@ function EnhancementPicker({
           },
         ]
       : [];
+  const currentText = unmatched ? null : enhText(currentId);
   return (
-    <div className="mt-2 flex items-center gap-2">
-      <span className="text-xs text-accent">✦</span>
-      <div className="min-w-0 flex-1">
-        <Dropdown
-          value={unmatched ? "unmatched" : currentId}
-          placeholder="No enhancement"
-          clearable
-          options={[
-            ...(unmatched
-              ? [{ value: "unmatched", label: `${unmatched} (unmatched)`, disabled: true }]
-              : []),
-            ...currentRow,
-            ...choices.map((c) => ({
-              value: c.id,
-              label: c.name,
-              detail: c.takenBy != null ? `${c.cost} pts · taken` : `${c.cost} pts`,
-              disabled: c.takenBy != null,
-            })),
-          ]}
-          onChange={(id) =>
-            apply(setEnhancement(data, content, index, id === "unmatched" ? null : id))
-          }
-        />
+    <div className="mt-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-accent">✦</span>
+        <div className="min-w-0 flex-1">
+          <Dropdown
+            value={unmatched ? "unmatched" : currentId}
+            placeholder="No enhancement"
+            clearable
+            options={[
+              ...(unmatched
+                ? [{ value: "unmatched", label: `${unmatched} (unmatched)`, disabled: true }]
+                : []),
+              ...currentRow.map((r) => ({ ...r, sub: enhText(r.value) ?? undefined })),
+              ...choices.map((c) => ({
+                value: c.id,
+                label: c.name,
+                detail: c.takenBy != null ? `${c.cost} pts · taken` : `${c.cost} pts`,
+                disabled: c.takenBy != null,
+                sub: enhText(c.id) ?? undefined,
+              })),
+            ]}
+            onChange={(id) =>
+              apply(setEnhancement(data, content, index, id === "unmatched" ? null : id))
+            }
+          />
+        </div>
       </div>
+      {currentText && (
+        <p className="mt-1 whitespace-pre-wrap pl-6 text-xs leading-snug text-ink-dim">
+          {currentText}
+        </p>
+      )}
     </div>
   );
 }
@@ -846,25 +867,52 @@ function WargearEditor({
                 ))}
               </div>
             ))
-          : rows.map((r) => (
-              <div key={r.id} className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-xs">
-                  {r.name}
-                  {r.cost > 0 && <span className="text-ink-faint"> +{r.cost} pts ea</span>}
-                </span>
-                {freeform ? (
-                  <Stepper
-                    label={r.name}
-                    count={r.count}
-                    canDown={r.count > 0}
-                    canUp={r.count < u.model_count}
-                    onStep={(d) => apply(setWeaponCount(data, content, index, r.id, r.count + d))}
-                  />
-                ) : (
-                  <span className="text-xs text-ink-faint">×{r.count}</span>
-                )}
-              </div>
-            ))}
+          : (() => {
+              // Ranged / Melee / other-gear subheaders — same-name profiles
+              // (Nazdreg's ranged and melee Kustom Blasta X) are otherwise
+              // indistinguishable rows. Headers only show when they separate
+              // anything.
+              const typeOf = (id: string) =>
+                byId(data.weapons, id, factionId)?.raw.type ?? null;
+              const buckets: ["ranged" | "melee" | null, string][] = [
+                ["ranged", "Ranged"],
+                ["melee", "Melee"],
+                [null, "Gear"],
+              ];
+              const grouped = buckets
+                .map(([t, label]) => ({ label, rows: rows.filter((r) => typeOf(r.id) === t) }))
+                .filter((g) => g.rows.length > 0);
+              return grouped.map((g) => (
+                <div key={g.label}>
+                  {grouped.length > 1 && (
+                    <p className="pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                      {g.label}
+                    </p>
+                  )}
+                  {g.rows.map((r) => (
+                    <div key={r.id} className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-xs">
+                        {r.name}
+                        {r.cost > 0 && <span className="text-ink-faint"> +{r.cost} pts ea</span>}
+                      </span>
+                      {freeform ? (
+                        <Stepper
+                          label={r.name}
+                          count={r.count}
+                          canDown={r.count > 0}
+                          canUp={r.count < u.model_count}
+                          onStep={(d) =>
+                            apply(setWeaponCount(data, content, index, r.id, r.count + d))
+                          }
+                        />
+                      ) : (
+                        <span className="text-xs text-ink-faint">×{r.count}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ));
+            })()}
         {unresolvedGear.map((w, i) => (
           <div key={`raw-${i}`} className="flex items-center gap-2">
             <span className="min-w-0 flex-1 truncate text-xs text-ink-dim">
