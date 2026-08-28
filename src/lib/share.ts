@@ -28,15 +28,18 @@ export function shareText(data: Data40k, list: SavedList): string {
         }
       : null;
   });
-  // Characters first (stable within each group) — the WTC convention, and how
-  // every other view in the app orders the army — with each led unit hoisted
-  // up to ride directly behind its leader(s), like the glance and edit views.
+  // Attached characters first (each with its led unit riding directly behind),
+  // then loose characters, then the rest — and since CharN slots are assigned
+  // in output order, the numbering follows this layout too.
   roster.units = attachedOrder(data, roster, attachments).map((i) => roster.units[i]);
   const out = data.exportRoster(roster, "newrecruit-wtc-compact");
   return spaceUnitBlocks(remarkCharacters(out, data, roster));
 }
 
-/** Unit indices: characters first, bodyguards pulled up behind their leaders. */
+/**
+ * Unit indices: attached characters first (bodyguards pulled up behind their
+ * leaders), then loose characters, then everything else.
+ */
 function attachedOrder(
   data: Data40k,
   roster: Roster,
@@ -52,9 +55,13 @@ function attachedOrder(
   }
   for (const leaders of leadersOf.values()) leaders.sort((a, b) => a - b);
 
+  const rank = (i: number) => {
+    if (charRank(data, roster, roster.units[i]) !== 0) return 2;
+    return bodyguardOf.has(i) ? 0 : 1;
+  };
   const sorted = roster.units
     .map((_, i) => i)
-    .sort((a, b) => charRank(data, roster, roster.units[a]) - charRank(data, roster, roster.units[b]) || a - b);
+    .sort((a, b) => rank(a) - rank(b) || a - b);
   const out: number[] = [];
   const emitted = new Set<number>();
   const emit = (i: number) => {

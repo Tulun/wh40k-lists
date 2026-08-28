@@ -64,6 +64,23 @@ describe("shareText", () => {
     expect(units[leader + 1]).toContain("Squighog Boyz");
   });
 
+  it("filters attached characters to the top and renumbers CharN to match", () => {
+    // Attach ONLY the third pair (Bigboss → Breaka Boyz, indices 4→5): the
+    // pair must jump ahead of the earlier, now-loose characters, and Char1
+    // must be the attached leader, not the roster's first character.
+    const withAtt = shareText(data40k as never, { ...list, attachments: { "4": 5 } });
+    const units = withAtt
+      .slice(withAtt.lastIndexOf("+++"))
+      .split("\n")
+      .filter((l) => /^\S.*\(\d+ pts\)/.test(l));
+    expect(units[0]).toMatch(/^Char1: 1x Bigboss/);
+    expect(units[1]).toContain("Breaka Boyz");
+    // Loose characters follow the attached pair, numbered after it.
+    const squig = units.findIndex((l) => l.includes("Beastboss on Squigosaur"));
+    expect(squig).toBeGreaterThan(1);
+    expect(units[squig]).toMatch(/^Char[2-9]/);
+  });
+
   it("puts a blank line between unit blocks, keeping Enhancement lines attached", () => {
     const body = out.slice(out.lastIndexOf("+++"));
     // Units are separated by exactly one blank line…
