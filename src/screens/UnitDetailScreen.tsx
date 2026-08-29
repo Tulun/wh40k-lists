@@ -5,6 +5,7 @@ import AbilityBlock from "../components/AbilityBlock";
 import KeywordChips from "../components/KeywordChips";
 import StatLine from "../components/StatLine";
 import CardColumns from "../components/CardColumns";
+import CrunchPanel from "../components/CrunchPanel";
 import StratagemCard from "../components/StratagemCard";
 import WeaponTable from "../components/WeaponTable";
 import { useDataset } from "../hooks/useDataset";
@@ -183,6 +184,12 @@ export default function UnitDetailScreen() {
           showInstances={entry.count > 1}
         />
       </Section>
+
+      {unit && (
+        <Section title="Damage output">
+          <CrunchPanel data={data} list={list} entry={entry} />
+        </Section>
+      )}
 
       {textAbilities.length > 0 && (
         <Section title="Abilities" open>
