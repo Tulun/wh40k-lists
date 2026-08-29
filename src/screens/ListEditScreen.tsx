@@ -36,6 +36,7 @@ import { DISPOSITIONS } from "../lib/codex-model";
 import { abilityText } from "../lib/describe";
 import { EXPLORE_FACTION_IDS } from "../lib/flags";
 import { byId } from "../lib/lookup";
+import { groupLoadoutSpread } from "../lib/group-loadout";
 import { useLists } from "../store/lists";
 import { backState } from "../components/BackBar";
 
@@ -980,7 +981,7 @@ function WargearEditor({
   const gearGroups =
     locked || freeform
       ? null
-      : data.groupLoadout(
+      : groupLoadoutSpread(
           unit,
           u.model_count,
           optionStates.map((s) => s.option),
@@ -1013,7 +1014,10 @@ function WargearEditor({
               <div key={`grp-${gi}`} className={gi > 0 ? "border-t border-edge/40 pt-1" : ""}>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
                   {g.model_name ?? "Model"} wargear
-                  {g.count > 1 && <span className="normal-case"> · {g.count} models</span>}
+                  <span className="normal-case">
+                    {" "}
+                    · {g.count} {g.count === 1 ? "model" : "models"}
+                  </span>
                 </p>
                 {g.weapons.map((w) => (
                   <div key={`${gi}-${w.id}`} className="flex items-center gap-2">

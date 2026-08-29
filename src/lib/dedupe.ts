@@ -181,3 +181,60 @@ export function instanceTag(weapon: MergedWeapon): string | null {
   if (carriers.length === weapon.perInstance.length) return "all, varies";
   return carriers.map((i) => `#${i}`).join(", ");
 }
+
+/** One distinct loadout across an entry's instances: N models each carrying this gear. */
+export interface MergedLoadoutGroup {
+  modelName: string | null;
+  /** Total models with this exact loadout, across instances. */
+  count: number;
+  /** Models per instance, aligned with DisplayEntry.instances. */
+  perInstance: number[];
+  /** Per-model gear (count is per model, matching RosterLoadoutGroup). */
+  wargear: { ref: ResolvedRef; count: number }[];
+}
+
+/**
+ * Merge each instance's `loadout_groups` into one deduplicated list keyed by
+ * model name + exact gear multiset — the "4× klaw, 1× killsaws" breakdown the
+ * flat weapon table can't express. Returns null unless every instance has a
+ * decomposition, so a partial picture is never presented as the whole unit.
+ * First-seen order is kept, which preserves composition order (leader first).
+ */
+export function mergeLoadoutGroups(
+  perInstanceGroups: readonly (readonly RosterLoadoutGroup[] | undefined)[],
+): MergedLoadoutGroup[] | null {
+  if (perInstanceGroups.length === 0 || perInstanceGroups.some((g) => !g || g.length === 0)) {
+    return null;
+  }
+  const merged = new Map<string, MergedLoadoutGroup>();
+  perInstanceGroups.forEach((groups, instanceIndex) => {
+    for (const group of groups!) {
+      const gearKey = group.wargear
+        .map((w) => `${w.count}:${wargearKey(w.ref)}`)
+        .sort()
+        .join("|");
+      const key = `${group.model_name ?? ""}##${gearKey}`;
+      let m = merged.get(key);
+      if (!m) {
+        m = {
+          modelName: group.model_name,
+          count: 0,
+          perInstance: Array(perInstanceGroups.length).fill(0),
+          wargear: group.wargear.map((w) => ({ ref: w.ref, count: w.count })),
+        };
+        merged.set(key, m);
+      }
+      m.count += group.count;
+      m.perInstance[instanceIndex] += group.count;
+    }
+  });
+  return [...merged.values()];
+}
+
+/** Instance tag for a merged loadout group ("#2" when only squad 2 runs it). */
+export function loadoutInstanceTag(group: MergedLoadoutGroup): string | null {
+  if (group.perInstance.length <= 1) return null;
+  const carriers = group.perInstance.map((n, i) => (n > 0 ? i + 1 : 0)).filter(Boolean);
+  if (carriers.length === group.perInstance.length) return null;
+  return carriers.map((i) => `#${i}`).join(", ");
+}

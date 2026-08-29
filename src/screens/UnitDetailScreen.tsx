@@ -11,7 +11,14 @@ import { useDataset } from "../hooks/useDataset";
 import { effectiveAttachments, leadersAttachedTo } from "../lib/attachments";
 import type { Data40k } from "../lib/data";
 import { abilityText } from "../lib/describe";
-import { dedupeRoster, type DisplayEntry } from "../lib/dedupe";
+import {
+  dedupeRoster,
+  loadoutInstanceTag,
+  mergeLoadoutGroups,
+  type DisplayEntry,
+  type MergedLoadoutGroup,
+} from "../lib/dedupe";
+import { displayLoadoutGroups } from "../lib/list-edit";
 import { byId } from "../lib/lookup";
 import { armyStratagems, sortStratagems, stratagemsForUnit } from "../lib/stratagems";
 import { useActiveList, useLists } from "../store/lists";
@@ -81,6 +88,15 @@ export default function UnitDetailScreen() {
 
   const enhancement = byId(data.enhancements, entry.enhancement?.id, roster.faction_id);
 
+  // "4× klaw, 1× killsaws" breakdown — only when models genuinely differ,
+  // since the flat table's unit-wide totals can't show who carries what.
+  const loadoutGroups = mergeLoadoutGroups(
+    entry.instances.map((inst) =>
+      displayLoadoutGroups(data, roster.units[inst.rosterIndex], roster.faction_id),
+    ),
+  );
+  const splitLoadouts = loadoutGroups && loadoutGroups.length > 1 ? loadoutGroups : null;
+
   // Core abilities (Leader, Feel No Pain 5+, Deep Strike…) read fine as bare
   // tags — only datasheet-specific abilities get their full text below.
   const coreTags = unit ? unit.abilities.filter((a) => a.raw.ability_type === "core") : [];
@@ -136,6 +152,14 @@ export default function UnitDetailScreen() {
       )}
 
       <Section title="Weapons" open>
+        {splitLoadouts && (
+          <LoadoutBreakdown
+            data={data}
+            groups={splitLoadouts}
+            factionId={roster.faction_id}
+            showInstances={entry.count > 1}
+          />
+        )}
         <WeaponTable
           data={data}
           weapons={entry.mergedWargear}
@@ -243,6 +267,58 @@ function Section({
       <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">{title}</summary>
       <div className="px-2 pb-2">{children}</div>
     </details>
+  );
+}
+
+/**
+ * Who carries what: one line per distinct loadout ("4× Kombi-weapon, Power
+ * Klaw" / "1× Kombi-weapon, Twin Killsaws"). Model names only appear when the
+ * unit mixes model types; instance tags only when squads differ.
+ */
+function LoadoutBreakdown({
+  data,
+  groups,
+  factionId,
+  showInstances,
+}: {
+  data: Data40k;
+  groups: MergedLoadoutGroup[];
+  factionId: string | null;
+  showInstances: boolean;
+}) {
+  const nameOf = (ref: MergedLoadoutGroup["wargear"][number]["ref"]) =>
+    byId(data.weapons, ref.id, factionId)?.name ??
+    byId(data.wargear, ref.id, factionId)?.name ??
+    ref.raw_name;
+  const showModelNames = new Set(groups.map((g) => g.modelName)).size > 1;
+  return (
+    <div className="mb-2 space-y-1 rounded-md border border-edge bg-panel/40 px-2.5 py-2">
+      {groups.map((g, i) => {
+        const tag = showInstances ? loadoutInstanceTag(g) : null;
+        return (
+          <div key={i} className="flex items-baseline gap-2 text-sm">
+            <span className="shrink-0 font-semibold tabular-nums text-accent">
+              {g.count}×
+            </span>
+            <span className="min-w-0 flex-1 leading-snug">
+              {showModelNames && g.modelName && (
+                <span className="font-medium">{g.modelName}: </span>
+              )}
+              <span className="text-ink-dim">
+                {g.wargear
+                  .map((w) => (w.count > 1 ? `${w.count}× ${nameOf(w.ref)}` : nameOf(w.ref)))
+                  .join(", ")}
+              </span>
+              {tag && (
+                <span className="ml-1.5 rounded bg-accent/15 px-1 py-px text-[10px] text-accent">
+                  {tag}
+                </span>
+              )}
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

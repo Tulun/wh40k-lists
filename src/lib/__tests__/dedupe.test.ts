@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ResolvedRef, Roster, RosterUnit } from "@alpaca-software/40kdc-data";
-import { dedupeRoster, instanceTag } from "../dedupe";
+import { dedupeRoster, instanceTag, loadoutInstanceTag, mergeLoadoutGroups } from "../dedupe";
 
 const ref = (id: string | null, raw?: string): ResolvedRef => ({
   id,
@@ -168,5 +168,49 @@ describe("dedupeRoster", () => {
     expect(entry.isWarlord).toBe(true);
     expect(entry.instances[1].leaderAttachment?.role).toBe("leader");
     expect(entry.instances[0].leaderAttachment).toBeNull();
+  });
+});
+
+describe("mergeLoadoutGroups", () => {
+  const gear = (id: string, count: number) => ({ ref: ref(id), count });
+
+  it("merges identical loadouts across instances and keeps distinct ones apart", () => {
+    // Two Meganobz squads: klaw models in both, killsaw models only in #1.
+    const merged = mergeLoadoutGroups([
+      [
+        { model_name: "Meganob", count: 3, wargear: [gear("kombi", 1), gear("klaw", 1)] },
+        { model_name: "Meganob", count: 2, wargear: [gear("kombi", 1), gear("killsaws", 1)] },
+      ],
+      [{ model_name: "Meganob", count: 3, wargear: [gear("klaw", 1), gear("kombi", 1)] }],
+    ]);
+    expect(merged).not.toBeNull();
+    expect(merged!).toHaveLength(2);
+    const [klaws, saws] = merged!;
+    expect(klaws.count).toBe(6);
+    expect(klaws.perInstance).toEqual([3, 3]);
+    expect(loadoutInstanceTag(klaws)).toBeNull(); // in every squad — no tag
+    expect(saws.count).toBe(2);
+    expect(saws.perInstance).toEqual([2, 0]);
+    expect(loadoutInstanceTag(saws)).toBe("#1");
+  });
+
+  it("treats per-model count differences as distinct loadouts", () => {
+    const merged = mergeLoadoutGroups([
+      [
+        { model_name: null, count: 1, wargear: [gear("choppa", 2)] },
+        { model_name: null, count: 4, wargear: [gear("choppa", 1)] },
+      ],
+    ]);
+    expect(merged!.map((g) => g.count)).toEqual([1, 4]);
+  });
+
+  it("returns null when any instance lacks a decomposition", () => {
+    expect(
+      mergeLoadoutGroups([
+        [{ model_name: "Nob", count: 1, wargear: [gear("klaw", 1)] }],
+        undefined,
+      ]),
+    ).toBeNull();
+    expect(mergeLoadoutGroups([])).toBeNull();
   });
 });

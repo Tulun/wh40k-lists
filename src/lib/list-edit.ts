@@ -27,6 +27,7 @@ import { BATTLELINE_GRANT_RE } from "./codex-model";
 import { abilityText } from "./describe";
 import type { RoleHints } from "./normalize";
 import { byId } from "./lookup";
+import { groupLoadoutSpread } from "./group-loadout";
 import type { SavedList } from "../store/schema";
 
 type LoadoutModels = Parameters<Data40k["baseLoadout"]>[3];
@@ -163,7 +164,7 @@ function regenGroups(
   counts: Map<string, number>,
   factionId: string | null,
 ): RosterLoadoutGroups {
-  const groups = data.groupLoadout(unit, modelCount, options, models, counts);
+  const groups = groupLoadoutSpread(unit, modelCount, options, models, counts);
   if (!groups) return undefined;
   return groups.map((g) => ({
     model_name: g.model_name,
@@ -173,6 +174,24 @@ function regenGroups(
       count: w.count,
     })),
   }));
+}
+
+/**
+ * A roster unit's loadout groups for display: the stored decomposition when the
+ * import (or a prior edit) recorded one, else recomputed from the flat wargear
+ * bag. Undefined when the bag genuinely doesn't decompose — callers fall back
+ * to unit-wide rendering.
+ */
+export function displayLoadoutGroups(
+  data: Data40k,
+  u: RosterUnit,
+  factionId: string | null,
+): RosterLoadoutGroups {
+  if (u.loadout_groups && u.loadout_groups.length > 0) return u.loadout_groups;
+  const unit = unitEntity(data, u.ref, factionId);
+  if (!unit || loadoutDataMissing(data, unit)) return undefined;
+  const { options, models } = loadoutCtx(data, unit);
+  return regenGroups(data, unit, u.model_count, options, models, wargearCounts(u), factionId);
 }
 
 function repriceUnits(data: Data40k, roster: Roster, touchedIds: ReadonlySet<string>): void {
