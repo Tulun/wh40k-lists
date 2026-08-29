@@ -13,13 +13,14 @@ import type { Data40k } from "../lib/data";
 import { abilityText } from "../lib/describe";
 import {
   dedupeRoster,
-  loadoutInstanceTag,
-  mergeLoadoutGroups,
+  loadoutBreakdown,
   type DisplayEntry,
-  type MergedLoadoutGroup,
+  type LoadoutBreakdownView,
+  type LoadoutGroupView,
 } from "../lib/dedupe";
 import { displayLoadoutGroups } from "../lib/list-edit";
 import { byId } from "../lib/lookup";
+import { shareText } from "../lib/share";
 import { armyStratagems, sortStratagems, stratagemsForUnit } from "../lib/stratagems";
 import { useActiveList, useLists } from "../store/lists";
 import type { SavedList } from "../store/schema";
@@ -39,6 +40,15 @@ export default function UnitDetailScreen() {
   const { entryKey } = useParams();
   const list = useActiveList();
   const data = useDataset();
+  const [copied, setCopied] = useState(false);
+
+  /** Copy the shareable list text (WTC-compact), same as the Glance screen's Share. */
+  async function share() {
+    if (!data || !list) return;
+    await navigator.clipboard.writeText(shareText(data, list));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   const entry = useMemo(() => {
     if (!list || !entryKey) return null;
@@ -90,12 +100,12 @@ export default function UnitDetailScreen() {
 
   // "4× klaw, 1× killsaws" breakdown — only when models genuinely differ,
   // since the flat table's unit-wide totals can't show who carries what.
-  const loadoutGroups = mergeLoadoutGroups(
+  const breakdown = loadoutBreakdown(
     entry.instances.map((inst) =>
       displayLoadoutGroups(data, roster.units[inst.rosterIndex], roster.faction_id),
     ),
   );
-  const splitLoadouts = loadoutGroups && loadoutGroups.length > 1 ? loadoutGroups : null;
+  const splitLoadouts = breakdown && breakdown.distinct > 1 ? breakdown : null;
 
   // Core abilities (Leader, Feel No Pain 5+, Deep Strike…) read fine as bare
   // tags — only datasheet-specific abilities get their full text below.
@@ -119,6 +129,17 @@ export default function UnitDetailScreen() {
           {unit?.name ?? entry.name}
           {entry.count > 1 && <span className="ml-1.5 text-sm text-accent">×{entry.count}</span>}
         </h1>
+        {data && (
+          <button
+            type="button"
+            onClick={() => void share()}
+            className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${
+              copied ? "bg-accent/20 text-accent" : "bg-panel text-ink-dim"
+            }`}
+          >
+            {copied ? "✓ Copied" : "Share"}
+          </button>
+        )}
         <span className="shrink-0 pr-2 text-sm text-ink-dim">{entry.totalPoints} pts</span>
       </div>
 
@@ -153,12 +174,7 @@ export default function UnitDetailScreen() {
 
       <Section title="Weapons" open>
         {splitLoadouts && (
-          <LoadoutBreakdown
-            data={data}
-            groups={splitLoadouts}
-            factionId={roster.faction_id}
-            showInstances={entry.count > 1}
-          />
+          <LoadoutBreakdown data={data} breakdown={splitLoadouts} factionId={roster.faction_id} />
         )}
         <WeaponTable
           data={data}
@@ -271,53 +287,59 @@ function Section({
 }
 
 /**
- * Who carries what: one line per distinct loadout ("4× Kombi-weapon, Power
- * Klaw" / "1× Kombi-weapon, Twin Killsaws"). Model names only appear when the
- * unit mixes model types; instance tags only when squads differ.
+ * Who carries what, squad by squad — never pooled across squads, since a
+ * summed "6× klaw" describes no squad anyone fields. Squad headers (#1, #2 —
+ * matching the chips above) appear only when there are several squads; if all
+ * squads run the identical mix, one list under "Each squad" stands for all.
+ * Model names ("Nob:") only appear when the unit mixes model types.
  */
 function LoadoutBreakdown({
   data,
-  groups,
+  breakdown,
   factionId,
-  showInstances,
 }: {
   data: Data40k;
-  groups: MergedLoadoutGroup[];
+  breakdown: LoadoutBreakdownView;
   factionId: string | null;
-  showInstances: boolean;
 }) {
-  const nameOf = (ref: MergedLoadoutGroup["wargear"][number]["ref"]) =>
+  const nameOf = (ref: LoadoutGroupView["wargear"][number]["ref"]) =>
     byId(data.weapons, ref.id, factionId)?.name ??
     byId(data.wargear, ref.id, factionId)?.name ??
     ref.raw_name;
-  const showModelNames = new Set(groups.map((g) => g.modelName)).size > 1;
+  const lists = breakdown.uniform ? [breakdown.perInstance[0]] : breakdown.perInstance;
+  const multiSquad = breakdown.perInstance.length > 1;
+  const showModelNames =
+    new Set(lists.flat().map((g) => g.modelName)).size > 1;
   return (
-    <div className="mb-2 space-y-1 rounded-md border border-edge bg-panel/40 px-2.5 py-2">
-      {groups.map((g, i) => {
-        const tag = showInstances ? loadoutInstanceTag(g) : null;
-        return (
-          <div key={i} className="flex items-baseline gap-2 text-sm">
-            <span className="shrink-0 font-semibold tabular-nums text-accent">
-              {g.count}×
-            </span>
-            <span className="min-w-0 flex-1 leading-snug">
-              {showModelNames && g.modelName && (
-                <span className="font-medium">{g.modelName}: </span>
-              )}
-              <span className="text-ink-dim">
-                {g.wargear
-                  .map((w) => (w.count > 1 ? `${w.count}× ${nameOf(w.ref)}` : nameOf(w.ref)))
-                  .join(", ")}
-              </span>
-              {tag && (
-                <span className="ml-1.5 rounded bg-accent/15 px-1 py-px text-[10px] text-accent">
-                  {tag}
+    <div className="mb-2 space-y-1.5 rounded-md border border-edge bg-panel/40 px-2.5 py-2">
+      {lists.map((groups, li) => (
+        <div key={li} className={li > 0 ? "border-t border-edge/40 pt-1.5" : ""}>
+          {multiSquad && (
+            <p className="pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+              {breakdown.uniform ? `Each squad ×${breakdown.perInstance.length}` : `#${li + 1}`}
+            </p>
+          )}
+          <div className="space-y-0.5">
+            {groups.map((g, gi) => (
+              <div key={gi} className="flex items-baseline gap-2 text-sm">
+                <span className="shrink-0 font-semibold tabular-nums text-accent">
+                  {g.count}×
                 </span>
-              )}
-            </span>
+                <span className="min-w-0 flex-1 leading-snug">
+                  {showModelNames && g.modelName && (
+                    <span className="font-medium">{g.modelName}: </span>
+                  )}
+                  <span className="text-ink-dim">
+                    {g.wargear
+                      .map((w) => (w.count > 1 ? `${w.count}× ${nameOf(w.ref)}` : nameOf(w.ref)))
+                      .join(", ")}
+                  </span>
+                </span>
+              </div>
+            ))}
           </div>
-        );
-      })}
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ResolvedRef, Roster, RosterUnit } from "@alpaca-software/40kdc-data";
-import { dedupeRoster, instanceTag, loadoutInstanceTag, mergeLoadoutGroups } from "../dedupe";
+import { dedupeRoster, instanceTag, loadoutBreakdown } from "../dedupe";
 
 const ref = (id: string | null, raw?: string): ResolvedRef => ({
   id,
@@ -171,46 +171,58 @@ describe("dedupeRoster", () => {
   });
 });
 
-describe("mergeLoadoutGroups", () => {
+describe("loadoutBreakdown", () => {
   const gear = (id: string, count: number) => ({ ref: ref(id), count });
 
-  it("merges identical loadouts across instances and keeps distinct ones apart", () => {
-    // Two Meganobz squads: klaw models in both, killsaw models only in #1.
-    const merged = mergeLoadoutGroups([
+  it("keeps each squad's own breakdown — never pooled across squads", () => {
+    // Meganobz: #1 fields 4 killsaws + 1 klaw, #2 all klaws.
+    const b = loadoutBreakdown([
       [
-        { model_name: "Meganob", count: 3, wargear: [gear("kombi", 1), gear("klaw", 1)] },
-        { model_name: "Meganob", count: 2, wargear: [gear("kombi", 1), gear("killsaws", 1)] },
+        { model_name: "Meganob", count: 4, wargear: [gear("killsaws", 1)] },
+        { model_name: "Meganob", count: 1, wargear: [gear("kombi", 1), gear("klaw", 1)] },
       ],
-      [{ model_name: "Meganob", count: 3, wargear: [gear("klaw", 1), gear("kombi", 1)] }],
+      [{ model_name: "Meganob", count: 5, wargear: [gear("klaw", 1), gear("kombi", 1)] }],
     ]);
-    expect(merged).not.toBeNull();
-    expect(merged!).toHaveLength(2);
-    const [klaws, saws] = merged!;
-    expect(klaws.count).toBe(6);
-    expect(klaws.perInstance).toEqual([3, 3]);
-    expect(loadoutInstanceTag(klaws)).toBeNull(); // in every squad — no tag
-    expect(saws.count).toBe(2);
-    expect(saws.perInstance).toEqual([2, 0]);
-    expect(loadoutInstanceTag(saws)).toBe("#1");
+    expect(b).not.toBeNull();
+    expect(b!.uniform).toBe(false);
+    expect(b!.distinct).toBe(2);
+    expect(b!.perInstance[0].map((g) => g.count)).toEqual([4, 1]);
+    expect(b!.perInstance[1].map((g) => g.count)).toEqual([5]);
   });
 
-  it("treats per-model count differences as distinct loadouts", () => {
-    const merged = mergeLoadoutGroups([
-      [
-        { model_name: null, count: 1, wargear: [gear("choppa", 2)] },
-        { model_name: null, count: 4, wargear: [gear("choppa", 1)] },
-      ],
-    ]);
-    expect(merged!.map((g) => g.count)).toEqual([1, 4]);
+  it("marks identical squads uniform, gear order ignored", () => {
+    const squad = [
+      { model_name: "Meganob", count: 4, wargear: [gear("kombi", 1), gear("klaw", 1)] },
+      { model_name: "Meganob", count: 1, wargear: [gear("killsaws", 1)] },
+    ];
+    const flipped = [
+      { model_name: "Meganob", count: 1, wargear: [gear("killsaws", 1)] },
+      { model_name: "Meganob", count: 4, wargear: [gear("klaw", 1), gear("kombi", 1)] },
+    ];
+    const b = loadoutBreakdown([squad, flipped]);
+    expect(b!.uniform).toBe(true);
+    expect(b!.distinct).toBe(2);
   });
 
-  it("returns null when any instance lacks a decomposition", () => {
+  it("dedupes repeated identical groups within a squad", () => {
+    const b = loadoutBreakdown([
+      [
+        { model_name: null, count: 2, wargear: [gear("choppa", 1)] },
+        { model_name: null, count: 3, wargear: [gear("choppa", 1)] },
+        { model_name: null, count: 1, wargear: [gear("choppa", 2)] }, // 2 choppas ≠ 1
+      ],
+    ]);
+    expect(b!.perInstance[0].map((g) => g.count)).toEqual([5, 1]);
+    expect(b!.distinct).toBe(2);
+  });
+
+  it("returns null when any squad lacks a decomposition", () => {
     expect(
-      mergeLoadoutGroups([
+      loadoutBreakdown([
         [{ model_name: "Nob", count: 1, wargear: [gear("klaw", 1)] }],
         undefined,
       ]),
     ).toBeNull();
-    expect(mergeLoadoutGroups([])).toBeNull();
+    expect(loadoutBreakdown([])).toBeNull();
   });
 });

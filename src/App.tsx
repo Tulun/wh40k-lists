@@ -1,4 +1,4 @@
-import { matchPath, Outlet, useLocation } from "react-router-dom";
+import { Link, matchPath, Outlet, useLocation } from "react-router-dom";
 import Sidebar, { DesktopNav } from "./components/Sidebar";
 import SlotToggle from "./components/SlotToggle";
 import PoweredBy from "./components/PoweredBy";
@@ -27,10 +27,14 @@ export default function App() {
               <SlotToggle />
             </div>
             {shown && pathname !== "/import" && (
-              <div className="flex min-w-0 shrink items-baseline justify-end gap-1.5 text-right text-xs">
+              <Link
+                to="/"
+                aria-label="Back to army glance"
+                className="-my-1 flex min-w-0 shrink items-baseline justify-end gap-1.5 rounded-md px-1.5 py-1 text-right text-xs hover:bg-panel active:bg-panel"
+              >
                 <span className="min-w-0 truncate font-semibold">{shown.name}</span>
                 <span className="shrink-0 text-ink-dim">{points} pts</span>
-              </div>
+              </Link>
             )}
           </div>
         </header>

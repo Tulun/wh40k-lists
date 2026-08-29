@@ -182,59 +182,70 @@ export function instanceTag(weapon: MergedWeapon): string | null {
   return carriers.map((i) => `#${i}`).join(", ");
 }
 
-/** One distinct loadout across an entry's instances: N models each carrying this gear. */
-export interface MergedLoadoutGroup {
+/** One distinct loadout within a single squad: N models each carrying this gear. */
+export interface LoadoutGroupView {
   modelName: string | null;
-  /** Total models with this exact loadout, across instances. */
   count: number;
-  /** Models per instance, aligned with DisplayEntry.instances. */
-  perInstance: number[];
   /** Per-model gear (count is per model, matching RosterLoadoutGroup). */
   wargear: { ref: ResolvedRef; count: number }[];
 }
 
+export interface LoadoutBreakdownView {
+  /** One deduped group list per squad, aligned with DisplayEntry.instances. */
+  perInstance: LoadoutGroupView[][];
+  /** True when every squad fields the identical breakdown. */
+  uniform: boolean;
+  /** Distinct loadouts across the whole entry. */
+  distinct: number;
+}
+
 /**
- * Merge each instance's `loadout_groups` into one deduplicated list keyed by
- * model name + exact gear multiset — the "4× klaw, 1× killsaws" breakdown the
- * flat weapon table can't express. Returns null unless every instance has a
- * decomposition, so a partial picture is never presented as the whole unit.
- * First-seen order is kept, which preserves composition order (leader first).
+ * Per-squad loadout breakdown — the "4× killsaws, 1× klaw" view the flat
+ * weapon table can't express. Each squad keeps its own list (never pooled
+ * across squads: a summed "6× klaw" describes no squad anyone fields); within
+ * a squad, groups dedupe by model name + exact gear multiset, first-seen order
+ * kept so composition order (leader first) survives. Returns null unless every
+ * squad has a decomposition, so a partial picture is never presented as the
+ * whole unit.
  */
-export function mergeLoadoutGroups(
+export function loadoutBreakdown(
   perInstanceGroups: readonly (readonly RosterLoadoutGroup[] | undefined)[],
-): MergedLoadoutGroup[] | null {
+): LoadoutBreakdownView | null {
   if (perInstanceGroups.length === 0 || perInstanceGroups.some((g) => !g || g.length === 0)) {
     return null;
   }
-  const merged = new Map<string, MergedLoadoutGroup>();
-  perInstanceGroups.forEach((groups, instanceIndex) => {
+  const allKeys = new Set<string>();
+  const signatures: string[] = [];
+  const perInstance = perInstanceGroups.map((groups) => {
+    const byKey = new Map<string, LoadoutGroupView>();
     for (const group of groups!) {
       const gearKey = group.wargear
         .map((w) => `${w.count}:${wargearKey(w.ref)}`)
         .sort()
         .join("|");
       const key = `${group.model_name ?? ""}##${gearKey}`;
-      let m = merged.get(key);
-      if (!m) {
-        m = {
+      allKeys.add(key);
+      const cur = byKey.get(key);
+      if (cur) cur.count += group.count;
+      else {
+        byKey.set(key, {
           modelName: group.model_name,
-          count: 0,
-          perInstance: Array(perInstanceGroups.length).fill(0),
+          count: group.count,
           wargear: group.wargear.map((w) => ({ ref: w.ref, count: w.count })),
-        };
-        merged.set(key, m);
+        });
       }
-      m.count += group.count;
-      m.perInstance[instanceIndex] += group.count;
     }
+    signatures.push(
+      [...byKey.entries()]
+        .map(([key, g]) => `${g.count}@${key}`)
+        .sort()
+        .join(";"),
+    );
+    return [...byKey.values()];
   });
-  return [...merged.values()];
-}
-
-/** Instance tag for a merged loadout group ("#2" when only squad 2 runs it). */
-export function loadoutInstanceTag(group: MergedLoadoutGroup): string | null {
-  if (group.perInstance.length <= 1) return null;
-  const carriers = group.perInstance.map((n, i) => (n > 0 ? i + 1 : 0)).filter(Boolean);
-  if (carriers.length === group.perInstance.length) return null;
-  return carriers.map((i) => `#${i}`).join(", ");
+  return {
+    perInstance,
+    uniform: signatures.every((s) => s === signatures[0]),
+    distinct: allKeys.size,
+  };
 }
