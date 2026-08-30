@@ -12,6 +12,7 @@ import {
   battlelineGrants,
   duplicateUnit,
   enhancementChoices,
+  enhancementSlots,
   legalityIssues,
   loadoutDataMissing,
   nextSize,
@@ -115,6 +116,7 @@ export default function ListEditScreen() {
         .sort((a, b) => a.name.localeCompare(b.name))
     : [];
   const dpSpent = roster.detachments.reduce((s, d) => s + (d.dp_cost ?? 0), 0);
+  const enhSlots = enhancementSlots(roster);
   // The dispositions the chosen detachments grant; empty = data unrecorded, offer all.
   const grantedDispositions = new Set(
     roster.detachments.flatMap(
@@ -165,6 +167,15 @@ export default function ListEditScreen() {
             </div>
           )}
           <span className="text-sm font-bold text-accent">
+            {enhSlots.used > 0 && (
+              <span
+                className={`mr-2 text-xs font-normal ${
+                  enhSlots.used > enhSlots.limit ? "text-opponent" : "text-ink-dim"
+                }`}
+              >
+                ✦ {enhSlots.used}/{enhSlots.limit}
+              </span>
+            )}
             {roster.points.total_computed}
             {roster.points.declared_limit ? `/${roster.points.declared_limit}` : ""} pts
           </span>
@@ -841,6 +852,10 @@ function EnhancementPicker({
   const u = content.roster.units[index];
   const choices = enhancementChoices(data, content.roster, index);
   if (choices.length === 0 && !u.enhancement) return null;
+  // A unit already carrying an enhancement may swap it slot-for-slot; one
+  // without can only add while the army still has a free enhancement slot.
+  const slots = enhancementSlots(content.roster);
+  const slotsFull = slots.used >= slots.limit && u.enhancement == null;
   /** The enhancement's rules text, resolved through its linked ability. */
   const enhText = (id: string | null | undefined): string | null => {
     const enh = id ? byId(data.enhancements, id, content.roster.faction_id) : undefined;
@@ -886,8 +901,13 @@ function EnhancementPicker({
               ...choices.map((c) => ({
                 value: c.id,
                 label: c.name,
-                detail: c.takenBy != null ? `${c.cost} pts · taken` : `${c.cost} pts`,
-                disabled: c.takenBy != null,
+                detail:
+                  c.taken > 0
+                    ? `${c.cost} pts · ${c.max > 1 ? `${c.taken}/${c.max} taken` : "taken"}`
+                    : slotsFull
+                      ? `${c.cost} pts · army at ${slots.limit} enhancements`
+                      : `${c.cost} pts`,
+                disabled: c.taken >= c.max || slotsFull,
                 sub: enhText(c.id) ?? undefined,
               })),
             ]}
@@ -919,19 +939,6 @@ function WargearEditor({
   unit: Unit;
   apply: (next: ListContent) => void;
 }) {
-  // The open block is tall; a tap anywhere outside it folds it back up so it
-  // doesn't keep eating the screen once the user moves on.
-  const [open, setOpen] = useState(false);
-  const detailsRef = useRef<HTMLDetailsElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      if (detailsRef.current && !detailsRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
-  }, [open]);
-
   const u = content.roster.units[index];
   const counts = wargearCounts(u);
   const factionId = content.roster.faction_id;
@@ -992,12 +999,7 @@ function WargearEditor({
   if (rows.length === 0 && unresolvedGear.length === 0 && optionStates.length === 0) return null;
 
   return (
-    <details
-      ref={detailsRef}
-      open={open}
-      onToggle={(e) => setOpen(e.currentTarget.open)}
-      className="mt-2 rounded-lg border border-edge"
-    >
+    <details className="mt-2 rounded-lg border border-edge">
       <summary className="cursor-pointer px-2 py-1.5 text-xs text-ink-dim">
         Wargear{" "}
         <span className="text-ink-faint">

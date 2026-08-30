@@ -250,7 +250,9 @@ describe("enhancements", () => {
     content.roster.units.push(structuredClone(content.roster.units[0]));
     const withEnh = setEnhancement(data40k, content, 1, found.enh.id);
     const choices = enhancementChoices(data40k, withEnh.roster, 0);
-    expect(choices.find((c) => c.id === found.enh.id)?.takenBy).toBe(1);
+    const choice = choices.find((c) => c.id === found.enh.id);
+    expect(choice?.taken).toBe(1);
+    expect(choice?.max).toBe(1);
   });
 });
 

@@ -740,8 +740,22 @@ export interface EnhancementChoice {
   id: string;
   name: string;
   cost: number;
-  /** Index of another roster unit already carrying it (an army takes each once). */
-  takenBy: number | null;
+  /** Copies already on OTHER units — upgrades may be taken more than once. */
+  taken: number;
+  /** Army-wide take limit: 3 for `upgrade_tag` upgrades, 1 for everything else. */
+  max: number;
+}
+
+/**
+ * Army-wide enhancement slots by game-size bracket: 2 up to 1000 pts, 4 up to
+ * 2000, 6 beyond — assuming a 2000-pt game when no limit is declared. Every
+ * instance spends a slot — an upgrade taken twice spends two.
+ */
+export function enhancementSlots(roster: Roster): { used: number; limit: number } {
+  const declared = roster.points.declared_limit ?? 2000;
+  const limit = declared <= 1000 ? 2 : declared <= 2000 ? 4 : 6;
+  const used = roster.units.filter((u) => u.enhancement != null).length;
+  return { used, limit };
 }
 
 /**
@@ -750,7 +764,7 @@ export interface EnhancementChoice {
  * `upgrade_tag` enhancements go to non-character units instead. The unit's own
  * NAME counts as a keyword — restrictions routinely name the datasheet
  * ("Deffkilla Wartrike"). Enhancements whose keyword restrictions the unit
- * fails are not offered at all; only ones already taken elsewhere remain
+ * fails are not offered at all; ones at their take limit elsewhere remain
  * listed (disabled) since the unit itself is eligible.
  */
 export function enhancementChoices(
@@ -776,16 +790,12 @@ export function enhancementChoices(
     .filter((e) => (e.upgrade_tag ? !characterish : unit.role === "character"))
     .filter((e) => !(e.exclusion_keywords ?? []).some((k) => keywords.has(k.toLowerCase())))
     .filter((e) => (e.keyword_restrictions ?? []).every((k) => keywords.has(k.toLowerCase())))
-    .map((e) => {
-      const takenBy = roster.units.findIndex(
-        (u, i) => i !== index && u.enhancement?.id === e.id,
-      );
-      return {
-        id: e.id,
-        name: e.name,
-        cost: e.cost,
-        takenBy: takenBy === -1 ? null : takenBy,
-      };
-    })
+    .map((e) => ({
+      id: e.id,
+      name: e.name,
+      cost: e.cost,
+      taken: roster.units.filter((u, i) => i !== index && u.enhancement?.id === e.id).length,
+      max: e.upgrade_tag ? 3 : 1,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
