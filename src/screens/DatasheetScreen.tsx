@@ -9,7 +9,8 @@ import StatLine from "../components/StatLine";
 import WeaponTable from "../components/WeaponTable";
 import { useDataset } from "../hooks/useDataset";
 import type { MergedWeapon } from "../lib/dedupe";
-import { abilityText, pointsTierLabels } from "../lib/describe";
+import { abilityText, pointsTierLabels, wargearOptionText } from "../lib/describe";
+import { byId } from "../lib/lookup";
 
 const ref = (id: string, name: string): ResolvedRef => ({
   id,
@@ -52,6 +53,13 @@ export default function DatasheetScreen() {
   }));
   const leaders = data.dataset.leadersAttachableTo(unit.id);
   const bodyguards = data.dataset.bodyguardsAttachableFrom(unit.id);
+
+  const wargearOptions = data.dataset.wargearOptionsOf(raw);
+  const compositionModels = (data.dataset.unitCompositionOf(raw)?.models ?? []).filter(
+    (m) => (m.default_weapon_ids?.length ?? 0) > 0,
+  );
+  const gearName = (id: string) =>
+    byId(data.weapons, id, factionId)?.name ?? byId(data.wargear, id, factionId)?.name ?? id;
 
   return (
     // Desktop two-pane explore: the faction's unit list rides along on the
@@ -111,6 +119,52 @@ export default function DatasheetScreen() {
           </summary>
           <div className="px-2 pb-2">
             <WeaponTable data={data} weapons={allWeapons} factionId={factionId} showInstances={false} />
+          </div>
+        </details>
+      )}
+
+      {(wargearOptions.length > 0 || compositionModels.length > 0) && (
+        <details open className="rounded-lg border border-edge">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">
+            Wargear options
+          </summary>
+          <div className="space-y-2 px-3 pb-2.5 text-sm leading-snug">
+            {compositionModels.length > 0 && (
+              <div className="space-y-0.5 text-ink-dim">
+                {compositionModels.map((m, i) => (
+                  <p key={i}>
+                    <span className="font-medium text-ink">
+                      {m.name}
+                      {" "}
+                      <span className="font-normal text-ink-faint">
+                        ×{m.min === m.max ? m.min : `${m.min}–${m.max}`}
+                      </span>
+                    </span>
+                    {": "}
+                    {(m.default_weapon_ids ?? []).map(gearName).join(", ")}
+                  </p>
+                ))}
+              </div>
+            )}
+            {wargearOptions.length > 0 && (
+              <ul className="list-disc space-y-1.5 pl-4">
+                {wargearOptions.map((o) => {
+                  const t = wargearOptionText(o, gearName);
+                  return (
+                    <li key={o.id}>
+                      {t.text}
+                      {t.choices && (
+                        <ul className="list-[circle] pl-4 text-ink-dim">
+                          {t.choices.map((c, ci) => (
+                            <li key={ci}>{c}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </details>
       )}
