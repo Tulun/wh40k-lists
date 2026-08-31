@@ -169,11 +169,12 @@ export default function ListEditScreen() {
           <span className="text-sm font-bold text-accent">
             {enhSlots.used > 0 && (
               <span
+                title="Enhancement & upgrade slots used"
                 className={`mr-2 text-xs font-normal ${
                   enhSlots.used > enhSlots.limit ? "text-opponent" : "text-ink-dim"
                 }`}
               >
-                ✦ {enhSlots.used}/{enhSlots.limit}
+                ✦ {enhSlots.used}/{enhSlots.limit} enhancements
               </span>
             )}
             {roster.points.total_computed}
