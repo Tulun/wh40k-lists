@@ -795,7 +795,7 @@ export function enhancementChoices(
       name: e.name,
       cost: e.cost,
       taken: roster.units.filter((u, i) => i !== index && u.enhancement?.id === e.id).length,
-      max: e.upgrade_tag ? 3 : 1,
+      max: e.upgrade_tag ? (e.max_targets ?? 3) : 1,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

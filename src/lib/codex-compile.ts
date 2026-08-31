@@ -353,7 +353,9 @@ function compileDetachment(factionId: string, det: EditableDetachment, out: Comp
       ability_id: abilityId,
       ...(enh.restrictions.length > 0 ? { keyword_restrictions: enh.restrictions } : {}),
       ...(enh.exclusions?.length ? { exclusion_keywords: enh.exclusions } : {}),
-      ...(enh.upgrade ? { upgrade_tag: true } : {}),
+      // Stock data marks upgrades takeable by up to 3 units; without this the
+      // checker's default of 1 flags any duplicate as illegal.
+      ...(enh.upgrade ? { upgrade_tag: true, max_targets: 3 } : {}),
       game_version: GV_REF,
     });
   }
