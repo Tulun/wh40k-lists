@@ -87,15 +87,21 @@ export default function GlanceScreen() {
 
       {withEnhancements.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {withEnhancements.map((e) => (
-            <Link
-              key={e.key}
-              to={`/unit/${encodeURIComponent(e.key)}?i=${e.instances[0].rosterIndex}`}
-              className="rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs text-accent"
-            >
-              ✦ {enhancementName(data, e, roster.faction_id)} → {e.name}
-            </Link>
-          ))}
+          {withEnhancements.map((e) => {
+            const pts =
+              e.instances[0].enhancementPoints ??
+              (data ? byId(data.enhancements, e.enhancement?.id, roster.faction_id)?.cost : null);
+            return (
+              <Link
+                key={e.key}
+                to={`/unit/${encodeURIComponent(e.key)}?i=${e.instances[0].rosterIndex}`}
+                className="rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs text-accent"
+              >
+                ✦ {enhancementName(data, e, roster.faction_id)} → {e.name}
+                {pts != null && <span className="text-accent/70"> · {pts} pts</span>}
+              </Link>
+            );
+          })}
         </div>
       )}
 

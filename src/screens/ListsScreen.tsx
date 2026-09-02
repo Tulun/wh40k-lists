@@ -33,12 +33,14 @@ export default function ListsScreen() {
   }
 
   const data = useDataset();
-  const all = Object.values(lists).sort(
-    (a, b) => b.importedAt.localeCompare(a.importedAt),
+  // Most recently edited first (`updated` stamps every in-app edit; older
+  // remote copies without it fall back to their import time).
+  const all = Object.values(lists).sort((a, b) =>
+    (b.updated ?? b.importedAt).localeCompare(a.updated ?? a.importedAt),
   );
 
-  // Group by faction, newest first within each group. Only lists with a
-  // recorded faction get a subheader; the rest render unlabeled at the end.
+  // Group by faction, most recently edited first within each group. Only lists
+  // with a recorded faction get a subheader; the rest render unlabeled at the end.
   const groups = new Map<string, { label: string | null; lists: SavedList[] }>();
   for (const list of all) {
     const fid = list.roster.faction_id;
