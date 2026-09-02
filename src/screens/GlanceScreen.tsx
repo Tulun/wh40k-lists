@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { backState } from "../components/BackBar";
 import CardColumns from "../components/CardColumns";
 import FilterInput from "../components/FilterInput";
+import GlanceSummary from "../components/GlanceSummary";
 import StratagemCard from "../components/StratagemCard";
 import { MicroStats } from "../components/StatLine";
 import { useDataset } from "../hooks/useDataset";
@@ -133,6 +134,8 @@ export default function GlanceScreen() {
         onShare={data ? share : undefined}
         copied={copied}
       />
+
+      {data && <GlanceSummary data={data} roster={roster} listId={list.id} />}
 
       {withEnhancements.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
