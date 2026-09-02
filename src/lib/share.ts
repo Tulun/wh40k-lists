@@ -7,6 +7,7 @@ import type { Roster } from "@alpaca-software/40kdc-data";
 import type { SavedList } from "../store/schema";
 import type { Data40k } from "./data";
 import { byId } from "./lookup";
+import { organizeArmy } from "./organize";
 
 export function shareText(data: Data40k, list: SavedList): string {
   const roster = structuredClone(list.roster);
@@ -28,64 +29,17 @@ export function shareText(data: Data40k, list: SavedList): string {
         }
       : null;
   });
-  // Attached characters first (each with its led unit riding directly behind),
-  // then loose characters, then the rest — and since CharN slots are assigned
-  // in output order, the numbering follows this layout too.
-  roster.units = attachedOrder(data, roster, attachments).map((i) => roster.units[i]);
+  // The shared army layout: attached bricks first in their own section, then
+  // loose units in role sections — and since CharN slots are assigned in
+  // output order, the numbering follows this layout too.
+  const sections = organizeArmy(data, list);
+  const order = sections.flatMap((s) => s.blocks.flatMap((b) => b.indices));
+  const labels = sections.flatMap((s) =>
+    s.blocks.flatMap((b) => b.indices.map(() => s.label)),
+  );
+  roster.units = order.map((i) => roster.units[i]);
   const out = data.exportRoster(roster, "newrecruit-wtc-compact");
-  return spaceUnitBlocks(remarkCharacters(out, data, roster));
-}
-
-/**
- * Unit indices: attached characters first (bodyguards pulled up behind their
- * leaders), then loose characters, then everything else.
- */
-function attachedOrder(
-  data: Data40k,
-  roster: Roster,
-  attachments: Record<string, number>,
-): number[] {
-  const bodyguardOf = new Map<number, number>();
-  const leadersOf = new Map<number, number[]>();
-  for (const [l, b] of Object.entries(attachments)) {
-    const li = Number(l);
-    if (!roster.units[li] || !roster.units[b]) continue;
-    bodyguardOf.set(li, b);
-    leadersOf.set(b, [...(leadersOf.get(b) ?? []), li]);
-  }
-  for (const leaders of leadersOf.values()) leaders.sort((a, b) => a - b);
-
-  const rank = (i: number) => {
-    if (charRank(data, roster, roster.units[i]) !== 0) return 2;
-    return bodyguardOf.has(i) ? 0 : 1;
-  };
-  const sorted = roster.units
-    .map((_, i) => i)
-    .sort((a, b) => rank(a) - rank(b) || a - b);
-  const out: number[] = [];
-  const emitted = new Set<number>();
-  const emit = (i: number) => {
-    if (!emitted.has(i)) {
-      emitted.add(i);
-      out.push(i);
-    }
-  };
-  for (const i of sorted) {
-    if (emitted.has(i)) continue;
-    if (leadersOf.has(i)) continue; // a led unit rides with its (first) leader
-    emit(i);
-    const body = bodyguardOf.get(i);
-    if (body != null) {
-      for (const li of leadersOf.get(body)!) emit(li); // co-leaders stay adjacent
-      emit(body);
-    }
-  }
-  return out;
-}
-
-function charRank(data: Data40k, roster: Roster, u: Roster["units"][number]): number {
-  const role = u.ref.id ? byId(data.units, u.ref.id, roster.faction_id)?.raw.role : undefined;
-  return role === "character" || role === "epic-hero" ? 0 : 1;
+  return spaceUnitBlocks(remarkCharacters(out, data, roster), labels);
 }
 
 /**
@@ -132,14 +86,20 @@ function remarkCharacters(text: string, data: Data40k, roster: Roster): string {
   }
 
   const warlordIdx = roster.units.findIndex((u) => u.is_warlord);
-  const enhancedIdx = roster.units.findIndex((u) => u.enhancement != null);
+  // Header ENHANCEMENT lines are emitted one per enhanced unit, in roster
+  // order — pair them up positionally so each keeps its own bearer.
+  const enhancedIdxs = roster.units
+    .map((u, i) => (u.enhancement != null ? i : -1))
+    .filter((i) => i >= 0);
+  let enhLine = 0;
   for (let i = 0; i < headerEnd; i++) {
     if (lines[i].startsWith("+ WARLORD:") && warlordIdx >= 0) {
       lines[i] = `+ WARLORD: Char${slots[warlordIdx]}: ${roster.units[warlordIdx].ref.raw_name}`;
     }
-    if (lines[i].startsWith("+ ENHANCEMENT:") && enhancedIdx >= 0) {
-      const u = roster.units[enhancedIdx];
-      lines[i] = `+ ENHANCEMENT: ${u.enhancement!.raw_name} (on Char${slots[enhancedIdx]}: ${u.ref.raw_name})`;
+    if (lines[i].startsWith("+ ENHANCEMENT:") && enhLine < enhancedIdxs.length) {
+      const uIdx = enhancedIdxs[enhLine++];
+      const u = roster.units[uIdx];
+      lines[i] = `+ ENHANCEMENT: ${u.enhancement!.raw_name} (on Char${slots[uIdx]}: ${u.ref.raw_name})`;
     }
   }
   return lines.join("\n");
@@ -148,8 +108,10 @@ function remarkCharacters(text: string, data: Data40k, roster: Roster): string {
 /**
  * The serializer emits units as contiguous lines; a blank line between blocks
  * reads better in chat. An "Enhancement:" line belongs to the unit above it.
+ * `labels` (one per unit, aligned with output order) become "== Section =="
+ * header lines wherever the section changes.
  */
-function spaceUnitBlocks(text: string): string {
+function spaceUnitBlocks(text: string, labels: readonly string[]): string {
   const lines = text.split("\n");
   let headerEnd = -1;
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -165,10 +127,16 @@ function spaceUnitBlocks(text: string): string {
     if (line.startsWith("Enhancement:") && blocks.length > 0) blocks[blocks.length - 1].push(line);
     else blocks.push([line]);
   }
+  const rendered: string[] = [];
+  blocks.forEach((b, i) => {
+    const label = labels[i];
+    if (label && label !== labels[i - 1]) rendered.push(`== ${label} ==`);
+    rendered.push(b.join("\n"));
+  });
   return (
     lines.slice(0, headerEnd + 1).join("\n") +
     "\n\n" +
-    blocks.map((b) => b.join("\n")).join("\n\n") +
+    rendered.join("\n\n") +
     "\n"
   );
 }

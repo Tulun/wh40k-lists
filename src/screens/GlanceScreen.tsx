@@ -11,19 +11,10 @@ import type { Data40k } from "../lib/data";
 import { dedupeRoster, unitKey, type DisplayEntry } from "../lib/dedupe";
 import { fnpFromAbilityNames } from "../lib/describe";
 import { byId } from "../lib/lookup";
-import { battlelineGrants } from "../lib/list-edit";
+import { organizeArmy } from "../lib/organize";
 import { shareText } from "../lib/share";
 import { armyStratagems, sortStratagems } from "../lib/stratagems";
 import { useActiveList, useLists } from "../store/lists";
-
-const ROLE_ORDER: Record<string, number> = {
-  "epic-hero": 0,
-  character: 1,
-  battleline: 2,
-  "dedicated-transport": 4,
-  fortification: 5,
-  allied: 6,
-};
 
 export default function GlanceScreen() {
   const list = useActiveList();
@@ -65,63 +56,20 @@ export default function GlanceScreen() {
   const resolveAt = (i: number) =>
     data ? data.resolveRosterUnit(roster.units[i], data.dataset, roster.faction_id) : undefined;
 
-  // Attachment shape: led units render under their character(s), anchored at
-  // the (first) character's slot — same grouping the editor shows.
-  const bodyguardOf = new Map<number, number>();
-  const leadersOf = new Map<number, number[]>();
-  for (const [l, b] of Object.entries(list.attachments)) {
-    const li = Number(l);
-    if (!roster.units[li] || !roster.units[b]) continue;
-    bodyguardOf.set(li, b);
-    if (!leadersOf.has(b)) leadersOf.set(b, []);
-    leadersOf.get(b)!.push(li);
-  }
-  for (const leaders of leadersOf.values()) leaders.sort((a, b) => a - b);
-
-  // Detachment-granted Battleline (Kult of Speed's Warbikers…) sorts as such.
-  const granted = data ? battlelineGrants(data, roster) : new Set<string>();
-  const rankAt = (i: number) => {
-    const id = roster.units[i].ref.id;
-    if (id && granted.has(id)) return ROLE_ORDER.battleline;
-    return ROLE_ORDER[resolveAt(i)?.raw.role ?? ""] ?? 3;
-  };
-  const anchors = roster.units
-    .map((_, i) => i)
-    .filter((i) => {
-      if (leadersOf.has(i)) return false; // led unit renders under its leader
-      const b = bodyguardOf.get(i);
-      return b == null || leadersOf.get(b)![0] === i; // co-leaders ride with the first
-    })
-    .sort((a, b) => {
-      const ra = rankAt(a);
-      const rb = rankAt(b);
-      if (ra !== rb) return ra - rb;
-      return roster.units[a].ref.raw_name.localeCompare(roster.units[b].ref.raw_name);
-    });
-
-  const sequence: { index: number; inGroup: boolean; isLed: boolean }[] = [];
-  for (const a of anchors) {
-    const b = bodyguardOf.get(a);
-    if (b != null) {
-      for (const li of leadersOf.get(b)!) sequence.push({ index: li, inGroup: true, isLed: false });
-      sequence.push({ index: b, inGroup: true, isLed: true });
-    } else {
-      sequence.push({ index: a, inGroup: false, isLed: false });
-    }
-  }
+  // Attached bricks first in their own section, then role sections — the
+  // same layout the share export prints.
+  const sections = organizeArmy(data, list);
 
   const q = query.trim().toLowerCase();
-  const filtered = q
-    ? sequence.filter(({ index }) => {
-        const ru = roster.units[index];
-        if (ru.ref.raw_name.toLowerCase().includes(q)) return true;
-        const raw = resolveAt(index)?.raw;
-        return (
-          (raw?.name.toLowerCase().includes(q) ?? false) ||
-          (raw?.keywords ?? []).some((k) => k.toLowerCase().includes(q))
-        );
-      })
-    : sequence;
+  const matches = (index: number) => {
+    const ru = roster.units[index];
+    if (ru.ref.raw_name.toLowerCase().includes(q)) return true;
+    const raw = resolveAt(index)?.raw;
+    return (
+      (raw?.name.toLowerCase().includes(q) ?? false) ||
+      (raw?.keywords ?? []).some((k) => k.toLowerCase().includes(q))
+    );
+  };
 
   const withEnhancements = entries.filter((e) => e.enhancement);
 
@@ -142,7 +90,7 @@ export default function GlanceScreen() {
           {withEnhancements.map((e) => (
             <Link
               key={e.key}
-              to={`/unit/${encodeURIComponent(e.key)}`}
+              to={`/unit/${encodeURIComponent(e.key)}?i=${e.instances[0].rosterIndex}`}
               className="rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs text-accent"
             >
               ✦ {enhancementName(data, e, roster.faction_id)} → {e.name}
@@ -174,7 +122,7 @@ export default function GlanceScreen() {
           return (
             <Link
               key={index}
-              to={`/unit/${encodeURIComponent(unitKey(ru))}`}
+              to={`/unit/${encodeURIComponent(unitKey(ru))}?i=${index}`}
               className={`block min-h-11 px-3 py-2 hover:bg-panel active:bg-panel ${isLed && !q ? "pl-6" : ""}`}
             >
               <div className="flex items-center gap-2">
@@ -201,52 +149,46 @@ export default function GlanceScreen() {
           );
         };
 
-        // Filtering breaks pairs apart, so matches render as single cards;
-        // otherwise an attached group is one rounded block, with air between
-        // blocks instead of one wall-to-wall table.
-        const blocks: { key: string; attached: boolean; rows: React.ReactNode[] }[] = [];
+        // Filtering breaks sections and pairs apart, so matches render as
+        // single cards; otherwise sections get headers, and an attached group
+        // stays one rounded block with air between blocks.
         if (q) {
-          for (const e of filtered) blocks.push({ key: String(e.index), attached: false, rows: [row(e.index, false)] });
-        } else {
-          for (let i = 0; i < filtered.length; ) {
-            const e = filtered[i];
-            if (!e.inGroup) {
-              blocks.push({ key: String(e.index), attached: false, rows: [row(e.index, false)] });
-              i += 1;
-              continue;
-            }
-            const rows: React.ReactNode[] = [];
-            let j = i;
-            for (; j < filtered.length && filtered[j].inGroup; j += 1) {
-              rows.push(row(filtered[j].index, filtered[j].isLed));
-              if (filtered[j].isLed) {
-                j += 1;
-                break; // the led unit closes its group
-              }
-            }
-            blocks.push({ key: `g-${e.index}`, attached: true, rows });
-            i = j;
-          }
+          const hits = sections
+            .flatMap((s) => s.blocks.flatMap((b) => b.indices))
+            .filter(matches);
+          return (
+            <ul className="space-y-2">
+              {hits.map((index) => (
+                <li key={index} className="overflow-hidden rounded-lg border border-edge">
+                  {row(index, false)}
+                </li>
+              ))}
+            </ul>
+          );
         }
-        return (
-          <ul className="space-y-2">
-            {blocks.map((b) => (
-              <li
-                key={b.key}
-                className={`overflow-hidden rounded-lg border ${
-                  b.attached ? "border-accent/40" : "border-edge"
-                }`}
-              >
-                {b.attached && (
-                  <p className="px-3 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
-                    Attached unit
-                  </p>
-                )}
-                <div className="divide-y divide-edge/60">{b.rows}</div>
-              </li>
-            ))}
-          </ul>
-        );
+        return sections.map((section) => (
+          <section key={section.label}>
+            <h2 className="px-1 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-wider text-ink-faint">
+              {section.label}
+            </h2>
+            <ul className="space-y-2">
+              {section.blocks.map((b) => (
+                <li
+                  key={b.indices[0]}
+                  className={`overflow-hidden rounded-lg border ${
+                    b.attached ? "border-accent/40" : "border-edge"
+                  }`}
+                >
+                  <div className="divide-y divide-edge/60">
+                    {b.indices.map((index, pos) =>
+                      row(index, b.attached && pos === b.indices.length - 1),
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ));
       })()}
 
       <StratagemSection data={data} roster={roster} listId={list.id} />

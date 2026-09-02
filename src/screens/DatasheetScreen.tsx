@@ -110,7 +110,10 @@ export default function DatasheetScreen() {
         ))}
       </div>
 
-      <KeywordChips coreTags={coreTags.map((a) => a.name)} keywords={raw.keywords ?? []} />
+      <KeywordChips
+        coreTags={coreTags.map((a) => ({ name: a.name, text: abilityText(a) || undefined }))}
+        keywords={raw.keywords ?? []}
+      />
 
       {allWeapons.length > 0 && (
         <details open className="rounded-lg border border-edge">

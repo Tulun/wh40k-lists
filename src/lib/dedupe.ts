@@ -172,6 +172,33 @@ export function dedupeRoster(roster: Roster): DisplayEntry[] {
   return [...entries.values()];
 }
 
+/**
+ * Narrow a deduped entry to one squad — the per-instance detail view. The
+ * result looks like a count-1 entry, so every downstream renderer (chips,
+ * weapon instance tags, attachments) shows just that squad.
+ */
+export function narrowEntry(entry: DisplayEntry, rosterIndex: number): DisplayEntry {
+  const idx = entry.instances.findIndex((inst) => inst.rosterIndex === rosterIndex);
+  if (idx < 0 || entry.count === 1) return entry;
+  const inst = entry.instances[idx];
+  return {
+    ...entry,
+    instances: [inst],
+    count: 1,
+    totalModels: inst.modelCount,
+    totalPoints: (inst.points ?? 0) + (inst.enhancementPoints ?? 0),
+    isWarlord: inst.isWarlord,
+    mergedWargear: entry.mergedWargear
+      .filter((w) => w.perInstance[idx] > 0)
+      .map((w) => ({
+        ...w,
+        totalCount: w.perInstance[idx],
+        perInstance: [w.perInstance[idx]],
+        universal: true,
+      })),
+  };
+}
+
 /** Human tag for a non-universal weapon: which instances carry it. */
 export function instanceTag(weapon: MergedWeapon): string | null {
   if (weapon.universal || weapon.perInstance.length <= 1) return null;

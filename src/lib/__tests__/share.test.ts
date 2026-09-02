@@ -28,7 +28,10 @@ describe("shareText", () => {
   });
 
   it("shows enhancements and per-unit wargear", () => {
-    expect(out).toContain("ENHANCEMENT: Da Kaptin");
+    // The header's single ENHANCEMENT line names the first enhanced unit in
+    // output order (Bannernob sorts first); the rest ride as body lines.
+    expect(out).toContain("ENHANCEMENT: Git-Spotter Squig (on Char1: Bannernob)");
+    expect(out).toContain("Enhancement: Da Kaptin");
     expect(out).toMatch(/Beastboss on Squigosaur \(105 pts\): .*Beastchoppa/);
     expect(out).toMatch(/Squighog Boyz \(270 pts\)/);
   });

@@ -85,8 +85,14 @@ export function pointsTierLabels(tiers: readonly PointsTier[]): string[] {
  * the DSL renderer (overlay records carry only a placeholder effect).
  */
 export function abilityText(ability: { describe(): string; raw: unknown }): string {
-  const leak = (ability.raw as { leak_text?: unknown }).leak_text;
-  return typeof leak === "string" && leak.length > 0 ? leak : ability.describe();
+  const raw = ability.raw as { leak_text?: unknown; authored_by?: unknown };
+  const leak = raw.leak_text;
+  if (typeof leak === "string" && leak.length > 0) return leak;
+  // Codex-authored records carry only a placeholder DSL effect — their prose IS
+  // leak_text, so an empty one (core tags like Waaagh!) must not fall through
+  // to the renderer, which would describe the placeholder as nonsense.
+  if (raw.authored_by === "codex-editor") return "";
+  return ability.describe();
 }
 
 /** The slice of a wargear-option record the prose renderer reads. */

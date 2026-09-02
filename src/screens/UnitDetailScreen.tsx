@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { Enhancement } from "@alpaca-software/40kdc-data";
 import AbilityBlock from "../components/AbilityBlock";
-import KeywordChips from "../components/KeywordChips";
+import KeywordChips, { type CoreTag } from "../components/KeywordChips";
 import StatLine from "../components/StatLine";
+import { backState } from "../components/BackBar";
 import CardColumns from "../components/CardColumns";
-import CrunchPanel from "../components/CrunchPanel";
 import StratagemCard from "../components/StratagemCard";
 import WeaponTable from "../components/WeaponTable";
 import { useDataset } from "../hooks/useDataset";
@@ -15,6 +15,7 @@ import { abilityText } from "../lib/describe";
 import {
   dedupeRoster,
   loadoutBreakdown,
+  narrowEntry,
   type DisplayEntry,
   type LoadoutBreakdownView,
   type LoadoutGroupView,
@@ -39,9 +40,14 @@ export function isProvisional(dataslate: string | undefined): boolean {
 
 export default function UnitDetailScreen() {
   const { entryKey } = useParams();
+  const [searchParams] = useSearchParams();
   const list = useActiveList();
   const data = useDataset();
   const [copied, setCopied] = useState(false);
+  // `?i=<rosterIndex>` narrows a multi-squad entry to that one squad — the
+  // per-unit summary the Glance rows link to. Without it (old links), the
+  // merged view still renders.
+  const instParam = searchParams.get("i");
 
   /** Copy the shareable list text (WTC-compact), same as the Glance screen's Share. */
   async function share() {
@@ -51,10 +57,17 @@ export default function UnitDetailScreen() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const entry = useMemo(() => {
-    if (!list || !entryKey) return null;
-    return dedupeRoster(list.roster).find((e) => e.key === entryKey) ?? null;
-  }, [list, entryKey]);
+  const { entry, position, siblingCount } = useMemo(() => {
+    if (!list || !entryKey) return { entry: null, position: 0, siblingCount: 0 };
+    const full = dedupeRoster(list.roster).find((e) => e.key === entryKey) ?? null;
+    if (!full || instParam == null) return { entry: full, position: 0, siblingCount: 0 };
+    const idx = full.instances.findIndex((inst) => inst.rosterIndex === Number(instParam));
+    return {
+      entry: narrowEntry(full, Number(instParam)),
+      position: idx + 1,
+      siblingCount: idx >= 0 ? full.count : 0,
+    };
+  }, [list, entryKey, instParam]);
 
   if (!list || !entry) {
     return (
@@ -128,6 +141,9 @@ export default function UnitDetailScreen() {
         <h1 className="min-w-0 flex-1 truncate text-base font-bold leading-tight">
           {entry.isWarlord && "⭐ "}
           {unit?.name ?? entry.name}
+          {siblingCount > 1 && (
+            <span className="ml-1.5 text-sm text-accent">#{position} of {siblingCount}</span>
+          )}
           {entry.count > 1 && <span className="ml-1.5 text-sm text-accent">×{entry.count}</span>}
         </h1>
         {data && (
@@ -159,7 +175,12 @@ export default function UnitDetailScreen() {
         </div>
       )}
 
-      <TagRow list={list} entry={entry} coreTags={coreTags.map((a) => a.name)} keywords={raw?.keywords ?? []} />
+      <TagRow
+        list={list}
+        entry={entry}
+        coreTags={coreTags.map((a) => ({ name: a.name, text: abilityText(a) || undefined }))}
+        keywords={raw?.keywords ?? []}
+      />
 
       {entry.count > 1 && (
         <div className="flex flex-wrap gap-1.5">
@@ -186,9 +207,17 @@ export default function UnitDetailScreen() {
       </Section>
 
       {unit && (
-        <Section title="Damage output">
-          <CrunchPanel data={data} list={list} entry={entry} />
-        </Section>
+        <Link
+          to={`/unit/${encodeURIComponent(entry.key)}/crunch${instParam != null ? `?i=${instParam}` : ""}`}
+          state={backState(
+            `/unit/${encodeURIComponent(entry.key)}${instParam != null ? `?i=${instParam}` : ""}`,
+            unit.name,
+          )}
+          className="flex min-h-11 items-center justify-between rounded-lg border border-edge px-3 py-2 text-sm font-semibold hover:bg-panel active:bg-panel"
+        >
+          <span>💥 Damage output</span>
+          <span aria-hidden className="text-ink-faint">›</span>
+        </Link>
       )}
 
       {textAbilities.length > 0 && (
@@ -438,7 +467,7 @@ function TagRow({
 }: {
   list: SavedList;
   entry: DisplayEntry;
-  coreTags: string[];
+  coreTags: CoreTag[];
   keywords: readonly string[];
 }) {
   const hints = [
@@ -448,7 +477,7 @@ function TagRow({
         .filter((h) => h != null),
     ),
     // The core "Leader" tag already covers the leader hint.
-  ].filter((h) => !(h === "leader" && coreTags.includes("Leader")));
+  ].filter((h) => !(h === "leader" && coreTags.some((t) => t.name === "Leader")));
 
   return (
     <KeywordChips coreTags={coreTags} keywords={keywords}>
@@ -547,6 +576,18 @@ function AttachmentBlock({
         {[...leaders.keys()].map((leaderIndex) => {
           const leaderUnit = list.roster.units[leaderIndex];
           const view = data.resolveRosterUnit(leaderUnit, data.dataset, factionId);
+          // Core abilities (Leader, Waaagh!, Deep Strike…) are tags, not prose
+          // — same as the datasheet header, tappable when their rule text is
+          // recorded — and empty-text records are skipped rather than
+          // rendered through the DSL placeholder.
+          const coreTags: CoreTag[] =
+            view?.abilities
+              .filter((a) => a.raw.ability_type === "core")
+              .map((a) => ({ name: a.name, text: abilityText(a) || undefined })) ?? [];
+          const buffs =
+            view?.abilities.filter(
+              (a) => a.raw.ability_type !== "core" && abilityText(a).length > 0,
+            ) ?? [];
           return (
             <div key={leaderIndex} className="rounded-md border border-mine/40 bg-mine/5 px-2.5 py-2">
               <div className="text-xs font-bold uppercase tracking-wide text-mine">
@@ -557,7 +598,12 @@ function AttachmentBlock({
                   </span>
                 )}
               </div>
-              {view?.abilities.map((a) => (
+              {coreTags.length > 0 && (
+                <div className="mt-1.5">
+                  <KeywordChips coreTags={coreTags} keywords={[]} />
+                </div>
+              )}
+              {buffs.map((a) => (
                 <div key={a.id} className="mt-1.5">
                   <div className="text-[11px] font-semibold uppercase text-ink-dim">{a.name}</div>
                   <p className="whitespace-pre-wrap text-sm leading-snug">{abilityText(a)}</p>
