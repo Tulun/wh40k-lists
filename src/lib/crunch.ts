@@ -75,6 +75,18 @@ export function standardTargets(data: Data40k): ResolvedTarget[] {
     .filter((t): t is ResolvedTarget => t !== null);
 }
 
+/**
+ * The classic benchmark five (GEQ/MEQ/TEQ/VEQ/KEQ) — the collapsed default;
+ * the full standard-target list sits behind a "show all" toggle.
+ */
+export const CORE_TARGET_IDS = new Set([
+  "geq-guardsmen",
+  "meq-intercessors",
+  "teq-terminators",
+  "rhino",
+  "questoris-knight",
+]);
+
 function unitKeywordsLower(data: Data40k, unitId: string, factionId: string | null): string[] {
   const raw = byId(data.units, unitId, factionId)?.raw;
   if (!raw) return [];
@@ -149,11 +161,24 @@ export interface WeaponOutput {
   damage: number;
 }
 
+/** Expected totals per attack-sequence stage, summed across weapon lines. */
+export interface StageFlow {
+  attacks: number;
+  hits: number;
+  wounds: number;
+  unsaved: number;
+  /** Damage dealt before Feel No Pain. */
+  damage: number;
+  /** Damage that sticks after FNP — equals `damage` when the target has none. */
+  afterFnp: number;
+}
+
 export interface TargetOutput {
   target: ResolvedTarget;
   damage: number;
   kills: number;
   weapons: WeaponOutput[];
+  flow: StageFlow;
 }
 
 /**
@@ -176,6 +201,7 @@ export function unitOutput(
     ctx,
   );
   const weapons: WeaponOutput[] = [];
+  const flow: StageFlow = { attacks: 0, hits: 0, wounds: 0, unsaved: 0, damage: 0, afterFnp: 0 };
   let damage = 0;
 
   for (const member of members) {
@@ -191,7 +217,12 @@ export function unitOutput(
         ),
         ...defensive,
       ];
-      let best: { damage: number; profileName: string | null } | null = null;
+      type Best = {
+        damage: number;
+        profileName: string | null;
+        stages: { name: string; expected: number }[];
+      };
+      let best: Best | null = null;
       weapon.raw.profiles.forEach((profile, profileIndex) => {
         if (data.isMeleeProfile(profile) !== wantMelee) return;
         const out = data.crunch(
@@ -213,12 +244,21 @@ export function unitOutput(
           best = {
             damage: dmg,
             profileName: weapon.raw.profiles.length > 1 ? profile.name : null,
+            stages: out.stages,
           };
         }
       });
       if (!best) continue; // no profile for this phase
-      const picked: { damage: number; profileName: string | null } = best;
+      const picked: Best = best;
       damage += picked.damage;
+      for (const stage of picked.stages) {
+        if (stage.name === "attacks") flow.attacks += stage.expected;
+        else if (stage.name === "hits") flow.hits += stage.expected;
+        else if (stage.name === "wounds") flow.wounds += stage.expected;
+        else if (stage.name === "unsaved") flow.unsaved += stage.expected;
+        else if (stage.name === "damage") flow.damage += stage.expected;
+        else if (stage.name === "after-fnp") flow.afterFnp += stage.expected;
+      }
       weapons.push({
         weaponId: weapon.id,
         weaponName: weapon.name,
@@ -232,7 +272,7 @@ export function unitOutput(
   weapons.sort((a, b) => b.damage - a.damage);
   const wounds = Number(target.unitRaw.profiles[0]?.W) || 1;
   const kills = Math.min(target.modelCount, damage / wounds);
-  return { target, damage, kills, weapons };
+  return { target, damage, kills, weapons, flow };
 }
 
 /** Quick manual levers for effects the data can't express yet. */

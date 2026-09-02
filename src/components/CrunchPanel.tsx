@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { StackableBuff } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "../lib/data";
 import {
+  CORE_TARGET_IDS,
   DEFAULT_SITUATION,
   MANUAL_TOGGLES,
   crunchLevers,
@@ -45,6 +46,7 @@ export default function CrunchPanel({ data, list, entry }: Props) {
   const [leverState, setLeverState] = useState<Record<string, boolean>>({});
   const [manualState, setManualState] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [allTargets, setAllTargets] = useState(false);
 
   const factionId = list.roster.faction_id;
   const inst = entry.instances[Math.min(instanceIdx, entry.instances.length - 1)];
@@ -110,6 +112,12 @@ export default function CrunchPanel({ data, list, entry }: Props) {
       unitOutput(data, members, factionId, chosenBuffs, ctx, target),
     );
   }, [data, members, factionId, chosenBuffs, ctx]);
+
+  // Benchmark five by default; the full standard-target list on demand.
+  const shownResults = allTargets
+    ? results
+    : results.filter((r) => CORE_TARGET_IDS.has(r.target.profileId));
+  const hiddenCount = results.length - shownResults.length;
 
   if (members.length === 0 || results.length === 0) return null;
   if (!hasPhase.shooting && !hasPhase.fight) return null;
@@ -230,7 +238,7 @@ export default function CrunchPanel({ data, list, entry }: Props) {
             </tr>
           </thead>
           <tbody>
-            {results.map((r) => {
+            {shownResults.map((r) => {
               const stats = r.target.unitRaw.profiles[0];
               const isOpen = expanded === r.target.profileId;
               return (
@@ -246,6 +254,15 @@ export default function CrunchPanel({ data, list, entry }: Props) {
           </tbody>
         </table>
       </div>
+      {(hiddenCount > 0 || allTargets) && (
+        <button
+          type="button"
+          onClick={() => setAllTargets(!allTargets)}
+          className="w-full rounded-md border border-edge py-1.5 text-xs font-semibold text-ink-dim hover:bg-panel active:bg-panel"
+        >
+          {allTargets ? "▴ Show benchmark targets only" : `▾ Show all targets (${hiddenCount} more)`}
+        </button>
+      )}
       <p className="text-[10px] leading-snug text-ink-faint">
         Expected values, all weapons in range. Always-on abilities are pre-applied — flip
         chips to layer stratagems and buffs. Kills cap at the target's model count.
@@ -270,6 +287,43 @@ function LeverChip({
       {lever.enabled && <span className="mr-1 opacity-70">{on ? "✓" : "✗"}</span>}
       {lever.label}
     </button>
+  );
+}
+
+/**
+ * The attack sequence as expected values — attacks → hits → wounds → unsaved
+ * → damage (→ after FNP when the target has one) → models slain. The same
+ * "flow" view damage calculators show, summed across the unit's weapons.
+ */
+function FlowStrip({ result }: { result: ReturnType<typeof unitOutput> }) {
+  const f = result.flow;
+  const fmt = (n: number) => (Number.isInteger(Math.round(n * 10) / 10) ? String(Math.round(n)) : n.toFixed(1));
+  const stages: { label: string; value: number }[] = [
+    { label: "attacks", value: f.attacks },
+    { label: "hits", value: f.hits },
+    { label: "wounds", value: f.wounds },
+    { label: "unsaved", value: f.unsaved },
+    { label: "damage", value: f.damage },
+  ];
+  if (Math.abs(f.afterFnp - f.damage) > 0.01) {
+    stages.push({ label: "after FNP", value: f.afterFnp });
+  }
+  stages.push({ label: "slain", value: result.kills });
+  if (f.attacks <= 0) return null;
+  return (
+    <div className="mb-1.5 overflow-x-auto">
+      <div className="flex w-max items-center gap-1 whitespace-nowrap text-[11px]">
+        {stages.map((s, i) => (
+          <span key={s.label} className="flex items-center gap-1">
+            {i > 0 && <span aria-hidden className="text-ink-faint">→</span>}
+            <span className={s.label === "slain" ? "text-accent" : ""}>
+              <span className="font-semibold tabular-nums">{fmt(s.value)}</span>{" "}
+              <span className="text-ink-faint">{s.label}</span>
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -310,6 +364,7 @@ function TargetRows({
       {open && (
         <tr className="border-t border-edge/40 bg-panel/40">
           <td colSpan={8} className="px-2 py-1.5">
+            <FlowStrip result={result} />
             <div className="space-y-0.5">
               {result.weapons.map((w, i) => (
                 <div key={`${w.weaponId}-${i}`} className="flex items-baseline gap-2 text-xs">
