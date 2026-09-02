@@ -4,7 +4,7 @@ import AbilityBlock from "../components/AbilityBlock";
 import BackBar from "../components/BackBar";
 import KeywordChips from "../components/KeywordChips";
 import UnitListPane from "../components/UnitListPane";
-import { isProvisional } from "./UnitDetailScreen";
+import { coreTagOf, isProvisional } from "./UnitDetailScreen";
 import StatLine from "../components/StatLine";
 import WeaponTable from "../components/WeaponTable";
 import { useDataset } from "../hooks/useDataset";
@@ -111,7 +111,7 @@ export default function DatasheetScreen() {
       </div>
 
       <KeywordChips
-        coreTags={coreTags.map((a) => ({ name: a.name, text: abilityText(a) || undefined }))}
+        coreTags={coreTags.map((a) => coreTagOf(a, data, factionId))}
         keywords={raw.keywords ?? []}
       />
 

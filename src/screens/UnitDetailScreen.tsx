@@ -21,7 +21,7 @@ import {
   type LoadoutGroupView,
 } from "../lib/dedupe";
 import { displayLoadoutGroups } from "../lib/list-edit";
-import { byId } from "../lib/lookup";
+import { armyRule, byId } from "../lib/lookup";
 import { shareText } from "../lib/share";
 import { armyStratagems, sortStratagems, stratagemsForUnit } from "../lib/stratagems";
 import { useActiveList, useLists } from "../store/lists";
@@ -36,6 +36,23 @@ const ROLE_HINT_LABEL: Record<string, string> = {
 /** Dataslates like "pre-launch-provisional" mean 10e-ported, unverified data. */
 export function isProvisional(dataslate: string | undefined): boolean {
   return dataslate?.includes("provisional") ?? false;
+}
+
+/**
+ * Core-ability chip with its rule text when known. A textless tag whose name
+ * matches the faction's army rule (Waaagh!) borrows that rule's text.
+ */
+export function coreTagOf(
+  ability: { name: string; describe(): string; raw: unknown },
+  data: Data40k,
+  factionId: string | null | undefined,
+): CoreTag {
+  let text = abilityText(ability);
+  if (!text) {
+    const rule = armyRule(data, factionId);
+    if (rule && rule.name === ability.name) text = abilityText(rule);
+  }
+  return { name: ability.name, text: text || undefined };
 }
 
 export default function UnitDetailScreen() {
@@ -178,7 +195,7 @@ export default function UnitDetailScreen() {
       <TagRow
         list={list}
         entry={entry}
-        coreTags={coreTags.map((a) => ({ name: a.name, text: abilityText(a) || undefined }))}
+        coreTags={coreTags.map((a) => coreTagOf(a, data, roster.faction_id))}
         keywords={raw?.keywords ?? []}
       />
 
@@ -538,9 +555,12 @@ function AttachmentBlock({
     const rows = entry.instances
       .map((inst, i) => ({ inst, i, bodyguard: attachments.get(inst.rosterIndex) }))
       .filter((r) => r.bodyguard !== undefined);
+    // Support units MUST attach (core rules) — warn whether the support role
+    // comes from the import hint or the datasheet itself.
+    const sheetIsSupport = raw?.attachment_role === "support";
     const unmatchedSupport = entry.instances.some(
       (inst) =>
-        list.roleHints[String(inst.rosterIndex)] === "support" &&
+        (sheetIsSupport || list.roleHints[String(inst.rosterIndex)] === "support") &&
         attachments.get(inst.rosterIndex) === undefined,
     );
 
@@ -583,7 +603,7 @@ function AttachmentBlock({
           const coreTags: CoreTag[] =
             view?.abilities
               .filter((a) => a.raw.ability_type === "core")
-              .map((a) => ({ name: a.name, text: abilityText(a) || undefined })) ?? [];
+              .map((a) => coreTagOf(a, data, factionId)) ?? [];
           const buffs =
             view?.abilities.filter(
               (a) => a.raw.ability_type !== "core" && abilityText(a).length > 0,
