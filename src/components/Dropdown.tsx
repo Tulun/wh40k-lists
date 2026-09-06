@@ -77,7 +77,7 @@ export default function Dropdown({
       {open && (
         <ul
           role="listbox"
-          className="absolute left-0 right-0 z-20 mt-1 max-h-64 min-w-fit overflow-y-auto rounded-md border border-edge bg-panel shadow-lg shadow-black/50"
+          className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-md border border-edge bg-panel shadow-lg shadow-black/50"
         >
           {clearable && (
             <Row
@@ -136,7 +136,7 @@ function Row({
         type="button"
         disabled={disabled}
         onClick={onPick}
-        className={`flex min-h-10 w-full items-center gap-2 border-b border-edge/60 px-3 py-1.5 text-left text-xs last:border-b-0 ${
+        className={`flex min-h-10 w-full flex-col justify-center border-b border-edge/60 px-3 py-1.5 text-left text-xs last:border-b-0 ${
           // Plain `opacity` rather than a color alpha modifier — Tailwind
           // compiles `text-ink-faint/60` to color-mix(), which older iOS
           // Safari ignores, silently dropping the grey-out on phones.
@@ -149,17 +149,19 @@ function Row({
                 : "hover:bg-surface active:bg-surface"
         }`}
       >
-        <span className={`w-3 shrink-0 ${selected ? "" : "opacity-0"}`}>✓</span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate">{label}</span>
-          {sub && (
-            <span className={`block truncate text-[10px] ${disabled ? "" : "text-ink-faint"}`}>
-              {sub}
-            </span>
+        <span className="flex w-full items-center gap-2">
+          <span className={`w-3 shrink-0 ${selected ? "" : "opacity-0"}`}>✓</span>
+          <span className="min-w-0 flex-1">{label}</span>
+          {detail && (
+            <span className={`shrink-0 ${disabled ? "" : "text-ink-faint"}`}>{detail}</span>
           )}
         </span>
-        {detail && (
-          <span className={`shrink-0 ${disabled ? "" : "text-ink-faint"}`}>{detail}</span>
+        {sub && (
+          <span
+            className={`mt-0.5 block w-full pl-5 text-[10px] leading-snug ${disabled ? "" : "text-ink-faint"}`}
+          >
+            {sub}
+          </span>
         )}
       </button>
     </li>
