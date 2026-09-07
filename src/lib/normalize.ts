@@ -13,6 +13,8 @@
  */
 import type { ResolvedRef, Roster } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "./data";
+// Value import, but no cycle: list-edit's import from this module is type-only.
+import { enhancementLeadGrants } from "./list-edit";
 
 type RosterDetachment = Roster["detachments"][number];
 
@@ -434,12 +436,15 @@ function inferAttachments(
       const hint = roleHints[String(index)];
       return (hint === "leader" || hint === "support") && seeds[String(index)] === undefined;
     })
-    .map(({ u, index }) => ({
-      index,
-      eligible: u.ref.id
+    .map(({ u, index }) => {
+      const eligible = u.ref.id
         ? new Set(data.dataset.bodyguardsAttachableFrom(u.ref.id).map((v) => v.id))
-        : new Set<string>(),
-    }));
+        : new Set<string>();
+      // Enhancement lead grants (Kaptin's Hat → Flash Gitz) widen who this
+      // character may join — the importer resolves enhancements before this.
+      for (const id of enhancementLeadGrants(data, roster, index)) eligible.add(id);
+      return { index, eligible };
+    });
   const bodyguards = roster.units
     .map((u, index) => ({ u, index }))
     .filter(

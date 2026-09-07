@@ -6,8 +6,10 @@
  */
 import { describe, expect, it } from "vitest";
 import * as mod from "@alpaca-software/40kdc-data";
-import type { RawData, Unit } from "@alpaca-software/40kdc-data";
+import type { RawData, Roster, Unit } from "@alpaca-software/40kdc-data";
 import { parseWeaponKeyword, compileFaction, compilePatches } from "../codex-compile";
+import type { Data40k } from "../data";
+import { enhancementLeadGrants } from "../list-edit";
 import type {
   CodexDoc,
   EditableDatasheet,
@@ -230,6 +232,57 @@ describe("compileFaction", () => {
     expect(strat.target_restrictions?.required_keywords).toEqual(["Orks"]);
     const stratRule = compiled.abilities.find((a) => a.ability_id === "new-strat--rule");
     expect(stratRule?.leak_text).toBe("Stratagem prose.");
+  });
+
+  it("compiles structured lead grants into the canonical enhancement sentence, without duplicating", () => {
+    const det = {
+      ...REPLACE_ORKS.detachments[0],
+      enhancements: [
+        {
+          id: "new-enh",
+          name: "New Enh",
+          cost: 15,
+          // One grant already written in the prose, one only structured.
+          text: "Enhancement prose.\nThe bearer can be attached to New Ladz units.",
+          restrictions: ["Character"],
+          leadsUnits: ["New Ladz", "Stormboyz"],
+        },
+      ],
+    };
+    const out = compileFaction("orks", { ...REPLACE_ORKS, detachments: [det] }, "Orks");
+    const text = out.abilities.find((a) => a.ability_id === "new-enh--rule")?.leak_text ?? "";
+    expect(text).toContain("The bearer can be attached to Stormboyz units.");
+    expect(text.match(/be attached to New Ladz units/g)).toHaveLength(1);
+  });
+
+  it("resolves a compiled lead grant back to datasheet ids for the bearer", () => {
+    const det = {
+      ...REPLACE_ORKS.detachments[0],
+      enhancements: [
+        { id: "new-enh", name: "New Enh", cost: 15, text: "Enhancement prose.", restrictions: ["Character"], leadsUnits: ["New Ladz"] },
+      ],
+    };
+    const merged = buildMergedRaw(
+      syntheticBase(),
+      compileFaction("orks", { ...REPLACE_ORKS, detachments: [det] }),
+    );
+    const ds = new mod.Dataset(merged);
+    const data = {
+      ...mod,
+      dataset: ds,
+      units: ds.units,
+      abilities: ds.abilities,
+      enhancements: ds.enhancements,
+    } as unknown as Data40k;
+    const roster = {
+      faction_id: "orks",
+      units: [
+        { ref: { id: "new-bignob" }, enhancement: { id: "new-enh" } },
+        { ref: { id: "new-bignob" }, enhancement: null },
+      ],
+    } as unknown as Roster;
+    expect(enhancementLeadGrants(data, roster, 0)).toEqual(new Set(["new-ladz"]));
+    expect(enhancementLeadGrants(data, roster, 1).size).toBe(0);
   });
 
   it("compiles structured Battleline grants into the canonical rule sentence, without duplicating", () => {

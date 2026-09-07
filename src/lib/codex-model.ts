@@ -141,6 +141,13 @@ export interface EditableEnhancement {
   exclusions?: string[];
   /** An upgrade taken by a non-character UNIT (11e upgrade_tag), not a character. */
   upgrade?: boolean;
+  /**
+   * Datasheet names (or keywords) the bearer may additionally lead, beyond its
+   * own Leader list (Kaptin's Hat → Flash Gitz, Kill Kommanda → Kommandos).
+   * Compiles into the canonical rule sentence the app parses, so display text
+   * and behaviour can't drift apart.
+   */
+  leadsUnits?: string[];
 }
 
 export interface EditableStratagem {
@@ -191,6 +198,16 @@ export interface EditableDetachment {
 export const BATTLELINE_GRANT_RE = /friendly (.+?) units gain the battleline keyword/gi;
 export const battlelineGrantSentence = (name: string) =>
   `Friendly ${name} units gain the Battleline keyword.`;
+
+/**
+ * The canonical rule sentence for an enhancement lead grant ("the bearer may
+ * also lead X"). The compiler emits it; `enhancementLeadGrants` (list-edit)
+ * parses it back out of the enhancement's rule text. The alternation also
+ * catches the "can lead" phrasing an author might type by hand.
+ */
+export const LEADS_GRANT_RE = /the bearer can (?:lead|be attached to) (.+?) units/gi;
+export const leadsGrantSentence = (name: string) =>
+  `The bearer can be attached to ${name} units.`;
 
 export interface ReplaceFaction {
   mode: "replace";
@@ -377,17 +394,23 @@ export function seedDetachmentFromUpstream(
     // Pre-fill from grants already written in the rule text, so an existing
     // detachment's grants show (and survive) in the structured field.
     battlelineUnits: [...(ruleText ?? "").matchAll(BATTLELINE_GRANT_RE)].map((m) => m[1].trim()),
-    enhancements: enhancements.map(({ record, text }) => ({
-      id: record.id,
-      name: record.name,
-      cost: record.cost,
-      text: text ?? "",
-      restrictions: [...(record.keyword_restrictions ?? [])],
-      ...(record.exclusion_keywords?.length
-        ? { exclusions: [...record.exclusion_keywords] }
-        : {}),
-      ...(record.upgrade_tag ? { upgrade: true } : {}),
-    })),
+    enhancements: enhancements.map(({ record, text }) => {
+      // Pre-fill lead grants already written in the rule text, mirroring
+      // battlelineUnits above.
+      const leadsUnits = [...(text ?? "").matchAll(LEADS_GRANT_RE)].map((m) => m[1].trim());
+      return {
+        id: record.id,
+        name: record.name,
+        cost: record.cost,
+        text: text ?? "",
+        restrictions: [...(record.keyword_restrictions ?? [])],
+        ...(record.exclusion_keywords?.length
+          ? { exclusions: [...record.exclusion_keywords] }
+          : {}),
+        ...(record.upgrade_tag ? { upgrade: true } : {}),
+        ...(leadsUnits.length ? { leadsUnits } : {}),
+      };
+    }),
     stratagems: stratagems.map(({ record, text }) => ({
       id: record.id,
       name: record.name,

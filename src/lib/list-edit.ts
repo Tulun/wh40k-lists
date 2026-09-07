@@ -23,7 +23,7 @@ import type {
   WargearOption,
 } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "./data";
-import { BATTLELINE_GRANT_RE } from "./codex-model";
+import { BATTLELINE_GRANT_RE, LEADS_GRANT_RE } from "./codex-model";
 import { abilityText } from "./describe";
 import type { RoleHints } from "./normalize";
 import { byId } from "./lookup";
@@ -595,13 +595,16 @@ export function repriceAll(data: Data40k, content: ListContent): ListContent {
 }
 
 /**
- * The legality report as displayable lines, with two app-level filters over
+ * The legality report as displayable lines, with three app-level filters over
  * the package's `checkRoster`:
  * - loadout complaints are dropped for units the dataset has no loadout data
  *   for (codex-overlay entries — the check would flag every weapon count);
  * - enhancement keyword mismatches are dropped when the "missing" keyword is
  *   the unit's own datasheet name ("DEFFKILLA WARTRIKE model only") — the
- *   package matches printed keywords only, the app treats the name as one.
+ *   package matches printed keywords only, the app treats the name as one;
+ * - illegal-attachment complaints are dropped when the leader's enhancement
+ *   grants leading that unit (Kaptin's Hat) — the package's eligibility list
+ *   is datasheet-level and can't see the list-level grant.
  */
 export function legalityIssues(
   data: Data40k,
@@ -663,11 +666,22 @@ export function legalityIssues(
     return `${ru.ref.raw_name} #${ordinal}`;
   };
 
+  const grantSatisfiesAttachment = (unitIndex: number): boolean => {
+    const bodyId = checked.units[unitIndex]?.leader_attachment?.bodyguard_ref.id;
+    return bodyId != null && enhancementLeadGrants(data, roster, unitIndex).has(bodyId);
+  };
+
   for (const v of legality.army) {
     if (
       v.code === "enhancement-keyword-mismatch" &&
       v.unitIndex != null &&
       nameSatisfiesRestriction(v.unitIndex)
+    )
+      continue;
+    if (
+      v.code === "leader-attachment-illegal" &&
+      v.unitIndex != null &&
+      grantSatisfiesAttachment(v.unitIndex)
     )
       continue;
     const unitName = v.unitIndex != null ? unitLabel(v.unitIndex) : null;
@@ -712,6 +726,42 @@ export function battlelineGrants(data: Data40k, roster: Roster): Set<string> {
             ids.add(u.id);
           }
         }
+      }
+    }
+  }
+  return ids;
+}
+
+/**
+ * Extra bodyguard datasheet ids the character at `leaderIndex` may lead thanks
+ * to its enhancement — parsed from the enhancement rule's "The bearer can be
+ * attached to X units" sentence (Kaptin's Hat → Flash Gitz, Kill Kommanda →
+ * Kommandos). X matches a datasheet name or a keyword its datasheet carries.
+ */
+export function enhancementLeadGrants(
+  data: Data40k,
+  roster: Roster,
+  leaderIndex: number,
+): Set<string> {
+  const ids = new Set<string>();
+  const factionId = roster.faction_id;
+  const enhId = roster.units[leaderIndex]?.enhancement?.id;
+  if (!factionId || !enhId) return ids;
+  const enh = byId(data.enhancements, enhId, factionId);
+  const ability = enh?.ability_id ? byId(data.abilities, enh.ability_id, factionId) : undefined;
+  const text = ability ? abilityText(ability) : "";
+  const pool = data.units.byFaction(factionId);
+  for (const m of text.matchAll(LEADS_GRANT_RE)) {
+    const term = m[1]
+      .trim()
+      .replace(/^(?:a|an|the)\s+/i, "")
+      .toLowerCase();
+    for (const u of pool) {
+      if (
+        u.name.toLowerCase() === term ||
+        (u.raw.keywords ?? []).some((k) => k.toLowerCase() === term)
+      ) {
+        ids.add(u.id);
       }
     }
   }

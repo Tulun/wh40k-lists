@@ -14,7 +14,7 @@ import {
 import RefImagePanel from "../components/editor/RefImagePanel";
 import { useDataset } from "../hooks/useDataset";
 import type { EditableDetachment, EditableStratagem } from "../lib/codex-model";
-import { BATTLELINE_GRANT_RE, DISPOSITIONS, slugify, uniqueSlug } from "../lib/codex-model";
+import { BATTLELINE_GRANT_RE, DISPOSITIONS, LEADS_GRANT_RE, slugify, uniqueSlug } from "../lib/codex-model";
 import { detachmentView } from "../lib/detachment-view";
 import { refImageKey } from "../lib/ref-images";
 import { useCodex } from "../store/codex";
@@ -56,12 +56,25 @@ export default function DetachmentEditScreen() {
         : entry.mode === "replace"
           ? (entry.detachments.find((d) => d.id === detId) ?? null)
           : (entry.detachments[detId] ?? null);
-    if (!found || found.battlelineUnits) return found;
-    // Doc entries saved before the structured field existed: pre-fill it from
-    // grants already written in the rule text.
+    if (!found) return found;
+    // Doc entries saved before the structured fields existed: pre-fill them
+    // from grant sentences already written in the rule text.
+    const migrated = found.battlelineUnits
+      ? found
+      : {
+          ...found,
+          battlelineUnits: [...found.ruleText.matchAll(BATTLELINE_GRANT_RE)].map((m) =>
+            m[1].trim(),
+          ),
+        };
+    if (migrated.enhancements.every((e) => e.leadsUnits)) return migrated;
     return {
-      ...found,
-      battlelineUnits: [...found.ruleText.matchAll(BATTLELINE_GRANT_RE)].map((m) => m[1].trim()),
+      ...migrated,
+      enhancements: migrated.enhancements.map((e) => {
+        if (e.leadsUnits) return e;
+        const leadsUnits = [...e.text.matchAll(LEADS_GRANT_RE)].map((m) => m[1].trim());
+        return leadsUnits.length ? { ...e, leadsUnits } : e;
+      }),
     };
   }, [entry, detId]);
 
@@ -253,6 +266,27 @@ export default function DetachmentEditScreen() {
                   })
                 }
                 placeholder="Aircraft…"
+              />
+            </Field>
+            <Field label="Bearer can also lead (comma-separated unit names)">
+              <TextInput
+                value={(enh.leadsUnits ?? []).join(", ")}
+                placeholder="e.g. Flash Gitz"
+                onChange={(e) =>
+                  patch({
+                    enhancements: det.enhancements.map((q, j) =>
+                      j === i
+                        ? {
+                            ...q,
+                            leadsUnits: e.target.value
+                              .split(",")
+                              .map((s) => s.trim())
+                              .filter(Boolean),
+                          }
+                        : q,
+                    ),
+                  })
+                }
               />
             </Field>
             <label className="flex items-center gap-2 text-xs text-ink-dim">

@@ -79,6 +79,7 @@ export default function GlanceScreen() {
         data={data}
         roster={roster}
         listName={list.name}
+        listId={list.id}
         onShare={data ? share : undefined}
         copied={copied}
       />
@@ -216,12 +217,14 @@ function ArmyHeader({
   data,
   roster,
   listName,
+  listId,
   onShare,
   copied,
 }: {
   data: Data40k | null;
   roster: import("@alpaca-software/40kdc-data").Roster;
   listName: string;
+  listId: string;
   onShare?: () => void;
   copied?: boolean;
 }) {
@@ -233,6 +236,13 @@ function ArmyHeader({
         <span className="min-w-0 flex-1 truncate text-sm font-bold">
           {faction?.name ?? roster.faction_id ?? "Unknown faction"}
         </span>
+        <Link
+          to={`/lists/${listId}/edit`}
+          state={backState("/", listName)}
+          className="rounded-md bg-panel px-2.5 py-1 text-xs font-semibold text-ink-dim"
+        >
+          Edit
+        </Link>
         {onShare && (
           <button
             type="button"

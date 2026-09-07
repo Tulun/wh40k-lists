@@ -32,7 +32,7 @@ import type {
   ReplaceFaction,
 } from "./codex-model";
 import type { RawData } from "@alpaca-software/40kdc-data";
-import { battlelineGrantSentence, slugify } from "./codex-model";
+import { battlelineGrantSentence, leadsGrantSentence, slugify } from "./codex-model";
 
 export const CODEX_GAME_VERSION = { edition: "11th", dataslate: "leak-provisional" } as const;
 type GV = Unit["game_version"];
@@ -341,9 +341,20 @@ function compileDetachment(factionId: string, det: EditableDetachment, out: Comp
     ruleIds.push(ruleId);
   }
   for (const enh of det.enhancements) {
+    // Structured lead grants compile into the canonical sentence the same way
+    // Battleline grants do above.
+    let enhText = enh.text;
+    for (const raw of enh.leadsUnits ?? []) {
+      const name = raw.trim();
+      if (!name) continue;
+      const sentence = `the bearer can be attached to ${name.toLowerCase()} units`;
+      if (!enhText.toLowerCase().includes(sentence)) {
+        enhText = `${enhText.trimEnd()}\n${leadsGrantSentence(name)}`.trim();
+      }
+    }
     const abilityId = `${enh.id}--rule`;
     out.abilities.push(
-      abilityRecord(abilityId, enh.name, enh.text, "enhancement", { detachment_id: det.id }),
+      abilityRecord(abilityId, enh.name, enhText, "enhancement", { detachment_id: det.id }),
     );
     out.enhancements.push({
       id: enh.id,

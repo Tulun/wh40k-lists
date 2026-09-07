@@ -107,6 +107,11 @@ export default function DetachmentCard({ det }: { det: EditableDetachment }) {
                     {enh.restrictions.join(", ")} only
                   </p>
                 )}
+                {(enh.leadsUnits?.length ?? 0) > 0 && (
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                    Leader: {enh.leadsUnits!.join(", ")}
+                  </p>
+                )}
                 <p className="mt-0.5 whitespace-pre-wrap">{enh.text}</p>
               </div>
             ))}

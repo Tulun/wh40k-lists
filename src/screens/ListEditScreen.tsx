@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import type { RosterUnit, Unit } from "@alpaca-software/40kdc-data";
 import Dropdown from "../components/Dropdown";
 import FilterInput from "../components/FilterInput";
@@ -12,6 +12,7 @@ import {
   battlelineGrants,
   duplicateUnit,
   enhancementChoices,
+  enhancementLeadGrants,
   enhancementSlots,
   legalityIssues,
   loadoutDataMissing,
@@ -54,6 +55,10 @@ export default function ListEditScreen() {
   const updateListContent = useLists((s) => s.updateListContent);
   const data = useDataset();
   const editBack = useEditBackState();
+  // Where "Done" returns to: the screen that opened the editor (glance's Edit
+  // button passes it), defaulting to the lists screen for direct entry.
+  const { state } = useLocation() as { state?: { back?: { to: string } } };
+  const doneTo = state?.back?.to ?? "/lists";
 
   const issues = useMemo(
     () => (data && list ? legalityIssues(data, list.roster, list.attachments) : []),
@@ -129,7 +134,7 @@ export default function ListEditScreen() {
       <div className="sticky top-12 z-10 -mx-3 flex items-center justify-between gap-2 border-b border-edge bg-surface/95 px-3 py-1.5 backdrop-blur">
         <h1 className="text-lg font-bold">Edit list</h1>
         <Link
-          to="/lists"
+          to={doneTo}
           className="rounded-md bg-accent px-4 py-1.5 text-sm font-bold text-surface"
         >
           Done
@@ -701,6 +706,9 @@ function AttachPicker({
 }) {
   const roster = content.roster;
   const eligible = new Set(data.dataset.bodyguardsAttachableFrom(unit.id).map((v) => v.id));
+  // Enhancement lead grants (Kaptin's Hat → Flash Gitz) extend the datasheet's
+  // own Leader list for this list's copy of the character.
+  for (const id of enhancementLeadGrants(data, roster, index)) eligible.add(id);
   const current = content.attachments[String(index)] ?? null;
   if (eligible.size === 0 && current == null) return null;
   // A unit takes at most 1 leader and 1 support. Each option names whichever
