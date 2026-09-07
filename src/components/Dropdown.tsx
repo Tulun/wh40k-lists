@@ -21,6 +21,7 @@ export default function Dropdown({
   onChange,
   placeholder,
   clearable = false,
+  searchable = false,
   className = "",
 }: {
   value: string | null;
@@ -30,11 +31,22 @@ export default function Dropdown({
   placeholder: string;
   /** Offer a row that clears the selection back to null. */
   clearable?: boolean;
+  /** Show a filter input at the top of the open list (for long option lists). */
+  searchable?: boolean;
   /** Extra classes for the trigger button (e.g. width/text size tweaks). */
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      searchRef.current?.focus();
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -53,6 +65,8 @@ export default function Dropdown({
   }, [open]);
 
   const selected = value != null ? options.find((o) => o.value === value) : undefined;
+  const q = query.trim().toLowerCase();
+  const shown = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
 
   return (
     <div ref={rootRef} className="relative min-w-0">
@@ -79,6 +93,18 @@ export default function Dropdown({
           role="listbox"
           className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-md border border-edge bg-panel shadow-lg shadow-black/50"
         >
+          {searchable && (
+            <li className="sticky top-0 border-b border-edge bg-panel p-1.5">
+              <input
+                ref={searchRef}
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Filter…"
+                className="w-full rounded border border-edge bg-surface px-2 py-1 text-xs outline-none placeholder:text-ink-faint focus:border-accent/60"
+              />
+            </li>
+          )}
           {clearable && (
             <Row
               label={placeholder}
@@ -90,7 +116,7 @@ export default function Dropdown({
               }}
             />
           )}
-          {options.map((o) => (
+          {shown.map((o) => (
             <Row
               key={o.value}
               label={o.label}
@@ -104,8 +130,10 @@ export default function Dropdown({
               }}
             />
           ))}
-          {options.length === 0 && !clearable && (
-            <li className="px-3 py-2 text-xs text-ink-faint">Nothing available</li>
+          {shown.length === 0 && !clearable && (
+            <li className="px-3 py-2 text-xs text-ink-faint">
+              {q ? "No matches" : "Nothing available"}
+            </li>
           )}
         </ul>
       )}

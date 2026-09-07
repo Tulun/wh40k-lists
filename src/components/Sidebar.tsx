@@ -8,6 +8,7 @@ const LINKS = [
   { to: "/lists", label: "Saved lists", icon: "☰" },
   { to: "/import", label: "Import a list", icon: "＋" },
   { to: "/explore", label: "Explore factions", icon: "🔍" },
+  { to: "/crunch", label: "Crunch lab", icon: "💥" },
   { to: "/editor", label: "Codex editor", icon: "✎" },
 ];
 

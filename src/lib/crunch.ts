@@ -17,6 +17,7 @@ import type {
   RosterUnit,
   StackableBuff,
   StackableBuffGroup,
+  UnitView,
 } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "./data";
 import { byId } from "./lookup";
@@ -47,6 +48,14 @@ export const DEFAULT_SITUATION: CrunchSituation = {
   targetInCover: false,
 };
 
+/** Board-state chips: label + which situation field they flip. */
+export const SITUATION_TOGGLES: { key: keyof Omit<CrunchSituation, "phase">; label: string }[] = [
+  { key: "withinHalfRange", label: "Half range" },
+  { key: "stationary", label: "Stationary" },
+  { key: "targetInCover", label: "Target in cover" },
+  { key: "charged", label: "Charged" },
+];
+
 /**
  * Build a member from a roster unit: every wargear line that resolves to a
  * weapon record, with its squad-wide copy count. Returns null for unresolved
@@ -66,6 +75,42 @@ export function memberFromRosterUnit(
     lines.push({ weaponId: weapon.id, count: item.count });
   }
   return { unitId: unit.ref.id, label: unit.ref.raw_name, lines };
+}
+
+/**
+ * Any dataset unit as a crunch target — the crunch lab's "pick a datasheet"
+ * defender. Same shape the standard profiles resolve to, so `unitOutput`
+ * (and its defensive-buff wiring) treats both identically.
+ */
+export function targetFromUnit(unit: UnitView, modelCount: number): ResolvedTarget {
+  return {
+    profileId: unit.raw.id,
+    profileName: unit.name,
+    unitRaw: unit.raw,
+    modelCount,
+  };
+}
+
+/**
+ * A member from an explicit weapon-count map (the crunch lab's editable
+ * loadout). Non-weapon ids (grots, force fields…) are dropped, mirroring
+ * `memberFromRosterUnit`.
+ */
+export function memberFromCounts(
+  data: Data40k,
+  unitId: string,
+  label: string,
+  counts: ReadonlyMap<string, number>,
+  factionId: string | null,
+): CrunchMember {
+  const lines: CrunchMember["lines"] = [];
+  for (const [id, count] of counts) {
+    if (count <= 0) continue;
+    const weapon = byId(data.weapons, id, factionId);
+    if (!weapon) continue;
+    lines.push({ weaponId: weapon.id, count });
+  }
+  return { unitId, label, lines };
 }
 
 /** All standard target profiles the dataset ships, resolved to live units. */
@@ -159,6 +204,8 @@ export interface WeaponOutput {
   profileName: string | null;
   count: number;
   damage: number;
+  /** This weapon line's own stage flow (its share of the unit totals). */
+  flow: StageFlow;
 }
 
 /** Expected totals per attack-sequence stage, summed across weapon lines. */
@@ -171,6 +218,19 @@ export interface StageFlow {
   damage: number;
   /** Damage that sticks after FNP — equals `damage` when the target has none. */
   afterFnp: number;
+}
+
+function flowFromStages(stages: { name: string; expected: number }[]): StageFlow {
+  const flow: StageFlow = { attacks: 0, hits: 0, wounds: 0, unsaved: 0, damage: 0, afterFnp: 0 };
+  for (const stage of stages) {
+    if (stage.name === "attacks") flow.attacks = stage.expected;
+    else if (stage.name === "hits") flow.hits = stage.expected;
+    else if (stage.name === "wounds") flow.wounds = stage.expected;
+    else if (stage.name === "unsaved") flow.unsaved = stage.expected;
+    else if (stage.name === "damage") flow.damage = stage.expected;
+    else if (stage.name === "after-fnp") flow.afterFnp = stage.expected;
+  }
+  return flow;
 }
 
 export interface TargetOutput {
@@ -251,20 +311,20 @@ export function unitOutput(
       if (!best) continue; // no profile for this phase
       const picked: Best = best;
       damage += picked.damage;
-      for (const stage of picked.stages) {
-        if (stage.name === "attacks") flow.attacks += stage.expected;
-        else if (stage.name === "hits") flow.hits += stage.expected;
-        else if (stage.name === "wounds") flow.wounds += stage.expected;
-        else if (stage.name === "unsaved") flow.unsaved += stage.expected;
-        else if (stage.name === "damage") flow.damage += stage.expected;
-        else if (stage.name === "after-fnp") flow.afterFnp += stage.expected;
-      }
+      const weaponFlow = flowFromStages(picked.stages);
+      flow.attacks += weaponFlow.attacks;
+      flow.hits += weaponFlow.hits;
+      flow.wounds += weaponFlow.wounds;
+      flow.unsaved += weaponFlow.unsaved;
+      flow.damage += weaponFlow.damage;
+      flow.afterFnp += weaponFlow.afterFnp;
       weapons.push({
         weaponId: weapon.id,
         weaponName: weapon.name,
         profileName: picked.profileName,
         count: line.count,
         damage: picked.damage,
+        flow: weaponFlow,
       });
     }
   }

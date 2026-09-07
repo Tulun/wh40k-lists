@@ -11,8 +11,10 @@ import {
   DEFAULT_SITUATION,
   crunchLevers,
   engineContext,
+  memberFromCounts,
   memberFromRosterUnit,
   standardTargets,
+  targetFromUnit,
   unitOutput,
 } from "../crunch";
 
@@ -69,6 +71,38 @@ describe("crunch summary", () => {
     expect(out.damage).toBeGreaterThan(1);
     expect(out.kills).toBeLessThanOrEqual(geq.modelCount);
     expect(out.weapons.map((w) => w.weaponId)).toEqual(["bolt-rifle"]);
+  });
+
+  it("crunches an arbitrary dataset unit as the defender (crunch lab path)", () => {
+    // Attacker built from an explicit count map, not a roster entry.
+    const member = memberFromCounts(
+      data,
+      "intercessor-squad",
+      "Intercessors",
+      new Map([
+        ["bolt-rifle", 5],
+        ["close-combat-weapon", 5],
+      ]),
+      factionId,
+    );
+    expect(member.lines.length).toBe(2);
+
+    const defender = data.units.getInFaction("intercessor-squad", factionId)!;
+    const target = targetFromUnit(defender, 5);
+    expect(target.modelCount).toBe(5);
+    expect(target.unitRaw.id).toBe("intercessor-squad");
+
+    const members = [member];
+    const ctx = engineContext(data, members, factionId, DEFAULT_SITUATION);
+    const out = unitOutput(data, members, factionId, [], ctx, target);
+    expect(out.damage).toBeGreaterThan(0);
+    expect(out.kills).toBeLessThanOrEqual(5);
+    // Per-weapon flow accompanies each line and sums to the unit flow.
+    const summed = out.weapons.reduce((a, w) => a + w.flow.attacks, 0);
+    expect(summed).toBeCloseTo(out.flow.attacks, 6);
+    for (const w of out.weapons) {
+      expect(w.flow.hits).toBeLessThanOrEqual(w.flow.attacks + 1e-9);
+    }
   });
 
   it("melee phase picks the melee weapon and charged context holds", () => {

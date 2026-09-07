@@ -96,6 +96,14 @@ export default function DatasheetScreen() {
           ))}
         </span>
         <Link
+          to={`/crunch?af=${encodeURIComponent(factionId)}&au=${encodeURIComponent(unit.id)}`}
+          aria-label="Crunch this unit's damage"
+          title="Crunch lab"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-sm text-accent hover:bg-panel active:bg-panel"
+        >
+          💥
+        </Link>
+        <Link
           to={`/editor/${factionId}/datasheet/${unit.id}`}
           aria-label="Edit this datasheet"
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-sm text-accent hover:bg-panel active:bg-panel"

@@ -1,5 +1,6 @@
 import { createHashRouter } from "react-router-dom";
 import App from "./App";
+import CrunchLabScreen from "./screens/CrunchLabScreen";
 import CrunchScreen from "./screens/CrunchScreen";
 import DatasheetScreen from "./screens/DatasheetScreen";
 import ExploreScreen from "./screens/ExploreScreen";
@@ -25,6 +26,7 @@ export const router = createHashRouter([
       { path: "import", element: <ImportScreen /> },
       { path: "unit/:entryKey", element: <UnitDetailScreen /> },
       { path: "unit/:entryKey/crunch", element: <CrunchScreen /> },
+      { path: "crunch", element: <CrunchLabScreen /> },
       { path: "lists", element: <ListsScreen /> },
       { path: "lists/:listId/edit", element: <ListEditScreen /> },
       { path: "sync-setup", element: <SyncSetupScreen /> },
