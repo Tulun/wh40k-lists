@@ -59,6 +59,18 @@ export default function ListsScreen() {
     return a.label.localeCompare(b.label);
   });
 
+  /** Clone the list under a new id and jump straight into editing the copy. */
+  function duplicate(list: SavedList) {
+    const copy: SavedList = {
+      ...structuredClone(list),
+      id: crypto.randomUUID(),
+      name: `${list.name} (copy)`,
+      importedAt: new Date().toISOString(),
+    };
+    saveList(copy);
+    navigate(`/lists/${copy.id}/edit`);
+  }
+
   function use(slot: Slot, id: string) {
     assignSlot(slot, id);
     setActiveSlot(slot);
@@ -145,6 +157,13 @@ export default function ListsScreen() {
         >
           Edit
         </Link>
+        <button
+          type="button"
+          onClick={() => duplicate(list)}
+          className="rounded-md bg-panel px-3 py-1.5 text-xs font-semibold text-ink-dim transition-colors hover:bg-edge hover:text-ink"
+        >
+          Copy
+        </button>
         <button
           type="button"
           onClick={() => void share(list)}
