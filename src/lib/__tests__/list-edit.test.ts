@@ -28,6 +28,8 @@ import {
   wargearOptionStates,
   type ListContent,
 } from "../list-edit";
+import { mergedData } from "../data";
+import type { CodexDoc, EditableDatasheet } from "../codex-model";
 import { normalizeImportedRoster } from "../normalize";
 
 const text = readFileSync(join(import.meta.dirname, "gw-11e-attached.txt"), "utf8");
@@ -140,8 +142,114 @@ describe("setModelCount", () => {
     const unit = data40k.units.getInFaction("boyz", "orks")!.raw;
     const range = sizeRange(unit);
     expect(range).not.toBeNull();
-    expect(range!.min).toBeGreaterThan(0);
     expect(range!.max).toBeGreaterThanOrEqual(range!.min);
+    expect(range!.min).toBeGreaterThan(0);
+  });
+
+  // A swap that consumes TWO base items (Meganobz' Power Klaw + Kustom Shoota
+  // → Twin Killsaws) must survive a downsize intact: removing models removes
+  // whole loadouts, not the base-loadout delta — the old delta+clamp approach
+  // left an orphaned swap product (Twin Killsaws ×3 plus a stray shoota) that
+  // no sequence of swaps can produce.
+  it("shrinking a unit with multi-item swaps stays on the option lattice", () => {
+    const doc: CodexDoc = {
+      version: 1,
+      updated: "2026-09-08T00:00:00Z",
+      factions: {
+        orks: {
+          mode: "replace",
+          name: "Orks",
+          armyRule: null,
+          detachments: [],
+          datasheets: [
+            {
+              id: "meganobz",
+              name: "Meganobz",
+              role: "",
+              profiles: [{ M: 5, T: 6, W: 3, Sv: 2, invuln: null, Ld: 7, OC: 1 }],
+              keywords: [],
+              factionKeywords: ["Orks"],
+              leads: [],
+              // No 5-model tier gap games here; 3 and 5 mirror the real sheet's
+              // stepper jumping straight from 5 to 3.
+              points: [
+                { models: 3, cost: 110 },
+                { models: 5, cost: 185 },
+              ],
+              weapons: [
+                { name: "Kustom Shoota", type: "ranged", profiles: [{ range: 18, A: 4, skill: 5, S: 4, AP: 0, D: 1, keywords: [] }] },
+                { name: "Kombi-weapon", type: "ranged", profiles: [{ range: 18, A: 2, skill: 5, S: 4, AP: 0, D: 1, keywords: [] }] },
+                { name: "Power Klaw", type: "melee", profiles: [{ range: "Melee", A: 3, skill: 3, S: 10, AP: -2, D: 2, keywords: [] }] },
+                { name: "Killsaw", type: "melee", profiles: [{ range: "Melee", A: 3, skill: 4, S: 10, AP: -2, D: 3, keywords: [] }], cost: 5 },
+                { name: "Twin Killsaws", type: "melee", profiles: [{ range: "Melee", A: 3, skill: 4, S: 10, AP: -2, D: 3, keywords: [] }], cost: 5 },
+              ],
+              abilities: [],
+              wargearOptions: [
+                { replaces: ["Power Klaw"], choices: [["Killsaw"]], limit: { kind: "any" } },
+                { replaces: ["Kustom Shoota"], choices: [["Kombi-weapon"]], limit: { kind: "any" } },
+                { replaces: ["Power Klaw", "Kustom Shoota"], choices: [["Twin Killsaws"]], limit: { kind: "any" } },
+              ],
+              composition: [
+                { name: "Meganob", min: 2, max: 6, weapons: ["Kustom Shoota", "Power Klaw"] },
+              ],
+            } as unknown as EditableDatasheet,
+          ],
+        },
+      },
+    };
+    const data = mergedData(data40k as Parameters<typeof mergedData>[0], doc);
+    const TK = "meganobz--twin-killsaws";
+    const PK = "meganobz--power-klaw";
+    const KS = "meganobz--kustom-shoota";
+    const KOMBI = "meganobz--kombi-weapon";
+    const mkContent = (modelCount: number, wargear: Record<string, number>): ListContent => ({
+      roster: {
+        ...blankSavedList("test").roster,
+        faction_id: "orks",
+        units: [
+          {
+            ref: { id: "meganobz", raw_name: "Meganobz", resolved: true, candidates: [] },
+            model_count: modelCount,
+            points: null,
+            is_warlord: false,
+            enhancement: null,
+            enhancement_points: null,
+            wargear: Object.entries(wargear).map(([id, count]) => ({
+              ref: { id, raw_name: id, resolved: true, candidates: [] },
+              count,
+            })),
+            leader_attachment: null,
+          },
+        ],
+      },
+      roleHints: {},
+      attachments: {},
+    });
+
+    // The reported corruption: 5 models with 4 twin-killsaw swaps and a kombi.
+    const shrunk = setModelCount(data, mkContent(5, { [TK]: 4, [PK]: 1, [KOMBI]: 1 }), 0, 3);
+    const counts = wargearCounts(shrunk.roster.units[0]);
+    const at = (id: string) => counts.get(id) ?? 0;
+    // Every model carries exactly one melee arm and one ranged slot's worth.
+    expect(at(TK) + at(PK) + at("meganobz--killsaw")).toBe(3);
+    expect(at(TK) + at(KS) + at(KOMBI)).toBe(3);
+    // Greedy re-application keeps the kombi and as many twin killsaws as fit.
+    expect(at(TK)).toBe(2);
+    expect(at(KOMBI)).toBe(1);
+    expect(at(PK)).toBe(1);
+    expect(shrunk.roster.units[0].points).toBe(110 + 2 * 5);
+    // The steppers agree with the bag.
+    const unit = data.units.getInFaction("meganobz", "orks")!.raw;
+    const states = wargearOptionStates(data, shrunk.roster.units[0], unit);
+    const twinState = states.find((s) => (s.option.replaces ?? []).length === 2)!;
+    expect(twinState.totalApplied).toBe(at(TK));
+
+    // Growing keeps swaps and hands each new model its default kit.
+    const grown = setModelCount(data, mkContent(3, { [TK]: 3 }), 0, 5);
+    const g = wargearCounts(grown.roster.units[0]);
+    expect(g.get(TK)).toBe(3);
+    expect(g.get(PK)).toBe(2);
+    expect(g.get(KS)).toBe(2);
   });
 });
 

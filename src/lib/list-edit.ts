@@ -304,9 +304,13 @@ export function nextSize(data: Data40k, unit: Unit, current: number, dir: 1 | -1
 }
 
 /**
- * Change a unit's model count. Each added model brings its default equipment
- * (the base-loadout delta between the sizes); removed models give theirs back.
- * Existing swaps are kept, clamped into the new size's valid ranges.
+ * Change a unit's model count. The wargear is rebuilt from the new size's base
+ * loadout with the user's option choices re-applied (as often as before, capped
+ * by the new size's limits and what's left to swap). Adjusting raw weapon
+ * counts by the base-loadout delta instead is wrong when swapped models leave:
+ * a swap consuming two base items (Meganobz' Power Klaw + Kustom Shoota → Twin
+ * Killsaws) would keep its product while only part of its cost gets refunded,
+ * leaving the bag unreachable by any sequence of swaps.
  */
 export function setModelCount(
   data: Data40k,
@@ -321,15 +325,29 @@ export function setModelCount(
   const unit = unitEntity(data, u.ref, next.roster.faction_id);
   if (unit && !loadoutDataMissing(data, unit)) {
     const { options, models } = loadoutCtx(data, unit);
-    const bounds = data.weaponBounds(unit, count, options, models);
-    const baseOld = data.baseLoadout(unit, oldCount, options, models).counts;
-    const baseNew = data.baseLoadout(unit, count, options, models).counts;
-    const current = wargearCounts(u);
-    const counts = new Map<string, number>();
-    for (const id of new Set([...bounds.keys(), ...current.keys(), ...baseNew.keys()])) {
-      const delta = (baseNew.get(id) ?? 0) - (baseOld.get(id) ?? 0);
-      const wanted = (current.get(id) ?? 0) + delta;
-      counts.set(id, bounds.has(id) ? data.clampWeaponCount(bounds, id, wanted) : wanted);
+    const applied = wargearOptionStates(data, { ...u, model_count: oldCount }, unit);
+    const counts = new Map(data.baseLoadout(unit, count, options, models).counts);
+    const optionItems = new Set(
+      options.flatMap((o) => [...(o.replaces ?? []), ...optionBranches(o).flat()]),
+    );
+    for (const state of applied) {
+      let room = data.optionCap(state.option, count, models);
+      for (const branch of state.branches) {
+        let take = Math.min(branch.applied, room);
+        for (const id of state.option.replaces ?? []) {
+          take = Math.min(take, counts.get(id) ?? 0);
+        }
+        if (take <= 0) continue;
+        room -= take;
+        for (const id of state.option.replaces ?? []) {
+          counts.set(id, (counts.get(id) ?? 0) - take);
+        }
+        for (const id of branch.ids) counts.set(id, (counts.get(id) ?? 0) + take);
+      }
+    }
+    // Items outside the option system (imported oddities) carry over verbatim.
+    for (const [id, c] of wargearCounts(u)) {
+      if (!counts.has(id) && !optionItems.has(id)) counts.set(id, c);
     }
     u.wargear = wargearFromCounts(data, counts, next.roster.faction_id, u.wargear);
     u.loadout_groups = regenGroups(

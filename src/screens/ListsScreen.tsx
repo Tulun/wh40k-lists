@@ -22,6 +22,8 @@ export default function ListsScreen() {
   const navigate = useNavigate();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  /** Pending duplicate: which list, and the (editable) name the copy will get. */
+  const [copying, setCopying] = useState<{ id: string; name: string } | null>(null);
 
   /** Copy the shareable text (WTC-compact) for pasting into Discord/Facebook. */
   async function share(list: SavedList) {
@@ -59,16 +61,16 @@ export default function ListsScreen() {
     return a.label.localeCompare(b.label);
   });
 
-  /** Clone the list under a new id and jump straight into editing the copy. */
-  function duplicate(list: SavedList) {
+  /** Clone the list under a new id; it lands at the top as the most recent edit. */
+  function duplicate(list: SavedList, name: string) {
     const copy: SavedList = {
       ...structuredClone(list),
       id: crypto.randomUUID(),
-      name: `${list.name} (copy)`,
+      name: name.trim() || `${list.name} (copy)`,
       importedAt: new Date().toISOString(),
     };
     saveList(copy);
-    navigate(`/lists/${copy.id}/edit`);
+    setCopying(null);
   }
 
   function use(slot: Slot, id: string) {
@@ -159,8 +161,17 @@ export default function ListsScreen() {
         </Link>
         <button
           type="button"
-          onClick={() => duplicate(list)}
-          className="rounded-md bg-panel px-3 py-1.5 text-xs font-semibold text-ink-dim transition-colors hover:bg-edge hover:text-ink"
+          aria-pressed={copying?.id === list.id}
+          onClick={() =>
+            setCopying(
+              copying?.id === list.id ? null : { id: list.id, name: `${list.name} (copy)` },
+            )
+          }
+          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+            copying?.id === list.id
+              ? "bg-accent/20 text-accent"
+              : "bg-panel text-ink-dim hover:bg-edge hover:text-ink"
+          }`}
         >
           Copy
         </button>
@@ -183,6 +194,28 @@ export default function ListsScreen() {
           armedClassName="rounded-md bg-opponent/20 px-3 py-1.5 text-xs font-semibold text-opponent"
         />
       </div>
+      {copying?.id === list.id && (
+        <div className="mt-2 flex gap-2">
+          <input
+            autoFocus
+            value={copying.name}
+            onChange={(e) => setCopying({ id: list.id, name: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") duplicate(list, copying.name);
+              if (e.key === "Escape") setCopying(null);
+            }}
+            placeholder="Name for the copy"
+            className="min-w-0 flex-1 rounded-md border border-edge bg-panel px-3 py-1.5 text-sm"
+          />
+          <button
+            type="button"
+            onClick={() => duplicate(list, copying.name)}
+            className="rounded-md bg-accent px-4 py-1.5 text-xs font-bold text-surface"
+          >
+            Create
+          </button>
+        </div>
+      )}
     </li>
   );
 
