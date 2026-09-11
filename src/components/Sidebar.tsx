@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
-import PoweredBy from "./PoweredBy";
 
 const LINKS = [
   { to: "/", label: "Army glance", icon: "⌂" },
@@ -39,19 +38,8 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-/** Always-visible nav rail for desktop; the drawer below covers mobile. */
-export function DesktopNav() {
-  return (
-    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-edge bg-surface p-3 pt-4 lg:flex">
-      <div className="mb-3 px-2 text-sm font-bold tracking-wide text-accent">40k List Viewer</div>
-      <NavLinks />
-      <div className="mt-auto px-3">
-        <PoweredBy />
-      </div>
-    </aside>
-  );
-}
-
+/** Hamburger-opened nav drawer — all screen sizes, so the content keeps the
+ * full width on desktop too. */
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
 
@@ -61,7 +49,7 @@ export default function Sidebar() {
         type="button"
         aria-label="Menu"
         onClick={() => setOpen(true)}
-        className="flex h-9 w-9 items-center justify-center rounded-md text-lg text-accent hover:bg-panel active:bg-panel lg:hidden"
+        className="flex h-9 w-9 items-center justify-center rounded-md text-lg text-accent hover:bg-panel active:bg-panel"
       >
         ≡
       </button>
@@ -71,7 +59,7 @@ export default function Sidebar() {
         // containing block for fixed descendants, which would clip the drawer
         // to the 48px header strip.
         createPortal(
-          <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-label="Navigation">
+          <div className="fixed inset-0 z-50" role="dialog" aria-label="Navigation">
             <button
               type="button"
               aria-label="Close menu"
