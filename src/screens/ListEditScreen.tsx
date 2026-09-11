@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import type { RosterUnit, Unit } from "@alpaca-software/40kdc-data";
 import Dropdown from "../components/Dropdown";
@@ -60,6 +60,13 @@ export default function ListEditScreen() {
   // button passes it), defaulting to the lists screen for direct entry.
   const { state } = useLocation() as { state?: { back?: { to: string } } };
   const doneTo = state?.back?.to ?? "/lists";
+
+  // Mobile shows one pane at a time — the datasheet browser or the army —
+  // switched by bottom tabs, like the official app. Desktop shows both side
+  // by side. A list with nothing in it yet opens on Units.
+  const [mobileTab, setMobileTab] = useState<"units" | "army">(() =>
+    list && list.roster.units.length > 0 ? "army" : "units",
+  );
 
   const issues = useMemo(
     () => (data && list ? legalityIssues(data, list.roster, list.attachments) : []),
@@ -130,9 +137,22 @@ export default function ListEditScreen() {
     ),
   );
 
+  const unitsTab = factionId != null && mobileTab === "units";
+
   return (
-    <div className="space-y-3 pb-8">
-      <div className="sticky top-12 z-10 -mx-3 flex items-center justify-between gap-2 border-b border-edge bg-surface/95 px-3 py-1.5 backdrop-blur">
+    <div className="pb-20 lg:flex lg:items-start lg:gap-4 lg:pb-8">
+      {factionId && <DatasheetBrowser data={data} content={content} apply={apply} />}
+
+      {/* Mobile Units tab: the same browser, full width. Kept mounted while
+          on the Army tab so the search query survives switching. */}
+      {factionId && (
+        <div className={unitsTab ? "lg:hidden" : "hidden"}>
+          <BrowserPanel data={data} content={content} apply={apply} variant="mobile" />
+        </div>
+      )}
+
+      <div className={`min-w-0 flex-1 space-y-3 ${unitsTab ? "hidden lg:block" : ""}`}>
+      <div className="sticky top-12 z-10 -mx-3 flex items-center justify-between gap-2 border-b border-edge bg-surface/95 px-3 py-1.5 backdrop-blur lg:mx-0">
         <h1 className="text-lg font-bold">Edit list</h1>
         <Link
           to={doneTo}
@@ -274,6 +294,41 @@ export default function ListEditScreen() {
       <Link to={`/import?edit=${list.id}`} className="block text-xs text-ink-faint underline">
         Edit as text (re-import) →
       </Link>
+      </div>
+
+      {/* Mobile bottom tab bar: Units (browse & add) | Army (the list). */}
+      {factionId && (
+        <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-edge bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+          <div className="mx-auto flex max-w-3xl">
+            {(
+              [
+                ["units", "Units", null],
+                ["army", "Army", roster.units.length || null],
+              ] as const
+            ).map(([key, label, badge]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={mobileTab === key}
+                onClick={() => {
+                  // The panes share the page scroll — carrying one pane's
+                  // offset into the other lands mid-list.
+                  if (mobileTab !== key) window.scrollTo(0, 0);
+                  setMobileTab(key);
+                }}
+                className={`flex flex-1 items-center justify-center gap-1.5 py-3 text-xs font-bold uppercase tracking-widest ${
+                  mobileTab === key ? "bg-panel text-ink" : "text-ink-dim"
+                }`}
+              >
+                {label}
+                {badge != null && (
+                  <span className="tabular-nums font-semibold text-accent">{badge}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </nav>
+      )}
     </div>
   );
 }
@@ -310,89 +365,148 @@ function countsInList(roster: ListContent["roster"]): Map<string, number> {
 const capFor = (role: string | null | undefined) =>
   role === "epic-hero" ? 1 : role === "battleline" || role === "dedicated-transport" ? 6 : 3;
 
-/** Inline add-picker for one section: filter box + that category's datasheets. */
-function AddSection({
+/**
+ * Desktop persistent datasheet browser: every faction datasheet grouped by
+ * the same role sections as the list, one search box, click to add. The
+ * mobile Units tab renders the same panel full width.
+ */
+function DatasheetBrowser(props: {
+  data: Data40k;
+  content: ListContent;
+  apply: (next: ListContent) => void;
+}) {
+  return (
+    <aside className="hidden shrink-0 lg:sticky lg:top-14 lg:flex lg:max-h-[calc(100dvh-4.5rem)] lg:w-64 lg:flex-col xl:w-72">
+      <BrowserPanel {...props} variant="desktop" />
+    </aside>
+  );
+}
+
+function BrowserPanel({
   data,
   content,
   apply,
-  section,
+  variant,
 }: {
   data: Data40k;
   content: ListContent;
   apply: (next: ListContent) => void;
-  section: (typeof SECTIONS)[number];
+  variant: "desktop" | "mobile";
 }) {
   const [query, setQuery] = useState("");
+  const mobile = variant === "mobile";
   const factionId = content.roster.faction_id;
   if (!factionId) return null;
   const q = query.trim().toLowerCase();
   const inList = countsInList(content.roster);
-  // Detachment-granted Battleline units list (and cap) as Battleline.
   const granted = battlelineGrants(data, content.roster);
   const roleFor = (u: { id: string; raw: { role?: string | null } }) =>
     granted.has(u.id) ? "battleline" : u.raw.role;
-  const units = data.units
-    .byFaction(factionId)
-    .filter((u) =>
-      section.roles.length > 0
-        ? section.roles.includes(roleFor(u) ?? "")
-        : !KNOWN_ROLES.has(roleFor(u) ?? ""),
-    )
-    .filter(
-      (u) =>
-        !q ||
-        u.name.toLowerCase().includes(q) ||
-        (u.raw.keywords ?? []).some((k) => k.toLowerCase().includes(q)),
-    )
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const all = data.units.byFaction(factionId);
+  const matches = (u: (typeof all)[number]) =>
+    !q ||
+    u.name.toLowerCase().includes(q) ||
+    (u.raw.keywords ?? []).some((k) => k.toLowerCase().includes(q));
+  const groups = SECTIONS.map((section) => ({
+    section,
+    units: all
+      .filter((u) =>
+        section.roles.length > 0
+          ? section.roles.includes(roleFor(u) ?? "")
+          : !KNOWN_ROLES.has(roleFor(u) ?? ""),
+      )
+      .filter(matches)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  })).filter((g) => g.units.length > 0);
+  const shown = groups.reduce((s, g) => s + g.units.length, 0);
 
   return (
-    <div className="rounded-lg border border-edge bg-panel/50 p-2">
-      <FilterInput value={query} onChange={setQuery} placeholder="Filter datasheets…" />
-      <ul className="mt-2 max-h-72 divide-y divide-edge overflow-y-auto rounded-md border border-edge lg:max-h-96">
-        {units.map((u) => {
-          const taken = inList.get(u.id) ?? 0;
-          const cap = capFor(roleFor(u));
-          const full = taken >= cap;
-          return (
-            <li key={u.id}>
-              <button
-                type="button"
-                disabled={full}
-                className={`flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left ${
-                  full ? "opacity-40" : "hover:bg-panel active:bg-panel"
-                }`}
-                onClick={() => apply(addUnit(data, content, u.id))}
-              >
-                <span className="min-w-0 flex-1 truncate text-sm">{u.name}</span>
-                {taken > 0 && (
-                  <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-accent">
-                    {taken}/{cap}
-                  </span>
-                )}
-                <span className="shrink-0 text-xs text-ink-faint">
-                  {u.raw.points?.[0]
-                    ? `${u.raw.points[0].models}m · ${u.raw.points[0].cost} pts`
-                    : "? pts"}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-        {units.length === 0 && (
-          <li className="py-4 text-center text-xs text-ink-faint">No datasheets match.</li>
+    <>
+      {/* On mobile the heading + search stick under the app header while the
+          page itself scrolls; desktop scrolls inside the sidebar instead. */}
+      <div
+        className={
+          mobile ? "sticky top-12 z-10 -mx-3 bg-surface/95 px-3 pb-2 pt-1 backdrop-blur" : "contents"
+        }
+      >
+        <div className="flex items-baseline justify-between px-1 pb-1.5">
+          <h2 className="text-xs font-bold uppercase tracking-wide">Datasheets</h2>
+          <span className="text-xs tabular-nums text-ink-faint">
+            {q ? `${shown}/${all.length}` : all.length}
+          </span>
+        </div>
+        <FilterInput value={query} onChange={setQuery} placeholder="Search units or keywords…" />
+      </div>
+      <div
+        className={`rounded-lg border border-edge bg-panel/30 ${
+          mobile ? "" : "mt-2 min-h-0 flex-1 overflow-y-auto"
+        }`}
+      >
+        {groups.map((g) => (
+          <div key={g.section.key}>
+            <p
+              className={`flex items-baseline justify-between border-b border-edge bg-surface px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-ink-dim ${
+                mobile ? "" : "sticky top-0 z-[1]"
+              }`}
+            >
+              {g.section.label}
+              <span className="font-normal tabular-nums text-ink-faint">{g.units.length}</span>
+            </p>
+            <ul className="divide-y divide-edge/60">
+              {g.units.map((u) => {
+                const taken = inList.get(u.id) ?? 0;
+                const cap = capFor(roleFor(u));
+                const full = taken >= cap;
+                return (
+                  <li key={u.id}>
+                    <button
+                      type="button"
+                      disabled={full}
+                      title={full ? `Already at ${cap} in list` : `Add ${u.name}`}
+                      className={`w-full px-3 py-1.5 text-left ${
+                        full ? "opacity-40" : "hover:bg-panel active:bg-panel"
+                      }`}
+                      onClick={() => apply(addUnit(data, content, u.id))}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                          {u.name}
+                        </span>
+                        {taken > 0 && (
+                          <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-accent">
+                            {taken}/{cap}
+                          </span>
+                        )}
+                      </span>
+                      <span className="block text-xs text-ink-faint">
+                        {u.raw.points?.[0]
+                          ? `${u.raw.points[0].cost} pts · ${u.raw.points[0].models} model${
+                              u.raw.points[0].models === 1 ? "" : "s"
+                            }`
+                          : "? pts"}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+        {shown === 0 && (
+          <p className="py-6 text-center text-xs text-ink-faint">No datasheets match.</p>
         )}
-      </ul>
-    </div>
+      </div>
+    </>
   );
 }
 
 /**
  * The army as GW-app-style role sections (Characters, Battleline, …), each
- * with a points subtotal and a + that expands an add-picker in place.
- * Attached pairings render as one bordered block — leaders ride with their
- * unit, and the block lives in the LED UNIT's section (a Warboss leading
- * Boyz shows under Battleline, like the official app).
+ * with a points subtotal. Units are added from the datasheet browser (the
+ * sidebar on desktop, the Units tab on mobile). Attached pairings render as
+ * one bordered block — leaders ride with their unit, and the block lives in
+ * the LED UNIT's section (a Warboss leading Boyz shows under Battleline,
+ * like the official app).
  */
 function UnitGroups({
   data,
@@ -403,21 +517,6 @@ function UnitGroups({
   content: ListContent;
   apply: (next: ListContent) => void;
 }) {
-  const [addOpen, setAddOpen] = useState<string | null>(null);
-  // A tap outside the open add-picker (its header and filter included) folds
-  // it away — same manners as the wargear block. Unmounting also resets the
-  // picker's filter for next time.
-  const openPickerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (addOpen == null) return;
-    const onDown = (e: PointerEvent) => {
-      if (openPickerRef.current && !openPickerRef.current.contains(e.target as Node)) {
-        setAddOpen(null);
-      }
-    };
-    document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
-  }, [addOpen]);
   const roster = content.roster;
   const factionId = roster.faction_id;
   const bodyguardOf = new Map<number, number>();
@@ -522,32 +621,18 @@ function UnitGroups({
           );
         if (own.length === 0 && !addable.has(section.key)) return null;
         const pts = own.reduce((s, e) => s + e.points, 0);
-        const open = addOpen === section.key;
         return (
-          <div key={section.key} className="space-y-2">
-            <div ref={open ? openPickerRef : undefined} className="space-y-2">
-              <div className="flex min-h-9 items-center gap-2 rounded-md bg-panel px-3 py-1.5">
-                <h2 className="min-w-0 flex-1 truncate text-xs font-bold uppercase tracking-wide">
-                  {section.label}
-                </h2>
-                <span className="shrink-0 text-xs tabular-nums text-ink-dim">{pts} pts</span>
-                {addable.has(section.key) && (
-                  <button
-                    type="button"
-                    aria-label={`Add ${section.label}`}
-                    aria-expanded={open}
-                    onClick={() => setAddOpen(open ? null : section.key)}
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-base leading-none ${
-                      open
-                        ? "border-accent bg-accent/15 text-accent"
-                        : "border-edge text-ink-dim hover:text-ink"
-                    }`}
-                  >
-                    {open ? "✕" : "+"}
-                  </button>
-                )}
-              </div>
-              {open && <AddSection data={data} content={content} apply={apply} section={section} />}
+          // An empty section only earns a header on desktop, where it mirrors
+          // the sidebar's grouping — on mobile it would just be noise.
+          <div
+            key={section.key}
+            className={`space-y-2 ${own.length === 0 ? "hidden lg:block" : ""}`}
+          >
+            <div className="flex min-h-9 items-center gap-2 rounded-md bg-panel px-3 py-1.5">
+              <h2 className="min-w-0 flex-1 truncate text-xs font-bold uppercase tracking-wide">
+                {section.label}
+              </h2>
+              <span className="shrink-0 text-xs tabular-nums text-ink-dim">{pts} pts</span>
             </div>
             {own.length > 0 && <ul className="space-y-2">{own.map((e) => e.node)}</ul>}
           </div>
