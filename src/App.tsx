@@ -19,7 +19,9 @@ export default function App() {
     <div className="min-h-dvh">
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 border-b border-edge bg-surface/95 backdrop-blur">
-          <div className="mx-auto flex h-12 w-full max-w-3xl items-center gap-2 px-3 lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
+          {/* Full-bleed app bar: the hamburger belongs to the window's corner,
+              not the centered content column. */}
+          <div className="flex h-12 w-full items-center gap-2 px-3">
             <Sidebar />
             <div className="flex-1">
               <SlotToggle />
