@@ -78,6 +78,25 @@ export function stratagemsForUnit(
   return pool.filter((s) => matchesTargetRestrictions(s, kw));
 }
 
+/**
+ * Split the army's detachment stratagems into one bucket per detachment, in
+ * the roster's detachment order, each bucket display-sorted.
+ */
+export function stratagemsByDetachment(
+  detachment: readonly Stratagem[],
+  detachmentIds: readonly (string | null)[],
+): { id: string; stratagems: Stratagem[] }[] {
+  const seen = new Set<string>();
+  const groups: { id: string; stratagems: Stratagem[] }[] = [];
+  for (const id of detachmentIds) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const stratagems = sortStratagems(detachment.filter((s) => s.detachment_id === id));
+    if (stratagems.length > 0) groups.push({ id, stratagems });
+  }
+  return groups;
+}
+
 const PHASE_ORDER = [
   "any",
   "command",

@@ -13,7 +13,7 @@ import { fnpFromAbilityNames } from "../lib/describe";
 import { byId } from "../lib/lookup";
 import { organizeArmy } from "../lib/organize";
 import { shareText } from "../lib/share";
-import { armyStratagems, sortStratagems } from "../lib/stratagems";
+import { armyStratagems, sortStratagems, stratagemsByDetachment } from "../lib/stratagems";
 import { useActiveList, useLists } from "../store/lists";
 
 export default function GlanceScreen() {
@@ -332,11 +332,26 @@ function StratagemSection({
         </span>
       </summary>
       <div className="px-2 pb-2">
-        <CardColumns>
-          {sortStratagems(detachment).map((s) => (
-            <StratagemCard key={s.id} data={data} stratagem={s} factionId={roster.faction_id} listId={listId} />
-          ))}
-        </CardColumns>
+        {/* One block per detachment, in roster order — matching the glance
+            summary's per-detachment sections. */}
+        {stratagemsByDetachment(detachment, detachmentIds).map((group, gi) => (
+          <div key={group.id}>
+            <div
+              className={`pb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint ${
+                gi > 0 ? "pt-3" : ""
+              }`}
+            >
+              {byId(data.detachments, group.id, roster.faction_id)?.name ??
+                roster.detachments.find((d) => d.ref.id === group.id)?.ref.raw_name ??
+                "Detachment"}
+            </div>
+            <CardColumns>
+              {group.stratagems.map((s) => (
+                <StratagemCard key={s.id} data={data} stratagem={s} factionId={roster.faction_id} listId={listId} />
+              ))}
+            </CardColumns>
+          </div>
+        ))}
         <div className="pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
           Core
         </div>

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import ConfirmButton from "../components/ConfirmButton";
+import ConfirmDialog from "../components/ConfirmDialog";
 import { useDataset } from "../hooks/useDataset";
 import { loadMergedData } from "../lib/data";
 import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
@@ -24,6 +24,8 @@ export default function ListsScreen() {
   const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   /** Pending duplicate: which list, and the (editable) name the copy will get. */
   const [copying, setCopying] = useState<{ id: string; name: string } | null>(null);
+  /** List awaiting delete confirmation in the modal. */
+  const [deleting, setDeleting] = useState<SavedList | null>(null);
 
   /** Copy the shareable text (WTC-compact) for pasting into Discord/Facebook. */
   async function share(list: SavedList) {
@@ -186,13 +188,13 @@ export default function ListsScreen() {
         >
           {copiedId === list.id ? "✓ Copied" : "Share"}
         </button>
-        <ConfirmButton
-          label="Delete"
-          confirmLabel="Sure?"
-          onConfirm={() => deleteList(list.id)}
+        <button
+          type="button"
+          onClick={() => setDeleting(list)}
           className="rounded-md bg-panel px-3 py-1.5 text-xs text-opponent transition-colors hover:bg-opponent/15"
-          armedClassName="rounded-md bg-opponent/20 px-3 py-1.5 text-xs font-semibold text-opponent"
-        />
+        >
+          Delete
+        </button>
       </div>
       {copying?.id === list.id && (
         <div className="mt-2 flex gap-2">
@@ -262,6 +264,19 @@ export default function ListsScreen() {
           <ul className="grid gap-2 lg:grid-cols-2">{group.lists.map(renderCard)}</ul>
         </div>
       ))}
+
+      {deleting && (
+        <ConfirmDialog
+          title={`Delete "${deleting.name}"?`}
+          detail={`${deleting.roster.points.total_computed} pts · this can't be undone.`}
+          confirmLabel="Delete list"
+          onConfirm={() => {
+            deleteList(deleting.id);
+            setDeleting(null);
+          }}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
     </div>
   );
 }

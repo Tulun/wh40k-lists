@@ -4,7 +4,7 @@ import type { Roster, Stratagem } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "../lib/data";
 import { abilityText, dekebabLabel } from "../lib/describe";
 import { byId } from "../lib/lookup";
-import { armyStratagems, sortStratagems } from "../lib/stratagems";
+import { armyStratagems, sortStratagems, stratagemsByDetachment } from "../lib/stratagems";
 import { useLists } from "../store/lists";
 
 interface Props {
@@ -109,11 +109,22 @@ export default function GlanceSummary({ data, roster, listId }: Props) {
                   </Section>
                 )}
 
-                <Section label="Detachment stratagems">
-                  {sortStratagems(detachment).map((s) => (
-                    <StratagemRow key={s.id} data={data} stratagem={s} roster={roster} note={notes?.[s.id]} />
-                  ))}
-                </Section>
+                {/* One section per detachment — a multi-detachment army's
+                    tricks read per detachment, not as one long pile. */}
+                {stratagemsByDetachment(detachment, detachmentIds).map((group) => (
+                  <Section
+                    key={group.id}
+                    label={`${
+                      byId(data.detachments, group.id, roster.faction_id)?.name ??
+                      roster.detachments.find((d) => d.ref.id === group.id)?.ref.raw_name ??
+                      "Detachment"
+                    } stratagems`}
+                  >
+                    {group.stratagems.map((s) => (
+                      <StratagemRow key={s.id} data={data} stratagem={s} roster={roster} note={notes?.[s.id]} />
+                    ))}
+                  </Section>
+                ))}
 
                 <Section label="Core stratagems">
                   {sortStratagems(core).map((s) => (

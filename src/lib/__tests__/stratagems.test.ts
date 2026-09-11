@@ -4,6 +4,7 @@ import {
   armyStratagems,
   effectiveKeywords,
   matchesTargetRestrictions,
+  stratagemsByDetachment,
   stratagemsForUnit,
 } from "../stratagems";
 
@@ -46,6 +47,26 @@ describe("armyStratagems", () => {
     ];
     const { detachment } = armyStratagems(all, ["freebooter-krew", "more-dakka"]);
     expect(detachment.map((s) => s.id).sort()).toEqual(["b", "c"]);
+  });
+});
+
+describe("stratagemsByDetachment", () => {
+  it("buckets per detachment in roster order, skipping empty and duplicate ids", () => {
+    const pool = [
+      strat({ id: "d1", detachment_id: "more-dakka" }),
+      strat({ id: "k1", detachment_id: "kult-of-speed" }),
+      strat({ id: "k2", detachment_id: "kult-of-speed" }),
+    ];
+    const groups = stratagemsByDetachment(pool, [
+      "kult-of-speed",
+      null,
+      "war-horde", // in the roster but owns no stratagems here
+      "more-dakka",
+      "kult-of-speed", // duplicate entry must not double the bucket
+    ]);
+    expect(groups.map((g) => g.id)).toEqual(["kult-of-speed", "more-dakka"]);
+    expect(groups[0].stratagems.map((s) => s.id).sort()).toEqual(["k1", "k2"]);
+    expect(groups[1].stratagems.map((s) => s.id)).toEqual(["d1"]);
   });
 });
 
