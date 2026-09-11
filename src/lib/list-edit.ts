@@ -816,14 +816,29 @@ export interface EnhancementChoice {
 
 /**
  * Army-wide enhancement slots by game-size bracket: 2 up to 1000 pts, 4 up to
- * 2000, 6 beyond — assuming a 2000-pt game when no limit is declared. Every
- * instance spends a slot — an upgrade taken twice spends two.
+ * 2000, 6 beyond — assuming a 2000-pt game when no limit is declared. A
+ * repeatable upgrade spends ONE slot no matter how many copies the army runs;
+ * everything else spends a slot per instance. `exceptIndex` leaves that unit's
+ * enhancement out of the count (for "what if this unit picked X" checks).
  */
-export function enhancementSlots(roster: Roster): { used: number; limit: number } {
+export function enhancementSlots(
+  data: Data40k,
+  roster: Roster,
+  exceptIndex?: number,
+): { used: number; limit: number } {
   const declared = roster.points.declared_limit ?? 2000;
   const limit = declared <= 1000 ? 2 : declared <= 2000 ? 4 : 6;
-  const used = roster.units.filter((u) => u.enhancement != null).length;
-  return { used, limit };
+  const upgradeIds = new Set<string>();
+  let used = 0;
+  roster.units.forEach((u, i) => {
+    if (i === exceptIndex || u.enhancement == null) return;
+    const enh = u.enhancement.id
+      ? byId(data.enhancements, u.enhancement.id, roster.faction_id)
+      : undefined;
+    if (enh?.upgrade_tag) upgradeIds.add(enh.id);
+    else used++;
+  });
+  return { used: used + upgradeIds.size, limit };
 }
 
 /**

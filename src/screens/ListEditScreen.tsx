@@ -32,6 +32,7 @@ import {
   sizeRange,
   wargearCounts,
   wargearOptionStates,
+  type EnhancementChoice,
   type ListContent,
 } from "../lib/list-edit";
 import { DISPOSITIONS } from "../lib/codex-model";
@@ -121,7 +122,7 @@ export default function ListEditScreen() {
         .sort((a, b) => a.name.localeCompare(b.name))
     : [];
   const dpSpent = roster.detachments.reduce((s, d) => s + (d.dp_cost ?? 0), 0);
-  const enhSlots = enhancementSlots(roster);
+  const enhSlots = enhancementSlots(data, roster);
   // The dispositions the chosen detachments grant; empty = data unrecorded, offer all.
   const grantedDispositions = new Set(
     roster.detachments.flatMap(
@@ -861,10 +862,13 @@ function EnhancementPicker({
   const u = content.roster.units[index];
   const choices = enhancementChoices(data, content.roster, index);
   if (choices.length === 0 && !u.enhancement) return null;
-  // A unit already carrying an enhancement may swap it slot-for-slot; one
-  // without can only add while the army still has a free enhancement slot.
-  const slots = enhancementSlots(content.roster);
-  const slotsFull = slots.used >= slots.limit && u.enhancement == null;
+  // Whether a choice fits depends on the army WITHOUT this unit's current
+  // enhancement: swaps free the old slot, and an extra copy of an upgrade
+  // already taken elsewhere spends no new slot at all.
+  const slots = enhancementSlots(data, content.roster);
+  const slotsWithoutMe = enhancementSlots(data, content.roster, index).used;
+  const spendsSlot = (c: EnhancementChoice) => !(c.max > 1 && c.taken > 0);
+  const overflows = (c: EnhancementChoice) => spendsSlot(c) && slotsWithoutMe >= slots.limit;
   /** The enhancement's rules text, resolved through its linked ability. */
   const enhText = (id: string | null | undefined): string | null => {
     const enh = id ? byId(data.enhancements, id, content.roster.faction_id) : undefined;
@@ -913,10 +917,10 @@ function EnhancementPicker({
                 detail:
                   c.taken > 0
                     ? `${c.cost} pts · ${c.max > 1 ? `${c.taken}/${c.max} taken` : "taken"}`
-                    : slotsFull
+                    : overflows(c)
                       ? `${c.cost} pts · army at ${slots.limit} enhancements`
                       : `${c.cost} pts`,
-                disabled: c.taken >= c.max || slotsFull,
+                disabled: c.taken >= c.max || overflows(c),
                 sub: enhText(c.id) ?? undefined,
               })),
             ]}

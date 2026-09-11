@@ -13,6 +13,7 @@ import {
   blankSavedList,
   duplicateUnit,
   enhancementChoices,
+  enhancementSlots,
   legalityIssues,
   nextSize,
   removeDetachment,
@@ -361,6 +362,28 @@ describe("enhancements", () => {
     const choice = choices.find((c) => c.id === found.enh.id);
     expect(choice?.taken).toBe(1);
     expect(choice?.max).toBe(1);
+  });
+
+  it("copies of one upgrade share a slot; distinct picks spend their own", () => {
+    const upgrade = data40k.enhancements.all.find(
+      (e) => e.upgrade_tag && (e.max_targets ?? 3) > 1,
+    )!;
+    const det = data40k.detachments.getAny(upgrade.detachment_id)!;
+    const regular = data40k.enhancements.all.find((e) => !e.upgrade_tag)!;
+    const unit = data40k.units.byFaction(det.faction_id)[0].raw;
+    const content = syntheticContent(det.faction_id, det.id, unit.id);
+    const blank = content.roster.units[0];
+    const withEnh = (enh: { id: string; name: string }) => ({
+      ...structuredClone(blank),
+      enhancement: { id: enh.id, raw_name: enh.name, resolved: true, candidates: [] },
+    });
+    content.roster.units = [withEnh(upgrade), withEnh(upgrade), withEnh(regular)];
+    const slots = enhancementSlots(data40k, content.roster);
+    expect(slots.used).toBe(2);
+    expect(slots.limit).toBe(4);
+    // Excluding a duplicate upgrade copy frees nothing; excluding the regular does.
+    expect(enhancementSlots(data40k, content.roster, 1).used).toBe(2);
+    expect(enhancementSlots(data40k, content.roster, 2).used).toBe(1);
   });
 });
 
