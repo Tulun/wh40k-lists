@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import type { ImportResult, Roster } from "@alpaca-software/40kdc-data";
+import type { Roster } from "@alpaca-software/40kdc-data";
 import CandidatePicker from "../components/CandidatePicker";
 import { loadMergedData, type Data40k } from "../lib/data";
 import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
+import { importRosterLenient } from "../lib/lenient-import";
 import { normalizeImportedRoster, type RoleHints } from "../lib/normalize";
 import { applyOverrides, collectUnresolved, type Overrides } from "../lib/overrides";
 import { useLists } from "../store/lists";
@@ -18,6 +19,8 @@ interface Review {
   attachmentSeeds: Record<string, number>;
   rawText: string;
   format: string;
+  /** Non-null when the text needed the lenient rewrite; the inference steps taken. */
+  inferredNotes: string[] | null;
 }
 
 export default function ImportScreen() {
@@ -54,10 +57,11 @@ export default function ImportScreen() {
     setError(null);
     try {
       const data = await loadMergedData();
-      const result: ImportResult = data.tryImportRoster(text);
+      const { result, inferred, notes } = importRosterLenient(data, text);
       if (!result.ok) {
         setError(
-          `${result.message}\n\nFormats tried: ${result.trials.map((t) => t.id).join(", ")}`,
+          `${result.message}\n\nFormats tried: ${result.trials.map((t) => t.id).join(", ")}` +
+            "\n\nBest-effort inference was also attempted but couldn't find any unit lines.",
         );
         return;
       }
@@ -66,7 +70,15 @@ export default function ImportScreen() {
         data,
         text,
       );
-      setReview({ data, roster, roleHints, attachmentSeeds, rawText: text, format: result.format });
+      setReview({
+        data,
+        roster,
+        roleHints,
+        attachmentSeeds,
+        rawText: text,
+        format: result.format,
+        inferredNotes: inferred ? notes : null,
+      });
       setName((n) => n.trim() || (result.roster.name !== "Imported roster" ? result.roster.name : ""));
       // When re-importing a saved list, its earlier picker decisions still apply by raw name.
       setOverrides(editing?.overrides ?? {});
@@ -126,7 +138,8 @@ export default function ImportScreen() {
               "Unknown faction"}
           </span>
           {" · "}
-          {patched.points.total_computed} pts · format: {review.format}
+          {patched.points.total_computed} pts · format:{" "}
+          {review.inferredNotes ? `${review.format} (inferred)` : review.format}
           <div className="mt-1 text-xs text-ink-dim">
             {d.resolved_units}/{d.resolved_units + d.unresolved_units} units,{" "}
             {d.resolved_weapons}/{d.resolved_weapons + d.unresolved_weapons} weapons resolved
@@ -142,6 +155,22 @@ export default function ImportScreen() {
             </details>
           )}
         </div>
+
+        {review.inferredNotes && (
+          <div className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs">
+            <span className="font-semibold">Imported with inference.</span> This list didn't match
+            a known export format, so its structure was reconstructed — double-check units and
+            points before saving.
+            <details className="mt-1 text-ink-faint">
+              <summary>What was inferred</summary>
+              <ul className="mt-1 list-inside list-disc">
+                {review.inferredNotes.map((n, i) => (
+                  <li key={i}>{n}</li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        )}
 
         {mainRows.length > 0 && (
           <div className="space-y-2">
@@ -235,7 +264,7 @@ export default function ImportScreen() {
       <p className="text-xs text-ink-dim">
         {editing
           ? "Edit the list text below, then re-import. Saving replaces this list in place — slots and notes are kept."
-          : "Paste an army list export — GW app, New Recruit (text or JSON), ListForge, or Rosterizer. Format is detected automatically."}
+          : "Paste an army list export — GW app, New Recruit (text or JSON), ListForge, or Rosterizer. Format is detected automatically; unrecognized layouts are imported with best-effort inference."}
       </p>
       <textarea
         value={text}
