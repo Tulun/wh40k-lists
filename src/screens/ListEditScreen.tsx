@@ -1002,18 +1002,23 @@ function EnhancementPicker({
                 ? [{ value: "unmatched", label: `${unmatched} (unmatched)`, disabled: true }]
                 : []),
               ...currentRow.map((r) => ({ ...r, sub: enhText(r.value) ?? undefined })),
-              ...choices.map((c) => ({
-                value: c.id,
-                label: c.name,
-                detail:
-                  c.taken > 0
-                    ? `${c.cost} pts · ${c.max > 1 ? `${c.taken}/${c.max} taken` : "taken"}`
-                    : overflows(c)
-                      ? `${c.cost} pts · army at ${slots.limit} enhancements`
-                      : `${c.cost} pts`,
-                disabled: c.taken >= c.max || overflows(c),
-                sub: enhText(c.id) ?? undefined,
-              })),
+              ...choices.map((c) => {
+                // `taken` counts other units only (that's what gates the row);
+                // the label counts every copy, this unit's own included.
+                const copies = c.max > 1 ? c.taken + (c.id === currentId ? 1 : 0) : c.taken;
+                return {
+                  value: c.id,
+                  label: c.name,
+                  detail:
+                    copies > 0
+                      ? `${c.cost} pts · ${c.max > 1 ? `${copies}/${c.max} taken` : "taken"}`
+                      : overflows(c)
+                        ? `${c.cost} pts · army at ${slots.limit} enhancements`
+                        : `${c.cost} pts`,
+                  disabled: c.taken >= c.max || overflows(c),
+                  sub: enhText(c.id) ?? undefined,
+                };
+              }),
             ]}
             onChange={(id) =>
               apply(setEnhancement(data, content, index, id === "unmatched" ? null : id))
