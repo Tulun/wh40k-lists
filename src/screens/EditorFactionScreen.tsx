@@ -9,16 +9,8 @@ import {
   TextInput,
 } from "../components/editor/fields";
 import { useDataset } from "../hooks/useDataset";
+import { DISPOSITION_SHORT } from "../lib/codex-model";
 import { factionMode, useCodex } from "../store/codex";
-
-/** Compact disposition labels for one-line list rows. */
-const DISPOSITION_SHORT: Record<string, string> = {
-  "take-and-hold": "Take & Hold",
-  disruption: "Disruption",
-  "purge-the-foe": "Purge",
-  "priority-assets": "Priority",
-  reconnaissance: "Recon",
-};
 
 /**
  * Editing hub for one faction. Replace mode (the new Ork codex): army rule +

@@ -29,6 +29,26 @@ export function shareText(data: Data40k, list: SavedList): string {
         }
       : null;
   });
+  // Stored wargear order varies with how the unit entered the list (import
+  // vs added vs stepped in the editor); the copy should print identical
+  // loadouts identically. Sort each bag into datasheet weapon order; lines
+  // the datasheet doesn't rank (wargear items, unresolved text) sort by name
+  // behind the ranked ones.
+  roster.units.forEach((u) => {
+    const view = u.ref.id ? data.resolveRosterUnit(u, data.dataset, roster.faction_id) : null;
+    if (!view) return;
+    const rank = new Map(view.weapons.map((w, i) => [w.id, i]));
+    const nameOf = (ref: (typeof u.wargear)[number]["ref"]) =>
+      byId(data.weapons, ref.id, roster.faction_id)?.name ??
+      byId(data.wargear, ref.id, roster.faction_id)?.name ??
+      ref.raw_name;
+    u.wargear = [...u.wargear].sort((a, b) => {
+      const ra = (a.ref.id != null ? rank.get(a.ref.id) : undefined) ?? Infinity;
+      const rb = (b.ref.id != null ? rank.get(b.ref.id) : undefined) ?? Infinity;
+      if (ra !== rb) return ra - rb;
+      return nameOf(a.ref).localeCompare(nameOf(b.ref));
+    });
+  });
   // The shared army layout: attached bricks first in their own section, then
   // loose units in role sections — and since CharN slots are assigned in
   // output order, the numbering follows this layout too.
@@ -52,15 +72,14 @@ function remarkCharacters(text: string, data: Data40k, roster: Roster): string {
   const slots: (number | null)[] = [];
   let next = 1;
   for (const u of roster.units) {
-    const role = u.ref.id
-      ? byId(data.units, u.ref.id, roster.faction_id)?.raw.role
-      : undefined;
-    const isChar =
-      role === "character" ||
-      role === "epic-hero" ||
-      u.is_warlord ||
-      u.enhancement != null ||
-      u.leader_attachment != null;
+    const sheet = u.ref.id ? byId(data.units, u.ref.id, roster.faction_id) : undefined;
+    // A resolved datasheet decides alone (an empty role means non-character —
+    // every character sheet declares its role): upgrade enhancements sit on
+    // regular units (Extra Sneaky Gretchin), so carrying one no longer implies
+    // a character. The old inference remains for unresolved datasheets only.
+    const isChar = sheet
+      ? sheet.raw.role === "character" || sheet.raw.role === "epic-hero"
+      : u.is_warlord || u.enhancement != null || u.leader_attachment != null;
     slots.push(isChar ? next++ : null);
   }
 
@@ -94,12 +113,17 @@ function remarkCharacters(text: string, data: Data40k, roster: Roster): string {
   let enhLine = 0;
   for (let i = 0; i < headerEnd; i++) {
     if (lines[i].startsWith("+ WARLORD:") && warlordIdx >= 0) {
-      lines[i] = `+ WARLORD: Char${slots[warlordIdx]}: ${roster.units[warlordIdx].ref.raw_name}`;
+      const slot = slots[warlordIdx];
+      const tag = slot != null ? `Char${slot}: ` : "";
+      lines[i] = `+ WARLORD: ${tag}${roster.units[warlordIdx].ref.raw_name}`;
     }
     if (lines[i].startsWith("+ ENHANCEMENT:") && enhLine < enhancedIdxs.length) {
       const uIdx = enhancedIdxs[enhLine++];
       const u = roster.units[uIdx];
-      lines[i] = `+ ENHANCEMENT: ${u.enhancement!.raw_name} (on Char${slots[uIdx]}: ${u.ref.raw_name})`;
+      // A non-character bearer (upgrade enhancement) has no Char slot — name
+      // it plainly; its own body block still shows the Enhancement line.
+      const tag = slots[uIdx] != null ? `Char${slots[uIdx]}: ` : "";
+      lines[i] = `+ ENHANCEMENT: ${u.enhancement!.raw_name} (on ${tag}${u.ref.raw_name})`;
     }
   }
   return lines.join("\n");

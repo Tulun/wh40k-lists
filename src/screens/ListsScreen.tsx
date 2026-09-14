@@ -2,9 +2,11 @@ import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { useDataset } from "../hooks/useDataset";
+import { DISPOSITION_SHORT, DISPOSITIONS } from "../lib/codex-model";
 import { loadMergedData } from "../lib/data";
 import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
 import { blankSavedList } from "../lib/list-edit";
+import { byId } from "../lib/lookup";
 import { shareText } from "../lib/share";
 import { useLists } from "../store/lists";
 import type { SavedList, Slot } from "../store/schema";
@@ -26,6 +28,8 @@ export default function ListsScreen() {
   const [copying, setCopying] = useState<{ id: string; name: string } | null>(null);
   /** List awaiting delete confirmation in the modal. */
   const [deleting, setDeleting] = useState<SavedList | null>(null);
+  /** Order within each disposition subgroup. */
+  const [sortBy, setSortBy] = useState<"latest" | "name">("latest");
 
   /** Copy the shareable text (WTC-compact) for pasting into Discord/Facebook. */
   async function share(list: SavedList) {
@@ -37,31 +41,44 @@ export default function ListsScreen() {
   }
 
   const data = useDataset();
-  // Most recently edited first (`updated` stamps every in-app edit; older
-  // remote copies without it fall back to their import time).
-  const all = Object.values(lists).sort((a, b) =>
-    (b.updated ?? b.importedAt).localeCompare(a.updated ?? a.importedAt),
+  // "latest" = most recently edited first (`updated` stamps every in-app edit;
+  // older remote copies without it fall back to their import time).
+  const all = Object.values(lists).sort(
+    sortBy === "name"
+      ? (a, b) => a.name.localeCompare(b.name)
+      : (a, b) => (b.updated ?? b.importedAt).localeCompare(a.updated ?? a.importedAt),
   );
 
-  // Group by faction, most recently edited first within each group. Only lists
-  // with a recorded faction get a subheader; the rest render unlabeled at the end.
-  const groups = new Map<string, { label: string | null; lists: SavedList[] }>();
+  // Group by faction, then by the list's chosen Force Disposition within each
+  // faction. Only lists with a recorded faction get a header; the rest render
+  // unlabeled at the end. Lists without a disposition render last, unlabeled.
+  const groups = new Map<string, { label: string | null; subs: Map<string, SavedList[]> }>();
   for (const list of all) {
     const fid = list.roster.faction_id;
     const key = fid ?? "";
     if (!groups.has(key)) {
       groups.set(key, {
         label: fid ? (data?.factions.getAny(fid)?.name ?? fid) : null,
-        lists: [],
+        subs: new Map(),
       });
     }
-    groups.get(key)!.lists.push(list);
+    const subs = groups.get(key)!.subs;
+    const dispo = list.roster.force_disposition ?? "";
+    if (!subs.has(dispo)) subs.set(dispo, []);
+    subs.get(dispo)!.push(list);
   }
-  const grouped = [...groups.values()].sort((a, b) => {
-    if (a.label == null) return 1;
-    if (b.label == null) return -1;
-    return a.label.localeCompare(b.label);
-  });
+  const dispoOrder = (id: string) =>
+    id === "" ? DISPOSITIONS.length : DISPOSITIONS.findIndex((d) => d.id === id);
+  const grouped = [...groups.values()]
+    .sort((a, b) => {
+      if (a.label == null) return 1;
+      if (b.label == null) return -1;
+      return a.label.localeCompare(b.label);
+    })
+    .map((g) => ({
+      ...g,
+      subs: [...g.subs.entries()].sort((a, b) => dispoOrder(a[0]) - dispoOrder(b[0])),
+    }));
 
   /** Clone the list under a new id; it lands at the top as the most recent edit. */
   function duplicate(list: SavedList, name: string) {
@@ -90,8 +107,19 @@ export default function ListsScreen() {
 
   const currentList = slots.mine ? (lists[slots.mine] ?? null) : null;
 
+  /** "Dread Mob (Take & Hold, Recon)" for each detachment on the list. */
+  const detachmentSummary = (list: SavedList) =>
+    list.roster.detachments
+      .map((d) => {
+        const det = data ? byId(data.detachments, d.ref.id, list.roster.faction_id) : undefined;
+        const name = det?.name ?? d.ref.raw_name;
+        const dispos = (det?.force_dispositions ?? []).map((x) => DISPOSITION_SHORT[x] ?? x);
+        return dispos.length > 0 ? `${name} (${dispos.join(", ")})` : name;
+      })
+      .join(" + ");
+
   const renderCard = (list: SavedList) => (
-    <li key={list.id} className="rounded-lg border border-edge bg-panel/50 px-3 py-2">
+    <li key={list.id} className="min-w-0 rounded-lg border border-edge bg-panel/50 px-3 py-2">
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -127,8 +155,8 @@ export default function ListsScreen() {
         onClick={() => open(list)}
         className="mt-0.5 block w-full text-left text-[11px] text-ink-faint"
       >
-        {new Date(list.importedAt).toLocaleDateString()} · {list.dataVersion.edition} ed /{" "}
-        {list.dataVersion.dataslate}
+        {new Date(list.importedAt).toLocaleDateString()}
+        {detachmentSummary(list) && ` · ${detachmentSummary(list)}`}
       </button>
       <div className="mt-2 flex gap-2">
         {OPPONENT_SLOT_ENABLED && (
@@ -245,6 +273,25 @@ export default function ListsScreen() {
         <p className="py-12 text-center text-sm text-ink-dim">No lists yet — import one to get started.</p>
       )}
 
+      {all.length > 1 && (
+        <div className="flex items-center justify-end gap-1 text-xs text-ink-faint">
+          Sort
+          {(["latest", "name"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={sortBy === mode}
+              onClick={() => setSortBy(mode)}
+              className={`rounded-md px-2 py-1 font-semibold transition-colors ${
+                sortBy === mode ? "bg-panel text-accent" : "text-ink-dim hover:text-ink"
+              }`}
+            >
+              {mode === "latest" ? "Latest" : "Name"}
+            </button>
+          ))}
+        </div>
+      )}
+
       {currentList && (
         <div>
           <div className="mb-2 mt-2 px-1 text-sm font-bold uppercase tracking-wide text-accent">
@@ -261,7 +308,20 @@ export default function ListsScreen() {
               {group.label}
             </div>
           )}
-          <ul className="grid gap-2 lg:grid-cols-2">{group.lists.map(renderCard)}</ul>
+          <div className="space-y-2">
+            {group.subs.map(([dispo, subLists]) => (
+              <div key={dispo || "·no-dispo"}>
+                {group.subs.length > 1 && (
+                  <div className="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+                    {dispo
+                      ? (DISPOSITIONS.find((d) => d.id === dispo)?.label ?? dispo)
+                      : "No disposition"}
+                  </div>
+                )}
+                <ul className="grid gap-2 lg:grid-cols-2">{subLists.map(renderCard)}</ul>
+              </div>
+            ))}
+          </div>
         </div>
       ))}
 

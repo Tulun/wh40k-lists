@@ -170,6 +170,15 @@ export const DISPOSITIONS = [
   { id: "reconnaissance", label: "Reconnaissance" },
 ] as const;
 
+/** Compact disposition labels for one-line list rows. */
+export const DISPOSITION_SHORT: Record<string, string> = {
+  "take-and-hold": "Take & Hold",
+  disruption: "Disruption",
+  "purge-the-foe": "Purge",
+  "priority-assets": "Priority",
+  reconnaissance: "Recon",
+};
+
 export interface EditableDetachment {
   id: string;
   name: string;

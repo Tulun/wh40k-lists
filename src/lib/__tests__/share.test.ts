@@ -84,6 +84,47 @@ describe("shareText", () => {
     expect(units[squig]).toMatch(/^Char[2-9]/);
   });
 
+  it("prints identical loadouts identically regardless of stored wargear order", () => {
+    // Two copies of the same unit whose wargear arrays are stored in
+    // different orders (import vs editor edits) must print the same line.
+    const src = list.roster.units.find((u) => u.wargear.length >= 2)!;
+    const copy = structuredClone(src);
+    copy.wargear.reverse();
+    const twoUnits = {
+      ...list,
+      roster: { ...list.roster, units: [structuredClone(src), copy] },
+    } as SavedList;
+    const out2 = shareText(data40k as never, twoUnits);
+    const unitLines = out2
+      .slice(out2.lastIndexOf("+++"))
+      .split("\n")
+      .filter((l) => /\(\d+ pts\): /.test(l))
+      .map((l) => l.replace(/^Char\d+: /, ""));
+    expect(unitLines).toHaveLength(2);
+    expect(unitLines[0]).toBe(unitLines[1]);
+  });
+
+  it("does not tag a non-character carrying an upgrade enhancement as CharN", () => {
+    const boyzIdx = list.roster.units.findIndex((u) => u.ref.id === "boyz");
+    expect(boyzIdx).toBeGreaterThanOrEqual(0);
+    const enhanced = structuredClone(list) as SavedList;
+    enhanced.roster.units[boyzIdx].enhancement = {
+      id: null,
+      raw_name: "Extra Sneaky",
+      resolved: false,
+      candidates: [],
+    };
+    enhanced.roster.units[boyzIdx].enhancement_points = 10;
+    const outE = shareText(data40k as never, enhanced);
+    // The enhancement rides along as a body line, but Boyz stays untagged —
+    // its datasheet role decides, not the enhancement.
+    expect(outE).not.toMatch(/Char\d+: \d+x Boyz/);
+    expect(outE).toMatch(/x Boyz \(\d+ pts\).*\nEnhancement: Extra Sneaky/);
+    // The single header ENHANCEMENT line still pairs with the first enhanced
+    // unit in output order (the Bannernob, a real character).
+    expect(outE).toContain("ENHANCEMENT: Git-Spotter Squig (on Char1: Bannernob)");
+  });
+
   it("puts a blank line between unit blocks, keeping Enhancement lines attached", () => {
     const body = out.slice(out.lastIndexOf("+++"));
     // Units are separated by exactly one blank line…
