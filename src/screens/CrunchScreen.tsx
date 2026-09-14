@@ -4,6 +4,7 @@ import BackBar from "../components/BackBar";
 import CrunchPanel from "../components/CrunchPanel";
 import { useDataset } from "../hooks/useDataset";
 import { dedupeRoster, narrowEntry } from "../lib/dedupe";
+import { completeRosterWargear } from "../lib/wargear-modes";
 import { useActiveList } from "../store/lists";
 
 /**
@@ -20,10 +21,13 @@ export default function CrunchScreen() {
 
   const entry = useMemo(() => {
     if (!list || !entryKey) return null;
-    const full = dedupeRoster(list.roster).find((e) => e.key === entryKey) ?? null;
+    // Same dual-mode wargear healing as the unit page, so the damage view
+    // counts every mode of a weapon saved before its second record existed.
+    const roster = data ? completeRosterWargear(data, list.roster) : list.roster;
+    const full = dedupeRoster(roster).find((e) => e.key === entryKey) ?? null;
     if (!full || instParam == null) return full;
     return narrowEntry(full, Number(instParam));
-  }, [list, entryKey, instParam]);
+  }, [list, data, entryKey, instParam]);
 
   if (!list || !entry) {
     return (

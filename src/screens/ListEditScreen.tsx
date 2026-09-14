@@ -84,11 +84,17 @@ export default function ListEditScreen() {
     });
     const changed =
       repriced.roster.points.total_computed !== list.roster.points.total_computed ||
-      repriced.roster.units.some(
-        (u, i) =>
-          u.points !== list.roster.units[i].points ||
-          u.enhancement_points !== list.roster.units[i].enhancement_points,
-      );
+      repriced.roster.units.some((u, i) => {
+        const old = list.roster.units[i];
+        return (
+          u.points !== old.points ||
+          u.enhancement_points !== old.enhancement_points ||
+          u.wargear.length !== old.wargear.length ||
+          u.wargear.some(
+            (w, j) => w.ref.id !== old.wargear[j].ref.id || w.count !== old.wargear[j].count,
+          )
+        );
+      });
     if (changed) {
       updateListContent(list.id, {
         ...repriced,

@@ -345,6 +345,30 @@ Deff Dread (130 pts)
     expect(attachmentSeeds[String(bannernob)]).toBe(boyz);
   });
 
+  it("splits an Oxford-comma detachment list and fuzzy-matches spelling drift", () => {
+    // Real-world tournament header: "Boys" vs the dataset's "Boyz", a comma
+    // list with a trailing ", and", and one name the dataset doesn't know.
+    const r = roster({
+      detachments: [
+        { ref: unresolved("Bully Boys, Dread mob, and Wreckas"), dp_cost: null },
+      ],
+    });
+    const { roster: out } = normalizeImportedRoster(r, data40k);
+    expect(out.detachments.map((d) => d.ref.id)).toEqual(["bully-boyz", "dread-mob", null]);
+    // The unknown part keeps its own row (and picker) instead of dragging the
+    // resolved parts back into one unresolved blob.
+    expect(out.detachments[2].ref.raw_name).toBe("Wreckas");
+    expect(out.detachments[2].ref.resolved).toBe(false);
+  });
+
+  it("fuzzy-resolves a lone misspelled detachment", () => {
+    const r = roster({
+      detachments: [{ ref: unresolved("Bully Boys"), dp_cost: null }],
+    });
+    const { roster: out } = normalizeImportedRoster(r, data40k);
+    expect(out.detachments.map((d) => d.ref.id)).toEqual(["bully-boyz"]);
+  });
+
   it("leaves unsplittable detachments untouched for the candidate picker", () => {
     const r = roster({
       detachments: [{ ref: unresolved("Da Best Boyz and Some Nonsense"), dp_cost: null }],

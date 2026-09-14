@@ -21,6 +21,7 @@ import {
   type LoadoutGroupView,
 } from "../lib/dedupe";
 import { displayLoadoutGroups } from "../lib/list-edit";
+import { completeRosterWargear } from "../lib/wargear-modes";
 import { armyRule, byId } from "../lib/lookup";
 import { shareText } from "../lib/share";
 import { armyStratagems, sortStratagems, stratagemsForUnit } from "../lib/stratagems";
@@ -76,7 +77,11 @@ export default function UnitDetailScreen() {
 
   const { entry, position, siblingCount } = useMemo(() => {
     if (!list || !entryKey) return { entry: null, position: 0, siblingCount: 0 };
-    const full = dedupeRoster(list.roster).find((e) => e.key === entryKey) ?? null;
+    // Heal wargear saved before a dual-mode weapon's second record existed in
+    // the codex (Nazdreg's melee Kustom Blasta X) — viewing shouldn't require
+    // an edit-screen visit first.
+    const roster = data ? completeRosterWargear(data, list.roster) : list.roster;
+    const full = dedupeRoster(roster).find((e) => e.key === entryKey) ?? null;
     if (!full || instParam == null) return { entry: full, position: 0, siblingCount: 0 };
     const idx = full.instances.findIndex((inst) => inst.rosterIndex === Number(instParam));
     return {
@@ -84,7 +89,7 @@ export default function UnitDetailScreen() {
       position: idx + 1,
       siblingCount: idx >= 0 ? full.count : 0,
     };
-  }, [list, entryKey, instParam]);
+  }, [list, data, entryKey, instParam]);
 
   if (!list || !entry) {
     return (

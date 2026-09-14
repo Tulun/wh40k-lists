@@ -15,6 +15,7 @@ import type { ResolvedRef, Roster } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "./data";
 // Value import, but no cycle: list-edit's import from this module is type-only.
 import { enhancementLeadGrants } from "./list-edit";
+import { completeDualModeWargear } from "./wargear-modes";
 
 type RosterDetachment = Roster["detachments"][number];
 
@@ -24,7 +25,8 @@ export type RoleHints = Record<string, RoleHint>;
 
 const MARKER = /^(leader|bodyguard|support)\s*(?:\((.*)\))?$/i;
 const DP_SUFFIX = /\s*\(\s*\d+\s*detachment\s*points?\s*\)\s*$/i;
-const DETACHMENT_JOINER = /\s+(?:and|&|\+)\s+/i;
+/** List separators: a comma (optionally Oxford — ", and "), or a bare joiner. */
+const DETACHMENT_JOINER = /\s*,\s*(?:and\s+|&\s*)?|\s+(?:and|&|\+)\s+/i;
 /** Parenthetical contents that name a role category rather than a partner unit. */
 const GENERIC_PARTNER = /^(character|epic hero)?$/i;
 
@@ -49,16 +51,36 @@ function resolveByExactName<V extends { id: string; name: string }>(
   return candidates.find((c) => normalizeName(c.name) === target);
 }
 
+/**
+ * Exact-name miss fallback: a unique near-match within the pool ("Bully Boys"
+ * → the dataset's "Bully Boyz"). Ambiguity stays unresolved for the picker.
+ */
+function fuzzyResolveDetachment<V extends { id: string; name: string }>(
+  pool: V[],
+  rawName: string,
+  normalizeName: (s: string) => string,
+): V | undefined {
+  const target = normalizeName(rawName);
+  const tolerance = target.length >= 8 ? 2 : 1;
+  const matches = pool.filter(
+    (d) => editDistance(normalizeName(d.name), target, tolerance) <= tolerance,
+  );
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 function splitDetachment(
   det: RosterDetachment,
   data: Data40k,
   factionId: string | null,
 ): RosterDetachment[] {
   if (det.ref.resolved) return [det];
+  const nn = data.normalizeName;
   const cleaned = det.ref.raw_name.replace(DP_SUFFIX, "").trim();
   const inFaction = factionId ? data.detachments.byFaction(factionId) : data.detachments.all;
+  const resolveOne = (name: string) =>
+    resolveByExactName(inFaction, name, nn) ?? fuzzyResolveDetachment(inFaction, name, nn);
 
-  const whole = resolveByExactName(inFaction, cleaned, data.normalizeName);
+  const whole = resolveOne(cleaned);
   if (whole) {
     return [
       {
@@ -68,14 +90,36 @@ function splitDetachment(
     ];
   }
 
-  const parts = cleaned.split(DETACHMENT_JOINER).map((p) => p.trim());
+  const parts = cleaned.split(DETACHMENT_JOINER).map((p) => p.trim()).filter((p) => p.length > 0);
   if (parts.length < 2) return [det];
-  const resolved = parts.map((p) => resolveByExactName(inFaction, p, data.normalizeName));
-  if (resolved.some((r) => !r)) return [det]; // only split when every part matches
-  return resolved.map((entity, i) => ({
-    dp_cost: entity!.detachment_points ?? null,
-    ref: { id: entity!.id, raw_name: parts[i], resolved: true, candidates: [] },
-  }));
+  const hits = parts.map(resolveOne);
+  // A comma is an unambiguous list separator, so a comma-separated header
+  // splits even when some parts stay unresolved — each part becomes its own
+  // row (and its own candidate picker). A bare "A and B" could be one real
+  // detachment name ("Legends of Saga and Song"), so it only splits when
+  // every part matches.
+  if (!cleaned.includes(",") && hits.some((h) => !h)) return [det];
+  return parts.map((part, i) => {
+    const hit = hits[i];
+    if (!hit) {
+      return {
+        dp_cost: null,
+        ref: {
+          id: null,
+          raw_name: part,
+          resolved: false,
+          candidates: data.detachments
+            .findAll(part)
+            .slice(0, 5)
+            .map((c) => ({ id: c.id, name: c.name })),
+        },
+      };
+    }
+    return {
+      dp_cost: hit.detachment_points ?? null,
+      ref: { id: hit.id, raw_name: part, resolved: true, candidates: [] },
+    };
+  });
 }
 
 function resolveWargearRef(ref: ResolvedRef, data: Data40k, factionId: string | null): ResolvedRef {
@@ -289,28 +333,10 @@ export function normalizeImportedRoster(
       wargear.push(item);
     }
 
-    // A datasheet can carry two weapon records with the same display name (a
-    // ranged and a melee profile printed as separate lines — Nazdreg's Kustom
-    // Blasta X). The importer resolves every such line to the same record and
-    // double-counts it; spill the excess into the unclaimed same-name siblings.
-    for (const item of [...wargear]) {
-      if (!item.ref.id || item.count < 2) continue;
-      const name = nn(item.ref.raw_name);
-      const siblings = unitWeapons.filter(
-        (w) =>
-          w.id !== item.ref.id &&
-          nn(w.name) === name &&
-          !wargear.some((o) => o.ref.id === w.id),
-      );
-      for (const sib of siblings) {
-        if (item.count < 2) break;
-        item.count -= 1;
-        wargear.push({
-          ref: { id: sib.id, raw_name: sib.name, resolved: true, candidates: [] },
-          count: 1,
-        });
-      }
-    }
+    // Dual-mode weapons (two same-named records — Nazdreg's Kustom Blasta X)
+    // arrive as one line, or as one double-counted line per printed profile;
+    // rebalance so every mode record carries the physical count.
+    const balancedWargear = completeDualModeWargear(unitWeapons, wargear, nn);
 
     // Rebuild per-model loadout groups from the raw text's ◦ nesting when the
     // parser didn't provide them (keeps "carried by the Nob" tags working).
@@ -324,7 +350,7 @@ export function normalizeImportedRoster(
           model_name: g.model_name,
           count: g.count,
           wargear: g.wargear.map((w) => {
-            const match = wargear.find((item) => nn(item.ref.raw_name) === nn(w.name));
+            const match = balancedWargear.find((item) => nn(item.ref.raw_name) === nn(w.name));
             // ◦ counts are group totals; RosterLoadoutGroup counts are per model.
             const perModel = g.count > 0 && w.count % g.count === 0 ? w.count / g.count : w.count;
             return {
@@ -335,7 +361,7 @@ export function normalizeImportedRoster(
         }));
       }
     }
-    return { ...unit, is_warlord: isWarlord, wargear, loadout_groups: loadoutGroups };
+    return { ...unit, is_warlord: isWarlord, wargear: balancedWargear, loadout_groups: loadoutGroups };
   });
 
   // Markers that named their partner unit ("Leader (Beast Snagga Boyz)")

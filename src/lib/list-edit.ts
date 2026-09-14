@@ -28,6 +28,7 @@ import { abilityText } from "./describe";
 import type { RoleHints } from "./normalize";
 import { byId } from "./lookup";
 import { groupLoadoutSpread } from "./group-loadout";
+import { completeRosterWargear } from "./wargear-modes";
 import type { SavedList } from "../store/schema";
 
 type LoadoutModels = Parameters<Data40k["baseLoadout"]>[3];
@@ -609,6 +610,9 @@ export function removeDetachment(data: Data40k, content: ListContent, index: num
  */
 export function repriceAll(data: Data40k, content: ListContent): ListContent {
   const next = clone(content);
+  // Also heal wargear saved before a dual-mode weapon's second record existed
+  // in the codex (Nazdreg's melee Kustom Blasta X).
+  next.roster = completeRosterWargear(data, next.roster);
   return finalize(data, next, next.roster.units.map((u) => u.ref.id));
 }
 
