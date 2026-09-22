@@ -205,6 +205,60 @@ describe("pullRemote / pushLocal", () => {
   });
 });
 
+describe("truncated gist files", () => {
+  it("follows raw_url when the API truncates a large file (grown lists.json)", async () => {
+    useCodex.setState({
+      sync: { gistId: CFG.gistId, token: CFG.token, lastSynced: null, remoteUpdated: "T0" },
+      dirty: false,
+    });
+    const remote = remoteLists("L1", { a: savedList("a", "big list") });
+    const fullLists = JSON.stringify(remote);
+    const files = {
+      [GIST_FILE]: { content: JSON.stringify(doc("T0")) },
+      // Inline content cut mid-JSON, the way the API serves files past ~1MB.
+      [LISTS_FILE]: {
+        content: fullLists.slice(0, 40),
+        truncated: true,
+        raw_url: "https://gist.githubusercontent.com/u/g/raw/sha/lists.json",
+      },
+    };
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("gist.githubusercontent.com")) {
+        return Promise.resolve(new Response(fullLists, { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ files }), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await pullRemote();
+    expect(result.status).toBe("pulled");
+    expect(Object.keys(useLists.getState().lists)).toEqual(["a"]);
+    // The raw fetch must not carry the API auth header — raw content is
+    // reachable by URL alone and the extra header would trigger CORS preflight.
+    const rawCall = fetchMock.mock.calls.find(([u]) => (u as string).includes("githubusercontent"));
+    expect(rawCall?.[1]).toBeUndefined();
+  });
+
+  it("fails the pull instead of treating an unreachable truncated file as absent", async () => {
+    useCodex.setState({
+      sync: { gistId: CFG.gistId, token: CFG.token, lastSynced: null, remoteUpdated: "T0" },
+      dirty: false,
+    });
+    const files = {
+      [GIST_FILE]: { content: JSON.stringify(doc("T0")) },
+      [LISTS_FILE]: { content: "{cut", truncated: true, raw_url: "https://gist.githubusercontent.com/u/g/raw/sha/lists.json" },
+    };
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("gist.githubusercontent.com")) {
+        return Promise.resolve(new Response("", { status: 500 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ files }), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await pullRemote();
+    expect(result.status).toBe("error");
+  });
+});
+
 describe("lists sync", () => {
   /** Codex side pinned up-to-date at T0 so only the lists behavior varies. */
   function connect() {

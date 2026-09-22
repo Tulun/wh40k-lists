@@ -75,10 +75,30 @@ async function fetchGistFiles(cfg: GistConfig): Promise<Result<{ files: Record<s
     return { ok: false, error: { kind: "network", message: "Could not reach GitHub (offline?)." } };
   }
   if (!res.ok) return { ok: false, error: failureFrom(res.status) };
-  const body = (await res.json()) as { files?: Record<string, { content?: string }> };
+  const body = (await res.json()) as {
+    files?: Record<string, { content?: string; truncated?: boolean; raw_url?: string }>;
+  };
   const files: Record<string, string> = {};
   for (const [name, file] of Object.entries(body.files ?? {})) {
-    if (file?.content) files[name] = file.content;
+    if (!file) continue;
+    if (file.truncated && file.raw_url) {
+      // The API truncates inline content around 1MB (JSON-escaped) — a grown
+      // lists.json comes back as unparseable half-JSON. Fetch the full copy
+      // from raw_url instead: it pins the same gist revision, serves CORS *,
+      // and (like all secret-gist content) is reachable by URL alone, so no
+      // auth header is sent. Failing loudly here matters — treating the file
+      // as absent would make push logic overwrite the remote copy.
+      let raw: Response;
+      try {
+        raw = await fetch(file.raw_url);
+      } catch {
+        return { ok: false, error: { kind: "network", message: "Could not reach GitHub (offline?)." } };
+      }
+      if (!raw.ok) return { ok: false, error: failureFrom(raw.status) };
+      files[name] = await raw.text();
+    } else if (file.content) {
+      files[name] = file.content;
+    }
   }
   return { ok: true, files };
 }
