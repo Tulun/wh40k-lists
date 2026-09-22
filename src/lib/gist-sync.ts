@@ -18,8 +18,8 @@
  */
 import type { CodexDoc } from "./codex-model";
 import { emptyCodexDoc } from "./codex-model";
-import { useCodex } from "../store/codex";
-import { useLists } from "../store/lists";
+import { absorbForeignCodexWrites, useCodex } from "../store/codex";
+import { absorbForeignWrites, useLists } from "../store/lists";
 import { useSyncUi } from "../store/sync-ui";
 import type { ListsSyncState, RemoteLists, SavedList, Slot } from "../store/schema";
 
@@ -124,6 +124,7 @@ function parseRemoteLists(content: string): RemoteLists | null {
 
 /** Snapshot the local lists state in the remote-file shape. */
 function localListsSnapshot(): RemoteLists {
+  absorbForeignWrites();
   const s = useLists.getState();
   return {
     version: 1,
@@ -249,6 +250,9 @@ type ListsPullStatus = "up-to-date" | "pulled" | "merged" | "push-needed" | "inv
  * with local content) → merge per list and queue the merge for push.
  */
 function reconcileLists(remoteContent: string | undefined): { status: ListsPullStatus } {
+  // Decisions below must build on the newest local copy — a stale frozen tab
+  // deciding "clean → adopt remote" would erase lists another tab just saved.
+  absorbForeignWrites();
   const state = useLists.getState();
   const now = new Date().toISOString();
   const hasLocal = Object.keys(state.lists).length > 0;
@@ -265,19 +269,26 @@ function reconcileLists(remoteContent: string | undefined): { status: ListsPullS
   const remote = parseRemoteLists(remoteContent);
   if (!remote) return { status: "invalid" };
 
+  const remoteSynced = { ids: Object.keys(remote.lists), localUpdated: remote.updated };
+
   if (state.sync.remoteUpdated === null && !hasLocal) {
     state.adoptRemote(remote);
-    useLists.getState().markSynced(now, remote.updated);
+    useLists.getState().markSynced(now, remote.updated, remoteSynced);
     return { status: "pulled" };
   }
 
   if (remote.updated === state.sync.remoteUpdated || remote.updated === state.updated) {
-    if (!state.dirty) useLists.getState().markSynced(now, remote.updated);
+    if (!state.dirty) {
+      useLists.getState().markSynced(now, remote.updated, {
+        ids: Object.keys(state.lists),
+        localUpdated: state.updated,
+      });
+    }
     return { status: "up-to-date" };
   }
   if (!state.dirty && state.sync.remoteUpdated !== null) {
     state.adoptRemote(remote);
-    useLists.getState().markSynced(now, remote.updated);
+    useLists.getState().markSynced(now, remote.updated, remoteSynced);
     return { status: "pulled" };
   }
 
@@ -285,7 +296,7 @@ function reconcileLists(remoteContent: string | undefined): { status: ListsPullS
   const merged = mergeLists(state, remote);
   if (mergeEqualsRemote(merged, remote)) {
     state.adoptRemote(remote);
-    useLists.getState().markSynced(now, remote.updated);
+    useLists.getState().markSynced(now, remote.updated, remoteSynced);
     return { status: "pulled" };
   }
   useLists.getState().adoptMerged(merged, remote.updated);
@@ -322,6 +333,7 @@ export function pullRemote(): Promise<PullResult> {
 }
 
 async function doPullRemote(): Promise<PullResult> {
+  absorbForeignCodexWrites();
   const { sync, dirty } = useCodex.getState();
   if (!sync.gistId || !sync.token) return { status: "up-to-date" };
   const gist = await fetchGistFiles({ gistId: sync.gistId, token: sync.token });
@@ -339,19 +351,19 @@ async function doPullRemote(): Promise<PullResult> {
   const now = new Date().toISOString();
   let codexStatus: "up-to-date" | "pulled" | "conflict" = "up-to-date";
   if (remote.updated === sync.remoteUpdated || remote.updated === useCodex.getState().doc.updated) {
-    if (!dirty) useCodex.getState().markSynced(now, remote.updated);
+    if (!dirty) useCodex.getState().markSynced(now, remote.updated, useCodex.getState().doc.updated);
   } else if (dirty) {
     if (sameDocContent(remote, useCodex.getState().doc)) {
       // Same content, different stamps (e.g. both devices resolved the same
       // way) — adopt the remote copy silently instead of raising a conflict.
       useCodex.getState().setDoc(remote, { markClean: true });
-      useCodex.getState().markSynced(now, remote.updated);
+      useCodex.getState().markSynced(now, remote.updated, remote.updated);
     } else {
       codexStatus = "conflict";
     }
   } else {
     useCodex.getState().setDoc(remote, { markClean: true });
-    useCodex.getState().markSynced(now, remote.updated);
+    useCodex.getState().markSynced(now, remote.updated, remote.updated);
     codexStatus = "pulled";
   }
 
@@ -381,6 +393,8 @@ export type PushResult =
  * differ, and that conflict doesn't block pushing the lists file.
  */
 export async function pushLocal(): Promise<PushResult> {
+  absorbForeignCodexWrites();
+  absorbForeignWrites();
   const { sync, doc, dirty: codexDirty } = useCodex.getState();
   if (!sync.gistId || !sync.token) {
     return { status: "error", error: { kind: "invalid", message: "Sync is not configured." } };
@@ -402,7 +416,7 @@ export async function pushLocal(): Promise<PushResult> {
     if (remote && sync.remoteUpdated !== null && remote.updated !== sync.remoteUpdated) {
       if (sameDocContent(remote, doc)) {
         useCodex.getState().setDoc(remote, { markClean: true });
-        useCodex.getState().markSynced(new Date().toISOString(), remote.updated);
+        useCodex.getState().markSynced(new Date().toISOString(), remote.updated, remote.updated);
       } else {
         codexConflict = remote;
       }
@@ -412,6 +426,7 @@ export async function pushLocal(): Promise<PushResult> {
   }
 
   let listsPushed: RemoteLists | undefined;
+  absorbForeignWrites();
   if (useLists.getState().dirty) {
     const content = gist.files[LISTS_FILE];
     if (content !== undefined) {
@@ -427,7 +442,10 @@ export async function pushLocal(): Promise<PushResult> {
         const merged = mergeLists(state, remote);
         if (mergeEqualsRemote(merged, remote)) {
           state.adoptRemote(remote);
-          useLists.getState().markSynced(new Date().toISOString(), remote.updated);
+          useLists.getState().markSynced(new Date().toISOString(), remote.updated, {
+            ids: Object.keys(remote.lists),
+            localUpdated: remote.updated,
+          });
         } else {
           useLists.getState().adoptMerged(merged, remote.updated);
         }
@@ -443,8 +461,16 @@ export async function pushLocal(): Promise<PushResult> {
     const saved = await saveRemoteFiles(cfg, files);
     if (!saved.ok) return { status: "error", error: saved.error };
     const now = new Date().toISOString();
-    if (files[GIST_FILE]) useCodex.getState().markSynced(now, doc.updated);
-    if (listsPushed) useLists.getState().markSynced(now, listsPushed.updated);
+    if (files[GIST_FILE]) useCodex.getState().markSynced(now, doc.updated, doc.updated);
+    if (listsPushed) {
+      // Baseline exactly what was pushed: a save that landed while the PATCH
+      // was in flight must stay dirty and unknown, or the next clean pull
+      // would treat it as remotely deleted and drop it.
+      useLists.getState().markSynced(now, listsPushed.updated, {
+        ids: Object.keys(listsPushed.lists),
+        localUpdated: listsPushed.updated,
+      });
+    }
   }
 
   if (codexConflict) {
@@ -462,7 +488,7 @@ export async function resolveConflict(keep: "local" | "remote", remoteDoc: Codex
   useSyncUi.getState().setCodexConflict(null);
   if (keep === "remote") {
     useCodex.getState().setDoc(remoteDoc, { markClean: true });
-    useCodex.getState().markSynced(new Date().toISOString(), remoteDoc.updated);
+    useCodex.getState().markSynced(new Date().toISOString(), remoteDoc.updated, remoteDoc.updated);
     return { status: "pulled" as const };
   }
   // Keep local: adopt the remote stamp as baseline, then overwrite it.
@@ -503,7 +529,7 @@ export async function setUpSync(token: string, gistIdInput: string | null) {
       return pushLocalWithBaseline(remoteDoc.updated);
     }
     useCodex.getState().setDoc(remoteDoc, { markClean: true });
-    useCodex.getState().markSynced(new Date().toISOString(), remoteDoc.updated);
+    useCodex.getState().markSynced(new Date().toISOString(), remoteDoc.updated, remoteDoc.updated);
     return { status: "connected" as const };
   }
   const hasLists = Object.keys(useLists.getState().lists).length > 0;
@@ -512,8 +538,13 @@ export async function setUpSync(token: string, gistIdInput: string | null) {
   if (!created.ok) return { status: "error" as const, error: created.error };
   store.setSyncConfig({ gistId: created.gistId, token });
   const now = new Date().toISOString();
-  useCodex.getState().markSynced(now, store.doc.updated);
-  if (listsSeed) useLists.getState().markSynced(now, listsSeed.updated);
+  useCodex.getState().markSynced(now, store.doc.updated, store.doc.updated);
+  if (listsSeed) {
+    useLists.getState().markSynced(now, listsSeed.updated, {
+      ids: Object.keys(listsSeed.lists),
+      localUpdated: listsSeed.updated,
+    });
+  }
   return { status: "created" as const, gistId: created.gistId };
 }
 
@@ -551,4 +582,11 @@ export function startAutoSync(): void {
     if (!sync.gistId || !sync.token) return;
     schedule();
   });
+  // A session killed between an edit and its debounced push (phone lock, tab
+  // close) leaves dirty state that no mutation would ever re-schedule — catch
+  // it up now. The startup pull runs first; pushLocal merges if remote moved.
+  const { sync } = useCodex.getState();
+  if (sync.gistId && sync.token && (useCodex.getState().dirty || useLists.getState().dirty)) {
+    schedule();
+  }
 }

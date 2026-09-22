@@ -10,7 +10,7 @@
  * with no reload.
  */
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import type {
   CodexDoc,
   EditableDatasheet,
@@ -47,7 +47,44 @@ interface CodexStore {
   /** Replace the whole doc (remote pull, or Claude-transcribed update). */
   setDoc(doc: CodexDoc, opts?: { markClean?: boolean }): void;
   setSyncConfig(config: Partial<Pick<SyncConfig, "gistId" | "token">>): void;
-  markSynced(at: string, remoteUpdated: string): void;
+  /**
+   * Record a completed sync. `syncedDocUpdated` is the stamp of the doc copy
+   * that was pushed or adopted — the dirty flag only clears while the store
+   * still holds that copy (an edit that landed mid-push stays dirty).
+   */
+  markSynced(at: string, remoteUpdated: string, syncedDocUpdated: string | null): void;
+}
+
+// Cross-tab write safety, same rationale as store/lists.ts: persist writes the
+// whole state, and a frozen background tab misses `storage` events entirely —
+// its next write would clobber codex edits made elsewhere. Track the last raw
+// string this tab read/wrote and rehydrate before writing over a foreign one.
+let lastSeenRaw: string | null = null;
+
+const trackedStorage: StateStorage = {
+  getItem: (name) => {
+    const value = globalThis.localStorage?.getItem(name) ?? null;
+    lastSeenRaw = value;
+    return value;
+  },
+  setItem: (name, value) => {
+    globalThis.localStorage?.setItem(name, value);
+    lastSeenRaw = value;
+  },
+  removeItem: (name) => {
+    globalThis.localStorage?.removeItem(name);
+    lastSeenRaw = null;
+  },
+};
+
+/** Rehydrate before mutating when another tab wrote storage since we last saw it. */
+export function absorbForeignCodexWrites(): void {
+  try {
+    const raw = globalThis.localStorage?.getItem(CODEX_STORAGE_KEY) ?? null;
+    if (raw !== null && raw !== lastSeenRaw) void useCodex.persist.rehydrate();
+  } catch {
+    // Storage unavailable (private mode) — then no other tab can write either.
+  }
 }
 
 /** Which mode a faction entry gets when first edited. */
@@ -76,12 +113,14 @@ export const useCodex = create<CodexStore>()(
   persist(
     (set) => {
       /** Clone → mutate → stamp, as a single set() helper. */
-      const update = (fn: (doc: CodexDoc) => void) =>
+      const update = (fn: (doc: CodexDoc) => void) => {
+        absorbForeignCodexWrites();
         set((s) => {
           const doc = structuredClone(s.doc);
           fn(doc);
           return { doc: mutated(doc), dirty: true };
         });
+      };
 
       return {
         doc: emptyCodexDoc(),
@@ -152,13 +191,21 @@ export const useCodex = create<CodexStore>()(
         setSyncConfig: (config) =>
           set((s) => ({ sync: { ...s.sync, ...config } })),
 
-        markSynced: (at, remoteUpdated) =>
-          set((s) => ({ sync: { ...s.sync, lastSynced: at, remoteUpdated }, dirty: false })),
+        markSynced: (at, remoteUpdated, syncedDocUpdated) => {
+          absorbForeignCodexWrites();
+          set((s) => ({
+            sync: { ...s.sync, lastSynced: at, remoteUpdated },
+            // An edit that landed after the synced copy was captured still
+            // needs pushing — only a store that matches the copy is clean.
+            dirty: s.doc.updated === syncedDocUpdated ? false : s.dirty,
+          }));
+        },
       };
     },
     {
       name: CODEX_STORAGE_KEY,
       version: CODEX_STORAGE_VERSION,
+      storage: createJSONStorage(() => trackedStorage),
     },
   ),
 );

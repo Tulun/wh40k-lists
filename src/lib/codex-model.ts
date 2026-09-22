@@ -212,9 +212,10 @@ export const battlelineGrantSentence = (name: string) =>
  * The canonical rule sentence for an enhancement lead grant ("the bearer may
  * also lead X"). The compiler emits it; `enhancementLeadGrants` (list-edit)
  * parses it back out of the enhancement's rule text. The alternation also
- * catches the "can lead" phrasing an author might type by hand.
+ * catches the "can lead" phrasing an author might type by hand, and the
+ * singular "a Flash Gitz unit" form printed rules use.
  */
-export const LEADS_GRANT_RE = /the bearer can (?:lead|be attached to) (.+?) units/gi;
+export const LEADS_GRANT_RE = /the bearer can (?:lead|be attached to) (.+?) units?\b/gi;
 export const leadsGrantSentence = (name: string) =>
   `The bearer can be attached to ${name} units.`;
 

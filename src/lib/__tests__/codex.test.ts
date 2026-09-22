@@ -285,6 +285,38 @@ describe("compileFaction", () => {
     expect(enhancementLeadGrants(data, roster, 1).size).toBe(0);
   });
 
+  it("parses a hand-written singular lead grant (\"a New Ladz unit\")", () => {
+    const det = {
+      ...REPLACE_ORKS.detachments[0],
+      enhancements: [
+        {
+          id: "new-enh",
+          name: "New Enh",
+          cost: 15,
+          text: "The bearer can be attached to a New Ladz unit.",
+          restrictions: ["Character"],
+        },
+      ],
+    };
+    const merged = buildMergedRaw(
+      syntheticBase(),
+      compileFaction("orks", { ...REPLACE_ORKS, detachments: [det] }),
+    );
+    const ds = new mod.Dataset(merged);
+    const data = {
+      ...mod,
+      dataset: ds,
+      units: ds.units,
+      abilities: ds.abilities,
+      enhancements: ds.enhancements,
+    } as unknown as Data40k;
+    const roster = {
+      faction_id: "orks",
+      units: [{ ref: { id: "new-bignob" }, enhancement: { id: "new-enh" } }],
+    } as unknown as Roster;
+    expect(enhancementLeadGrants(data, roster, 0)).toEqual(new Set(["new-ladz"]));
+  });
+
   it("compiles structured Battleline grants into the canonical rule sentence, without duplicating", () => {
     const det = {
       ...REPLACE_ORKS.detachments[0],
