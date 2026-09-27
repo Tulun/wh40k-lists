@@ -8,6 +8,10 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { Data40k } from "./data";
 import { DISPOSITIONS } from "./codex-model";
 
+/** GW's downloads page; the PDF's own URL changes when a new version ships. */
+export const EVENT_COMPANION_PAGE_URL =
+  "https://www.warhammer-community.com/en-gb/downloads/warhammer-40000/";
+
 export const EVENT_COMPANION_URL =
   "https://assets.warhammer-community.com/eng_wh40k_event_companion-pl87i44rzn-a7ieny8i9x.pdf";
 
@@ -20,9 +24,26 @@ export type MissionPageIndex = Record<string, number>;
 export interface MissionPack {
   id: "event-companion";
   fileName: string;
-  blob: Blob;
+  /**
+   * Raw PDF bytes. Stored as an ArrayBuffer, not the picked File: iOS Safari
+   * can fail to persist a File from <input type="file"> in IndexedDB.
+   */
+  bytes: ArrayBuffer;
   index: MissionPageIndex;
   importedAt: string;
+  /** The PDF's own modified (or created) date, ISO — identifies the version. */
+  pdfDate?: string;
+}
+
+export interface MissionPdfScan {
+  index: MissionPageIndex;
+  pdfDate?: string;
+}
+
+/** PDF date string ("D:20260809085029+01'00'") → ISO date, or undefined. */
+export function parsePdfDate(raw: unknown): string | undefined {
+  const m = typeof raw === "string" ? /^D:(\d{4})(\d{2})(\d{2})/.exec(raw) : null;
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : undefined;
 }
 
 export function pageKey(a: string, b: string, layout: Layout): string {
@@ -98,15 +119,17 @@ async function openPdf(bytes: ArrayBuffer): Promise<PDFDocumentProxy> {
   return pdfjs.getDocument({ data: new Uint8Array(bytes) }).promise;
 }
 
-/** Scan every page and map each pairing + layout to its page. */
+/** Scan every page, mapping each pairing + layout to its page, and read the PDF's date. */
 export async function indexMissionPdf(
   bytes: ArrayBuffer,
   pairings: Pairing[],
   onProgress?: (done: number, total: number) => void,
-): Promise<MissionPageIndex> {
+): Promise<MissionPdfScan> {
   const doc = await openPdf(bytes);
   const index: MissionPageIndex = {};
   try {
+    const info = (await doc.getMetadata()).info as Record<string, unknown>;
+    const pdfDate = parsePdfDate(info.ModDate) ?? parsePdfDate(info.CreationDate);
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const content = await page.getTextContent();
@@ -115,10 +138,10 @@ export async function indexMissionPdf(
       if (key && !(key in index)) index[key] = n;
       onProgress?.(n, doc.numPages);
     }
+    return { index, pdfDate };
   } finally {
     await doc.loadingTask.destroy();
   }
-  return index;
 }
 
 // ---- IndexedDB -------------------------------------------------------------
@@ -146,11 +169,20 @@ function tx<T>(
   return openDb().then(
     (db) =>
       new Promise<T>((resolve, reject) => {
+        // Settle on the transaction, not the request: a write can still
+        // abort after its request succeeds (e.g. over the storage quota).
         const t = db.transaction(STORE, mode);
         const req = run(t.objectStore(STORE));
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error ?? new Error("IndexedDB request failed"));
-        t.oncomplete = () => db.close();
+        t.oncomplete = () => {
+          db.close();
+          resolve(req.result);
+        };
+        const fail = () => {
+          db.close();
+          reject(t.error ?? req.error ?? new Error("IndexedDB transaction failed"));
+        };
+        t.onabort = fail;
+        t.onerror = fail;
       }),
   );
 }
@@ -158,17 +190,25 @@ function tx<T>(
 let openDoc: { pack: MissionPack; doc: Promise<PDFDocumentProxy> } | null = null;
 
 export async function loadMissionPack(): Promise<MissionPack | null> {
-  return (await tx<MissionPack | undefined>("readonly", (s) => s.get("event-companion"))) ?? null;
+  const pack = await tx<MissionPack | undefined>("readonly", (s) => s.get("event-companion"));
+  return pack?.bytes ? pack : null;
 }
 
-export async function saveMissionPack(file: File, index: MissionPageIndex): Promise<MissionPack> {
+export async function saveMissionPack(
+  fileName: string,
+  bytes: ArrayBuffer,
+  scan: MissionPdfScan,
+): Promise<MissionPack> {
   const pack: MissionPack = {
     id: "event-companion",
-    fileName: file.name,
-    blob: file,
-    index,
+    fileName,
+    bytes,
+    index: scan.index,
     importedAt: new Date().toISOString(),
+    pdfDate: scan.pdfDate,
   };
+  // Best effort: ask the browser not to evict it under storage pressure.
+  void navigator.storage?.persist?.().catch(() => {});
   await tx("readwrite", (s) => s.put(pack));
   closeOpenDoc();
   return pack;
@@ -189,7 +229,8 @@ function closeOpenDoc() {
 function docFor(pack: MissionPack): Promise<PDFDocumentProxy> {
   if (openDoc?.pack !== pack) {
     closeOpenDoc();
-    openDoc = { pack, doc: pack.blob.arrayBuffer().then(openPdf) };
+    // pdf.js transfers (detaches) the buffer it's given, so hand it a copy.
+    openDoc = { pack, doc: openPdf(pack.bytes.slice(0)) };
   }
   return openDoc.doc;
 }

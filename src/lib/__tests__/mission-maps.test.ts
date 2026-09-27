@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchMissionPage, missionPairings, pageKey } from "../mission-maps";
+import { matchMissionPage, missionPairings, pageKey, parsePdfDate } from "../mission-maps";
 
 describe("mission map pages", async () => {
   const data = await import("@alpaca-software/40kdc-data");
@@ -31,5 +31,11 @@ describe("mission map pages", async () => {
     expect(matchMissionPage("Take and Hold vs Take and Hold: Layout B", pairings)).toBeNull();
     expect(matchMissionPage("LAYOUTS KEY BATTLEFIELD DOMINANCE", pairings)).toBeNull();
     expect(matchMissionPage("LAYOUT A MEATGRINDER SABOTAGE", pairings)).toBeNull();
+  });
+
+  it("reads the PDF's version date", () => {
+    expect(parsePdfDate("D:20260809085029+01'00'")).toBe("2026-08-09");
+    expect(parsePdfDate("garbage")).toBeUndefined();
+    expect(parsePdfDate(undefined)).toBeUndefined();
   });
 });

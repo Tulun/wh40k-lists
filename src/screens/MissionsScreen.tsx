@@ -4,6 +4,7 @@ import { useDataset } from "../hooks/useDataset";
 import { DISPOSITION_SHORT, DISPOSITIONS } from "../lib/codex-model";
 import {
   deleteMissionPack,
+  EVENT_COMPANION_PAGE_URL,
   EVENT_COMPANION_URL,
   indexMissionPdf,
   LAYOUTS,
@@ -159,6 +160,8 @@ function MissionMap({ pageKeyFor, pairings }: { pageKeyFor: string; pairings: Pa
   const [pack, setPack] = useState<MissionPack | null | undefined>(undefined);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Outcome of the last import, e.g. "Updated to the 20 Sep 2026 version". */
+  const [notice, setNotice] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -168,18 +171,45 @@ function MissionMap({ pageKeyFor, pairings }: { pageKeyFor: string; pairings: Pa
     });
   }, []);
 
+  /**
+   * Import a first copy or a newer version. The current PDF stays in place
+   * unless the new one indexes at least as many layouts.
+   */
   async function importFile(file: File) {
     setError(null);
+    setNotice(null);
     setProgress("Reading PDF…");
     try {
-      const index = await indexMissionPdf(await file.arrayBuffer(), pairings, (done, total) =>
+      const bytes = await file.arrayBuffer();
+      // Index a copy: pdf.js detaches the buffer it reads.
+      const scan = await indexMissionPdf(bytes.slice(0), pairings, (done, total) =>
         setProgress(`Indexing page ${done} of ${total}…`),
       );
-      const found = Object.keys(index).length;
+      const found = Object.keys(scan.index).length;
       if (found === 0) {
         throw new Error("No mission layout pages found — is this the Event Companion PDF?");
       }
-      setPack(await saveMissionPack(file, index));
+      const prev = pack ?? null;
+      const prevFound = prev ? Object.keys(prev.index).length : 0;
+      if (prev && found < prevFound) {
+        throw new Error(
+          `That PDF has only ${found} of the ${prevFound} layouts the current one has, so the current one was kept.`,
+        );
+      }
+      if (prev && prev.pdfDate === scan.pdfDate && prev.bytes.byteLength === bytes.byteLength) {
+        setNotice(
+          `Already up to date${prev.pdfDate ? ` (${formatDate(prev.pdfDate)} version)` : ""}.`,
+        );
+        return;
+      }
+      setPack(await saveMissionPack(file.name, bytes, scan));
+      if (prev) {
+        setNotice(
+          scan.pdfDate && prev.pdfDate && scan.pdfDate !== prev.pdfDate
+            ? `Updated to the ${formatDate(scan.pdfDate)} version (was ${formatDate(prev.pdfDate)}).`
+            : "PDF replaced.",
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -250,25 +280,42 @@ function MissionMap({ pageKeyFor, pairings }: { pageKeyFor: string; pairings: Pa
           This matchup's layout isn't in the imported PDF.
         </p>
       )}
-      <div className="flex items-center gap-3 text-[11px] text-ink-faint">
-        <span className="min-w-0 flex-1 truncate">
-          {pack.fileName}
+      <div className="space-y-1.5 rounded-lg border border-edge px-3 py-2 text-[11px] text-ink-faint">
+        <div>
+          Event Companion
+          {pack.pdfDate && ` · ${formatDate(pack.pdfDate)} version`} ·{" "}
+          {Object.keys(pack.index).length} layouts
           {page && ` · p${page}`}
-        </span>
-        <button type="button" onClick={() => fileRef.current?.click()} className="underline">
-          Replace
-        </button>
-        <button
-          type="button"
-          onClick={() => void deleteMissionPack().then(() => setPack(null))}
-          className="underline"
-        >
-          Remove
-        </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <a href={EVENT_COMPANION_PAGE_URL} target="_blank" rel="noreferrer" className="underline">
+            Check for a newer version ↗
+          </a>
+          <button type="button" onClick={() => fileRef.current?.click()} className="underline">
+            Import update
+          </button>
+          <button
+            type="button"
+            onClick={() => void deleteMissionPack().then(() => setPack(null))}
+            className="underline"
+          >
+            Remove
+          </button>
+        </div>
+        {notice && <p className="text-accent">{notice}</p>}
       </div>
       {error && <p className="text-xs text-red-400">{error}</p>}
     </div>
   );
+}
+
+/** "2026-08-09" → "9 Aug 2026" in the viewer's locale. */
+function formatDate(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function MapCanvas({ pack, page }: { pack: MissionPack; page: number }) {
