@@ -10,7 +10,15 @@ import * as data40k from "@alpaca-software/40kdc-data";
 import { emptyCodexDoc } from "../codex-model";
 import { mergedData } from "../data";
 import { importRosterLenient } from "../lenient-import";
-import { legalityIssues, repriceAll, setModelCount, wargearOptionStates } from "../list-edit";
+import {
+  legalityIssues,
+  removeWargear,
+  repriceAll,
+  setModelCount,
+  strayWargearIds,
+  wargearCounts,
+  wargearOptionStates,
+} from "../list-edit";
 import { normalizeImportedRoster } from "../normalize";
 
 const d = mergedData(data40k as never, emptyCodexDoc());
@@ -57,8 +65,47 @@ describe("Grey Knights squad fixes", () => {
     expect(ids.filter((id) => id.includes("guns"))).toHaveLength(1);
   });
 
+  it("whole-model validation sees both per-5 gun records (4 psycannons + Ancient's)", () => {
+    // The wargear panel validates the unit on its own; it must pass every
+    // option record — the merged states drop the duplicate and halve the cap.
+    const u = content.roster.units.find((x) => x.ref.id === "paladin-squad")!;
+    const unit = d.units.getInFaction("paladin-squad", "grey-knights")!.raw;
+    const violations = d.validateLoadout(
+      unit,
+      u.model_count,
+      d.dataset.wargearOptionsOf(unit),
+      wargearCounts(u),
+      d.dataset.unitCompositionOf(unit)?.models,
+    );
+    expect(violations).toEqual([]);
+  });
+
   it("the imported list reads clean, with Ancient rows treated as models", () => {
     expect(legalityIssues(d, content.roster, content.attachments)).toEqual([]);
     expect(content.roster.units.flatMap((u) => u.wargear.filter((w) => !w.ref.id))).toEqual([]);
+  });
+
+  it("gear the sheet can't carry is flagged plainly and removable", () => {
+    // A saved list from the old data: the "Ancient" model line matched to
+    // the Fury of the Ancients weapon, banner/incinerator since removed.
+    const i = content.roster.units.findIndex((u) => u.ref.id === "brotherhood-terminator-squad");
+    const stale = structuredClone(content);
+    const ru = stale.roster.units[i];
+    ru.wargear = ru.wargear.filter(
+      (w) => w.ref.id !== "ancients-banner" && w.ref.id !== "incinerator",
+    );
+    ru.wargear.find((w) => w.ref.id === "storm-bolter")!.count = 3;
+    ru.wargear.push({
+      ref: { id: "fury-of-the-ancients", raw_name: "Ancient", resolved: true, candidates: [] },
+      count: 1,
+    });
+    const unit = d.units.getInFaction("brotherhood-terminator-squad", "grey-knights")!.raw;
+    expect(strayWargearIds(d, ru, unit)).toEqual(["fury-of-the-ancients"]);
+    const issues = legalityIssues(d, stale.roster, stale.attachments);
+    expect(issues.some((m) => /Fury of the Ancients isn't on this datasheet/.test(m))).toBe(true);
+    expect(issues.some((m) => /whole-model/.test(m))).toBe(false);
+    const fixed = removeWargear(d, stale, i, "fury-of-the-ancients");
+    expect(strayWargearIds(d, fixed.roster.units[i], unit)).toEqual([]);
+    expect(legalityIssues(d, fixed.roster, fixed.attachments)).toEqual([]);
   });
 });

@@ -359,6 +359,44 @@ export function setModelCount(
   return finalize(data, next, [u.ref.id]);
 }
 
+/**
+ * Resolved gear on a roster unit that its datasheet can't carry at all — not
+ * a listed weapon, not granted by any option, not a model default. Typically
+ * a stale import match (a model-name line matched to a same-named weapon,
+ * or gear the data has since dropped). Empty for free-form units.
+ */
+export function strayWargearIds(data: Data40k, rosterUnit: RosterUnit, unit: Unit): string[] {
+  if (loadoutDataMissing(data, unit)) return [];
+  const { options, models } = loadoutCtx(data, unit);
+  const allowed = new Set<string>(unit.weapon_ids ?? []);
+  for (const o of options) {
+    for (const id of o.replaces ?? []) allowed.add(id);
+    for (const b of optionBranches(o)) for (const id of b) allowed.add(id);
+  }
+  for (const m of models ?? []) for (const id of m.default_weapon_ids ?? []) allowed.add(id);
+  return [...wargearCounts(rosterUnit).keys()].filter((id) => !allowed.has(id));
+}
+
+/** Drop one item from a unit's wargear outright (no bounds — for strays). */
+export function removeWargear(
+  data: Data40k,
+  content: ListContent,
+  index: number,
+  itemId: string,
+): ListContent {
+  const next = clone(content);
+  const u = next.roster.units[index];
+  u.wargear = u.wargear.filter((w) => w.ref.id !== itemId);
+  const unit = unitEntity(data, u.ref, next.roster.faction_id);
+  if (unit && !loadoutDataMissing(data, unit)) {
+    const { options, models } = loadoutCtx(data, unit);
+    u.loadout_groups = regenGroups(
+      data, unit, u.model_count, options, models, wargearCounts(u), next.roster.faction_id,
+    );
+  }
+  return finalize(data, next, [u.ref.id]);
+}
+
 /** Set one weapon's count (clamped into its valid range) on a resolved unit. */
 export function setWeaponCount(
   data: Data40k,
@@ -762,11 +800,25 @@ export function legalityIssues(
     const unitName = v.unitIndex != null ? unitLabel(v.unitIndex) : null;
     issues.push(unitName ? `${unitName}: ${v.message}` : v.message);
   }
+  // Gear the datasheet can't carry gets a plain message; the package's
+  // "cannot be assigned to whole-model loadouts" for that unit is its echo.
+  const strayUnits = new Set<number>();
+  roster.units.forEach((ru, i) => {
+    const unit = unitEntity(data, ru.ref, factionId);
+    const strays = unit ? strayWargearIds(data, ru, unit) : [];
+    if (strays.length === 0) return;
+    strayUnits.add(i);
+    const names = strays.map((id) => itemName(data, id, factionId)).join(", ");
+    issues.push(`${unitLabel(i)}: ${names} isn't on this datasheet — remove it in the wargear list`);
+  });
   for (const ul of legality.units) {
     const ru = roster.units[ul.unitIndex];
     const unit = ru ? unitEntity(data, ru.ref, factionId) : undefined;
     if (unit && loadoutDataMissing(data, unit)) continue;
-    for (const v of ul.violations) issues.push(`${unitLabel(ul.unitIndex)}: ${v.message}`);
+    for (const v of ul.violations) {
+      if (v.code === "swap-conflict" && strayUnits.has(ul.unitIndex)) continue;
+      issues.push(`${unitLabel(ul.unitIndex)}: ${v.message}`);
+    }
   }
   issues.push(...alliedIssues(data, roster));
   return issues;

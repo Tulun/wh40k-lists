@@ -35,6 +35,8 @@ import {
   sizeRange,
   wargearCounts,
   wargearOptionStates,
+  strayWargearIds,
+  removeWargear,
   type EnhancementChoice,
   type ListContent,
 } from "../lib/list-edit";
@@ -1099,14 +1101,21 @@ function WargearEditor({
   // swaps yet — offer free steppers (0..squad size) until options are recorded.
   const freeform = !locked && loadoutDataMissing(data, unit);
   const optionStates = locked || freeform ? [] : wargearOptionStates(data, u, unit);
+  // Gear the datasheet can't carry at all (stale import matches) is listed
+  // separately with a remove button, and kept out of the whole-model check —
+  // otherwise it only surfaces as an opaque "cannot be assigned" error.
+  const strays = new Set(locked ? [] : strayWargearIds(data, u, unit));
+  const checkedCounts = new Map([...counts].filter(([id]) => !strays.has(id)));
   const violations =
     locked || freeform
       ? []
       : data.validateLoadout(
           unit,
           u.model_count,
-          optionStates.map((s) => s.option),
-          counts,
+          // Every option record, not the merged states: "2 per 5 models" is
+          // two identical records whose caps only add up when both are seen.
+          data.dataset.wargearOptionsOf(unit),
+          checkedCounts,
           data.dataset.unitCompositionOf(unit)?.models,
         );
   // The package validator misses one-of add-ons taken twice across branches
@@ -1127,6 +1136,7 @@ function WargearEditor({
     ? [...new Set([...(unit.weapon_ids ?? []), ...counts.keys()])]
     : [...counts.keys()];
   const rows = gearIds
+    .filter((id) => !strays.has(id))
     .map((id) => ({ id, name: nameOf(id), count: counts.get(id) ?? 0, cost: surcharge(id) }))
     .filter((r) => freeform || r.count > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -1138,9 +1148,9 @@ function WargearEditor({
       : groupLoadoutSpread(
           unit,
           u.model_count,
-          optionStates.map((s) => s.option),
+          data.dataset.wargearOptionsOf(unit),
           data.dataset.unitCompositionOf(unit)?.models,
-          counts,
+          checkedCounts,
         );
   const splitGroups = gearGroups && gearGroups.length > 1 ? gearGroups : null;
   if (rows.length === 0 && unresolvedGear.length === 0 && optionStates.length === 0) return null;
@@ -1150,11 +1160,14 @@ function WargearEditor({
       <summary className="cursor-pointer px-2 py-1.5 text-xs text-ink-dim">
         Wargear{" "}
         <span className="text-ink-faint">
-          ({rows.filter((r) => r.count > 0).length + unresolvedGear.length} items
+          ({rows.filter((r) => r.count > 0).length + unresolvedGear.length + strays.size} items
           {locked ? " · fixed" : ""})
         </span>
-        {violations.length + overCap.length > 0 && (
-          <span className="text-opponent"> ⚠ {violations.length + overCap.length}</span>
+        {violations.length + overCap.length + strays.size > 0 && (
+          <span className="text-opponent">
+            {" "}
+            ⚠ {violations.length + overCap.length + strays.size}
+          </span>
         )}
       </summary>
       <div className="space-y-1 px-2 pb-2">
@@ -1227,6 +1240,22 @@ function WargearEditor({
                 </div>
               ));
             })()}
+        {[...strays].map((id) => (
+          <div key={`stray-${id}`} className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-xs text-opponent">
+              ⚠ {nameOf(id)}
+              <span className="text-ink-faint"> · not on this datasheet</span>
+            </span>
+            <span className="text-xs text-ink-faint">×{counts.get(id)}</span>
+            <button
+              type="button"
+              onClick={() => apply(removeWargear(data, content, index, id))}
+              className="rounded-md bg-panel px-2 py-0.5 text-xs text-opponent hover:bg-opponent/15"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
         {unresolvedGear.map((w, i) => (
           <div key={`raw-${i}`} className="flex items-center gap-2">
             <span className="min-w-0 flex-1 truncate text-xs text-ink-dim">
