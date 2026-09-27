@@ -240,6 +240,13 @@ export interface CodexDoc {
   /** ISO timestamp of the last mutation — the gist conflict guard compares it. */
   updated: string;
   factions: Record<string, FactionEntry>;
+  /**
+   * Rewordings of individual upstream abilities, factionId → ability id →
+   * paraphrased prose. Shown instead of the DSL-generated text (which can read
+   * awkwardly) without patching the whole datasheet — a sheet patch re-ids its
+   * weapons and would orphan wargear in saved lists.
+   */
+  abilityText?: Record<string, Record<string, string>>;
 }
 
 export function emptyCodexDoc(): CodexDoc {
@@ -248,7 +255,8 @@ export function emptyCodexDoc(): CodexDoc {
 
 /** True when the doc has nothing that would change the dataset. */
 export function docIsEmpty(doc: CodexDoc): boolean {
-  return Object.values(doc.factions).every((f) =>
+  const reworded = Object.values(doc.abilityText ?? {}).some((m) => Object.keys(m).length > 0);
+  return !reworded && Object.values(doc.factions).every((f) =>
     f.mode === "replace"
       ? f.datasheets.length === 0 && f.detachments.length === 0 && !f.armyRule
       : Object.keys(f.datasheets).length === 0 && Object.keys(f.detachments).length === 0,

@@ -279,5 +279,32 @@ export function applyCodex(mod: Data40k, doc: CodexDoc): Dataset | null {
       changed = true;
     }
   }
+  if (applyAbilityText(raw, doc)) changed = true;
   return changed ? new mod.Dataset(raw) : null;
+}
+
+/**
+ * Doc rewordings → `leak_text` on the matching ability records (faction-owned,
+ * or unowned datasheet abilities), which `abilityText()` prefers over the DSL
+ * renderer. A reworded ability counts as checked against the card, so its
+ * provisional dataslate is cleared.
+ */
+export function applyAbilityText(raw: RawData, doc: CodexDoc): boolean {
+  let changed = false;
+  for (const [factionId, byAbility] of Object.entries(doc.abilityText ?? {})) {
+    for (const [abilityId, text] of Object.entries(byAbility)) {
+      if (!text.trim()) continue;
+      raw.abilities = raw.abilities.map((a) => {
+        if (a.ability_id !== abilityId) return a;
+        if (a.faction_id != null && a.faction_id !== factionId) return a;
+        changed = true;
+        return {
+          ...a,
+          leak_text: text.trim(),
+          game_version: { ...a.game_version, dataslate: "reworded" },
+        } as typeof a;
+      });
+    }
+  }
+  return changed;
 }
