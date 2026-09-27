@@ -221,7 +221,43 @@ const ABILITY_TEXT: Record<string, string> = {
     "the unit's melee weapons that have [PSYCHIC] also gain it:\n" +
     "• [SUSTAINED HITS 1]\n" +
     "• [LETHAL HITS]",
+  "truesilver-aegis-aura":
+    'While a friendly GREY KNIGHTS unit is wholly within 6" of this model, models ' +
+    "in that unit have Feel No Pain 6+ against mortal wounds.",
 };
+
+/**
+ * Structural effect replacements, keyed by ability id. Truesilver Aegis
+ * (Grey Knights Rhino) is an aura of FNP 6+ vs mortal wounds for GREY KNIGHTS
+ * units; upstream made it a blanket FNP 6+ on the Rhino itself.
+ */
+const ABILITY_EFFECTS: Record<string, { factionId: string; effect: Effect }> = {
+  "truesilver-aegis-aura": {
+    factionId: "grey-knights",
+    effect: {
+      type: "aura",
+      target: "friendly-within-aura",
+      modifier: {
+        range: 6,
+        recipient_filter: { required_keywords: ["GREY KNIGHTS"] },
+        effect: {
+          type: "feel-no-pain",
+          target: "unit",
+          modifier: { threshold: 6, scope: "mortal" },
+        },
+      },
+    } as Effect,
+  },
+};
+
+/** Abilities upstream lists on a datasheet that the card doesn't have. */
+const UNIT_ABILITY_REMOVALS: {
+  factionId: string;
+  unitId: string;
+  abilityIds: string[];
+}[] = [
+  { factionId: "grey-knights", unitId: "rhino", abilityIds: ["self-repair"] },
+];
 
 /**
  * Sanctic Hood (Brotherhood Librarian) is Feel No Pain 4+ against Psychic
@@ -245,6 +281,23 @@ function scopeFnpToPsychic(effect: Effect): Effect {
 
 function applyAbilityFixes(raw: RawData): boolean {
   let changed = false;
+  raw.abilities = raw.abilities.map((a) => {
+    const fix = ABILITY_EFFECTS[a.ability_id];
+    if (!fix || a.faction_id !== fix.factionId) return a;
+    changed = true;
+    return { ...a, effect: fix.effect };
+  });
+  for (const r of UNIT_ABILITY_REMOVALS) {
+    raw.units = raw.units.map((u) => {
+      if (u.id !== r.unitId || u.faction_id !== r.factionId) return u;
+      const ability_ids = (u.ability_ids ?? []).filter(
+        (id) => !r.abilityIds.includes(id),
+      );
+      if (ability_ids.length === (u.ability_ids ?? []).length) return u;
+      changed = true;
+      return { ...u, ability_ids };
+    });
+  }
   raw.abilities = raw.abilities.map((a) => {
     const text = ABILITY_TEXT[a.ability_id];
     if (!text) return a;

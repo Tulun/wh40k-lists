@@ -183,6 +183,23 @@ describe("ability and enhancement text fixes", () => {
     }
   });
 
+  it("gives the Grey Knights Rhino its aura and drops Self Repair", () => {
+    const rhino = d.units.getInFaction("rhino", "grey-knights")!;
+    const ids = rhino.abilities.map((a) => a.id);
+    expect(ids).not.toContain("self-repair");
+    const aegis = rhino.abilities.find(
+      (a) => a.id === "truesilver-aegis-aura",
+    )!;
+    expect(abilityText(aegis)).toMatch(/wholly within 6".*mortal wounds/);
+    expect(aegis.raw.effect.type).toBe("aura");
+    // Other factions' Rhinos keep Self Repair.
+    expect(
+      d.units
+        .getInFaction("rhino", "adeptus-astartes")!
+        .abilities.map((a) => a.id),
+    ).toContain("self-repair");
+  });
+
   it("rewords Dauntless Champions", () => {
     expect(text("dauntless-champions")).toMatch(
       /^Each time a friendly PALADIN SQUAD/,
