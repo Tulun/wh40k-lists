@@ -18,6 +18,7 @@ import { effectiveAttachments, leadersAttachedTo } from "../lib/attachments";
 import type { DisplayEntry } from "../lib/dedupe";
 import type { SavedList } from "../store/schema";
 import { TargetTable, crunchChip } from "./CrunchResults";
+import { unitFactionId } from "../lib/lookup";
 
 interface Props {
   data: Data40k;
@@ -38,8 +39,14 @@ export default function CrunchPanel({ data, list, entry }: Props) {
   const [leverState, setLeverState] = useState<Record<string, boolean>>({});
   const [manualState, setManualState] = useState<Record<string, boolean>>({});
 
-  const factionId = list.roster.faction_id;
-  const inst = entry.instances[Math.min(instanceIdx, entry.instances.length - 1)];
+  const inst =
+    entry.instances[Math.min(instanceIdx, entry.instances.length - 1)];
+  // An allied unit crunches with its own faction's weapon profiles and rules.
+  const factionId = unitFactionId(
+    data,
+    list.roster.units[inst.rosterIndex]?.ref.id,
+    list.roster.faction_id,
+  );
 
   // The combined unit: this entry's squad plus attached characters (viewed
   // from either side — a leader's page pulls in its bodyguard squad too).
@@ -50,7 +57,9 @@ export default function CrunchPanel({ data, list, entry }: Props) {
     const partnerIdxs: number[] = [];
     const bodyguard = effectiveAttachments(list).get(inst.rosterIndex);
     if (bodyguard !== undefined) partnerIdxs.push(bodyguard);
-    for (const leaderIdx of leadersAttachedTo(list, [inst.rosterIndex]).keys()) {
+    for (const leaderIdx of leadersAttachedTo(list, [
+      inst.rosterIndex,
+    ]).keys()) {
       partnerIdxs.push(leaderIdx);
     }
     const partners = partnerIdxs
@@ -63,24 +72,39 @@ export default function CrunchPanel({ data, list, entry }: Props) {
     const check = (wantMelee: boolean) =>
       members.some((m) =>
         m.lines.some((line) => {
-          const w = data.weapons.getInFaction(line.weaponId, factionId ?? "") ??
+          const w =
+            data.weapons.getInFaction(line.weaponId, factionId ?? "") ??
             data.weapons.getAny(line.weaponId);
-          return w?.raw.profiles.some((p) => data.isMeleeProfile(p) === wantMelee);
+          return w?.raw.profiles.some(
+            (p) => data.isMeleeProfile(p) === wantMelee,
+          );
         }),
       );
     return { shooting: check(false), fight: check(true) };
   }, [data, members, factionId]);
 
   // A melee-only unit (or one with no guns) opens on the phase it can play.
-  const phase: CrunchPhase =
-    phaseTouched ? sit.phase : hasPhase.shooting ? "shooting" : "fight";
+  const phase: CrunchPhase = phaseTouched
+    ? sit.phase
+    : hasPhase.shooting
+      ? "shooting"
+      : "fight";
   const situation = { ...sit, phase };
 
   const detachmentId = list.roster.detachments[0]?.ref.id ?? undefined;
   const ctx = useMemo(
     () => engineContext(data, members, factionId, situation),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, members, factionId, phase, sit.withinHalfRange, sit.stationary, sit.charged, sit.targetInCover],
+    [
+      data,
+      members,
+      factionId,
+      phase,
+      sit.withinHalfRange,
+      sit.stationary,
+      sit.charged,
+      sit.targetInCover,
+    ],
   );
 
   const levers = useMemo(
@@ -92,7 +116,9 @@ export default function CrunchPanel({ data, list, entry }: Props) {
     const fromLevers = levers.buffs
       .filter((l) => leverState[l.id] ?? l.enabled)
       .flatMap((l) => l.buffs);
-    const fromManual = MANUAL_TOGGLES.filter((t) => manualState[t.id]).map((t) => t.buff);
+    const fromManual = MANUAL_TOGGLES.filter((t) => manualState[t.id]).map(
+      (t) => t.buff,
+    );
     return [...fromLevers, ...fromManual];
   }, [levers, leverState, manualState]);
 
@@ -148,7 +174,11 @@ export default function CrunchPanel({ data, list, entry }: Props) {
         ))}
         {members.length > 1 && (
           <span className="ml-auto text-[11px] text-ink-faint">
-            incl. {members.slice(1).map((m) => m.label).join(" + ")}
+            incl.{" "}
+            {members
+              .slice(1)
+              .map((m) => m.label)
+              .join(" + ")}
           </span>
         )}
       </div>
@@ -165,7 +195,10 @@ export default function CrunchPanel({ data, list, entry }: Props) {
                 lever={l}
                 on={leverState[l.id] ?? l.enabled}
                 toggle={() =>
-                  setLeverState((s) => ({ ...s, [l.id]: !(s[l.id] ?? l.enabled) }))
+                  setLeverState((s) => ({
+                    ...s,
+                    [l.id]: !(s[l.id] ?? l.enabled),
+                  }))
                 }
                 chip={chip}
               />
@@ -193,7 +226,9 @@ export default function CrunchPanel({ data, list, entry }: Props) {
             <button
               key={t.id}
               type="button"
-              onClick={() => setManualState((s) => ({ ...s, [t.id]: !s[t.id] }))}
+              onClick={() =>
+                setManualState((s) => ({ ...s, [t.id]: !s[t.id] }))
+              }
               className={chip(!!manualState[t.id])}
             >
               {t.label}
@@ -204,8 +239,9 @@ export default function CrunchPanel({ data, list, entry }: Props) {
 
       <TargetTable results={results} />
       <p className="text-[10px] leading-snug text-ink-faint">
-        Expected values, all weapons in range. Always-on abilities are pre-applied — flip
-        chips to layer stratagems and buffs. Kills cap at the target's model count.
+        Expected values, all weapons in range. Always-on abilities are
+        pre-applied — flip chips to layer stratagems and buffs. Kills cap at the
+        target's model count.
       </p>
     </div>
   );
@@ -223,10 +259,16 @@ function LeverChip({
   chip: (active: boolean) => string;
 }) {
   return (
-    <button type="button" onClick={toggle} className={chip(on)} title={lever.label}>
-      {lever.enabled && <span className="mr-1 opacity-70">{on ? "✓" : "✗"}</span>}
+    <button
+      type="button"
+      onClick={toggle}
+      className={chip(on)}
+      title={lever.label}
+    >
+      {lever.enabled && (
+        <span className="mr-1 opacity-70">{on ? "✓" : "✗"}</span>
+      )}
       {lever.label}
     </button>
   );
 }
-

@@ -35,3 +35,21 @@ export function armyRules(data: Data40k, factionId: string | null | undefined) {
     .map((id) => byId(data.abilities, id, factionId))
     .filter((a) => a != null);
 }
+
+/**
+ * The faction a roster unit's own records live under: the army's faction for
+ * native units, the ally's faction for allied ones (an Imperial Agents Rhino in
+ * a Grey Knights list). Weapon/ability ids are shared across factions with
+ * different stats (`armoured-tracks` is A3 for Agents, A6 for Grey Knights), so
+ * resolving an ally's gear with the army faction picks up the wrong profile.
+ */
+export function unitFactionId(
+  data: Data40k,
+  unitId: string | null | undefined,
+  armyFactionId: string | null | undefined,
+): string | null {
+  if (!unitId) return armyFactionId ?? null;
+  if (armyFactionId && data.units.getInFaction(unitId, armyFactionId))
+    return armyFactionId;
+  return data.units.getAny(unitId)?.raw.faction_id ?? armyFactionId ?? null;
+}

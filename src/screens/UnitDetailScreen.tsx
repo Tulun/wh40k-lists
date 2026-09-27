@@ -22,9 +22,13 @@ import {
 } from "../lib/dedupe";
 import { displayLoadoutGroups } from "../lib/list-edit";
 import { completeRosterWargear } from "../lib/wargear-modes";
-import { armyRule, byId } from "../lib/lookup";
+import { armyRule, byId, unitFactionId } from "../lib/lookup";
 import { shareText } from "../lib/share";
-import { armyStratagems, sortStratagems, stratagemsForUnit } from "../lib/stratagems";
+import {
+  armyStratagems,
+  sortStratagems,
+  stratagemsForUnit,
+} from "../lib/stratagems";
 import { useActiveList, useLists } from "../store/lists";
 import type { SavedList } from "../store/schema";
 
@@ -76,14 +80,20 @@ export default function UnitDetailScreen() {
   }
 
   const { entry, position, siblingCount } = useMemo(() => {
-    if (!list || !entryKey) return { entry: null, position: 0, siblingCount: 0 };
+    if (!list || !entryKey)
+      return { entry: null, position: 0, siblingCount: 0 };
     // Heal wargear saved before a dual-mode weapon's second record existed in
     // the codex (Nazdreg's melee Kustom Blasta X) — viewing shouldn't require
     // an edit-screen visit first.
-    const roster = data ? completeRosterWargear(data, list.roster) : list.roster;
+    const roster = data
+      ? completeRosterWargear(data, list.roster)
+      : list.roster;
     const full = dedupeRoster(roster).find((e) => e.key === entryKey) ?? null;
-    if (!full || instParam == null) return { entry: full, position: 0, siblingCount: 0 };
-    const idx = full.instances.findIndex((inst) => inst.rosterIndex === Number(instParam));
+    if (!full || instParam == null)
+      return { entry: full, position: 0, siblingCount: 0 };
+    const idx = full.instances.findIndex(
+      (inst) => inst.rosterIndex === Number(instParam),
+    );
     return {
       entry: narrowEntry(full, Number(instParam)),
       position: idx + 1,
@@ -94,7 +104,10 @@ export default function UnitDetailScreen() {
   if (!list || !entry) {
     return (
       <p className="py-16 text-center text-sm text-ink-dim">
-        Unit not found in the active list. <Link to="/" className="underline">Back to army</Link>
+        Unit not found in the active list.{" "}
+        <Link to="/" className="underline">
+          Back to army
+        </Link>
       </p>
     );
   }
@@ -109,8 +122,18 @@ export default function UnitDetailScreen() {
 
   const roster = list.roster;
   const rosterUnit = roster.units[entry.instances[0].rosterIndex];
-  const unit = data.resolveRosterUnit(rosterUnit, data.dataset, roster.faction_id);
+  const unit = data.resolveRosterUnit(
+    rosterUnit,
+    data.dataset,
+    roster.faction_id,
+  );
   const raw = unit?.raw;
+  // An allied unit's weapons and abilities resolve under its own faction.
+  const unitFaction = unitFactionId(
+    data,
+    rosterUnit?.ref.id,
+    roster.faction_id,
+  );
   const detachmentIds = roster.detachments.map((d) => d.ref.id);
   const detachmentEntities = detachmentIds
     .map((id) => byId(data.detachments, id, roster.faction_id))
@@ -118,7 +141,9 @@ export default function UnitDetailScreen() {
 
   const pools = armyStratagems(data.stratagems.all, detachmentIds);
   const linkedStratagems = raw
-    ? sortStratagems(stratagemsForUnit(raw, pools.detachment, detachmentEntities))
+    ? sortStratagems(
+        stratagemsForUnit(raw, pools.detachment, detachmentEntities),
+      )
     : [];
   // Core stratagems that can target this unit live in their own section at the
   // bottom — they're always available, the detachment ones are the news.
@@ -132,20 +157,26 @@ export default function UnitDetailScreen() {
     pools.detachment.filter((s) => !linkedIds.has(s.id)),
   );
 
-  const enhancement = byId(data.enhancements, entry.enhancement?.id, roster.faction_id);
+  const enhancement = byId(
+    data.enhancements,
+    entry.enhancement?.id,
+    roster.faction_id,
+  );
 
   // "4× klaw, 1× killsaws" breakdown — only when models genuinely differ,
   // since the flat table's unit-wide totals can't show who carries what.
   const breakdown = loadoutBreakdown(
     entry.instances.map((inst) =>
-      displayLoadoutGroups(data, roster.units[inst.rosterIndex], roster.faction_id),
+      displayLoadoutGroups(data, roster.units[inst.rosterIndex], unitFaction),
     ),
   );
   const splitLoadouts = breakdown && breakdown.distinct > 1 ? breakdown : null;
 
   // Core abilities (Leader, Feel No Pain 5+, Deep Strike…) read fine as bare
   // tags — only datasheet-specific abilities get their full text below.
-  const coreTags = unit ? unit.abilities.filter((a) => a.raw.ability_type === "core") : [];
+  const coreTags = unit
+    ? unit.abilities.filter((a) => a.raw.ability_type === "core")
+    : [];
   const textAbilities = unit
     ? unit.abilities.filter((a) => a.raw.ability_type !== "core")
     : [];
@@ -164,9 +195,13 @@ export default function UnitDetailScreen() {
           {entry.isWarlord && "⭐ "}
           {unit?.name ?? entry.name}
           {siblingCount > 1 && (
-            <span className="ml-1.5 text-sm text-accent">#{position} of {siblingCount}</span>
+            <span className="ml-1.5 text-sm text-accent">
+              #{position} of {siblingCount}
+            </span>
           )}
-          {entry.count > 1 && <span className="ml-1.5 text-sm text-accent">×{entry.count}</span>}
+          {entry.count > 1 && (
+            <span className="ml-1.5 text-sm text-accent">×{entry.count}</span>
+          )}
         </h1>
         {data && (
           <button
@@ -179,13 +214,15 @@ export default function UnitDetailScreen() {
             {copied ? "✓ Copied" : "Share"}
           </button>
         )}
-        <span className="shrink-0 pr-2 text-sm text-ink-dim">{entry.totalPoints} pts</span>
+        <span className="shrink-0 pr-2 text-sm text-ink-dim">
+          {entry.totalPoints} pts
+        </span>
       </div>
 
       {!unit && (
         <p className="rounded-md border border-opponent/40 bg-opponent/10 p-2 text-xs text-opponent">
-          This unit couldn't be matched to the dataset — showing list info only. Re-import
-          and pick a match to see full stats.
+          This unit couldn't be matched to the dataset — showing list info only.
+          Re-import and pick a match to see full stats.
         </p>
       )}
 
@@ -200,14 +237,17 @@ export default function UnitDetailScreen() {
       <TagRow
         list={list}
         entry={entry}
-        coreTags={coreTags.map((a) => coreTagOf(a, data, roster.faction_id))}
+        coreTags={coreTags.map((a) => coreTagOf(a, data, unitFaction))}
         keywords={raw?.keywords ?? []}
       />
 
       {entry.count > 1 && (
         <div className="flex flex-wrap gap-1.5">
           {entry.instances.map((inst, i) => (
-            <span key={i} className="rounded-lg border border-edge bg-panel/50 px-2 py-1 text-xs text-ink-dim">
+            <span
+              key={i}
+              className="rounded-lg border border-edge bg-panel/50 px-2 py-1 text-xs text-ink-dim"
+            >
               #{i + 1}: {inst.modelCount} models
               {inst.points != null && ` · ${inst.points} pts`}
               {inst.isWarlord && " · ⭐"}
@@ -218,12 +258,16 @@ export default function UnitDetailScreen() {
 
       <Section title="Weapons" open>
         {splitLoadouts && (
-          <LoadoutBreakdown data={data} breakdown={splitLoadouts} factionId={roster.faction_id} />
+          <LoadoutBreakdown
+            data={data}
+            breakdown={splitLoadouts}
+            factionId={unitFaction}
+          />
         )}
         <WeaponTable
           data={data}
           weapons={entry.mergedWargear}
-          factionId={roster.faction_id}
+          factionId={unitFaction}
           showInstances={entry.count > 1}
         />
       </Section>
@@ -238,7 +282,9 @@ export default function UnitDetailScreen() {
           className="flex min-h-11 items-center justify-between rounded-lg border border-edge px-3 py-2 text-sm font-semibold hover:bg-panel active:bg-panel"
         >
           <span>💥 Damage output</span>
-          <span aria-hidden className="text-ink-faint">›</span>
+          <span aria-hidden className="text-ink-faint">
+            ›
+          </span>
         </Link>
       )}
 
@@ -270,10 +316,17 @@ export default function UnitDetailScreen() {
         </Section>
       )}
 
-      <AttachmentBlock data={data} list={list} entry={entry} unitId={unit?.id ?? null} />
+      <AttachmentBlock
+        data={data}
+        list={list}
+        entry={entry}
+        unitId={unit?.id ?? null}
+      />
 
       {linkedStratagems.length > 0 && (
-        <Section title={`Stratagems targeting this unit (${linkedStratagems.length})`}>
+        <Section
+          title={`Stratagems targeting this unit (${linkedStratagems.length})`}
+        >
           <CardColumns>
             {linkedStratagems.map((s) => (
               <StratagemCard
@@ -289,7 +342,9 @@ export default function UnitDetailScreen() {
       )}
 
       {otherDetachmentStratagems.length > 0 && (
-        <Section title={`Detachment stratagems (${otherDetachmentStratagems.length})`}>
+        <Section
+          title={`Detachment stratagems (${otherDetachmentStratagems.length})`}
+        >
           <CardColumns>
             {otherDetachmentStratagems.map((s) => (
               <StratagemCard
@@ -305,7 +360,9 @@ export default function UnitDetailScreen() {
       )}
 
       {coreStratagems.length > 0 && (
-        <Section title={`Core stratagems for this unit (${coreStratagems.length})`}>
+        <Section
+          title={`Core stratagems for this unit (${coreStratagems.length})`}
+        >
           <CardColumns>
             {coreStratagems.map((s) => (
               <StratagemCard
@@ -320,7 +377,10 @@ export default function UnitDetailScreen() {
         </Section>
       )}
 
-      <Link to="/" className="block pt-2 text-center text-xs text-ink-faint underline">
+      <Link
+        to="/"
+        className="block pt-2 text-center text-xs text-ink-faint underline"
+      >
         ← back to army
       </Link>
     </div>
@@ -338,7 +398,9 @@ function Section({
 }) {
   return (
     <details open={open} className="rounded-lg border border-edge">
-      <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">{title}</summary>
+      <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">
+        {title}
+      </summary>
       <div className="px-2 pb-2">{children}</div>
     </details>
   );
@@ -364,17 +426,23 @@ function LoadoutBreakdown({
     byId(data.weapons, ref.id, factionId)?.name ??
     byId(data.wargear, ref.id, factionId)?.name ??
     ref.raw_name;
-  const lists = breakdown.uniform ? [breakdown.perInstance[0]] : breakdown.perInstance;
+  const lists = breakdown.uniform
+    ? [breakdown.perInstance[0]]
+    : breakdown.perInstance;
   const multiSquad = breakdown.perInstance.length > 1;
-  const showModelNames =
-    new Set(lists.flat().map((g) => g.modelName)).size > 1;
+  const showModelNames = new Set(lists.flat().map((g) => g.modelName)).size > 1;
   return (
     <div className="mb-2 space-y-1.5 rounded-md border border-edge bg-panel/40 px-2.5 py-2">
       {lists.map((groups, li) => (
-        <div key={li} className={li > 0 ? "border-t border-edge/40 pt-1.5" : ""}>
+        <div
+          key={li}
+          className={li > 0 ? "border-t border-edge/40 pt-1.5" : ""}
+        >
           {multiSquad && (
             <p className="pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-              {breakdown.uniform ? `Each squad ×${breakdown.perInstance.length}` : `#${li + 1}`}
+              {breakdown.uniform
+                ? `Each squad ×${breakdown.perInstance.length}`
+                : `#${li + 1}`}
             </p>
           )}
           <div className="space-y-0.5">
@@ -389,7 +457,11 @@ function LoadoutBreakdown({
                   )}
                   <span className="text-ink-dim">
                     {g.wargear
-                      .map((w) => (w.count > 1 ? `${w.count}× ${nameOf(w.ref)}` : nameOf(w.ref)))
+                      .map((w) =>
+                        w.count > 1
+                          ? `${w.count}× ${nameOf(w.ref)}`
+                          : nameOf(w.ref),
+                      )
                       .join(", ")}
                   </span>
                 </span>
@@ -433,10 +505,14 @@ function EnhancementCard({
         <span className="flex-1 text-xs font-bold uppercase tracking-wide text-accent">
           ✦ {name}
         </span>
-        {cost != null && <span className="text-xs text-ink-dim">{cost} pts</span>}
+        {cost != null && (
+          <span className="text-xs text-ink-dim">{cost} pts</span>
+        )}
       </div>
       {ability ? (
-        <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">{abilityText(ability)}</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-snug">
+          {abilityText(ability)}
+        </p>
       ) : (
         <p className="mt-1 text-xs italic text-ink-faint">
           Effect not in the dataset yet —{" "}
@@ -469,7 +545,11 @@ function EnhancementCard({
             onClick={() => setEditing(true)}
             className="text-left text-xs text-ink-faint underline decoration-dotted"
           >
-            {note ? <span className="text-ink-dim">📝 {note}</span> : "+ add note"}
+            {note ? (
+              <span className="text-ink-dim">📝 {note}</span>
+            ) : (
+              "+ add note"
+            )}
           </button>
         )}
       </div>
@@ -499,7 +579,9 @@ function TagRow({
         .filter((h) => h != null),
     ),
     // The core "Leader" tag already covers the leader hint.
-  ].filter((h) => !(h === "leader" && coreTags.some((t) => t.name === "Leader")));
+  ].filter(
+    (h) => !(h === "leader" && coreTags.some((t) => t.name === "Leader")),
+  );
 
   return (
     <KeywordChips coreTags={coreTags} keywords={keywords}>
@@ -521,7 +603,9 @@ function rosterUnitLabel(list: SavedList, index: number): string {
   const unit = units[index];
   const sameBefore = units
     .slice(0, index)
-    .filter((u) => u.ref.id === unit.ref.id && u.ref.raw_name === unit.ref.raw_name).length;
+    .filter(
+      (u) => u.ref.id === unit.ref.id && u.ref.raw_name === unit.ref.raw_name,
+    ).length;
   const total = units.filter(
     (u) => u.ref.id === unit.ref.id && u.ref.raw_name === unit.ref.raw_name,
   ).length;
@@ -553,19 +637,26 @@ function AttachmentBlock({
     const h = list.roleHints[String(inst.rosterIndex)];
     return h === "leader" || h === "support";
   });
-  const isCharacter = raw ? raw.role === "character" || raw.role === "epic-hero" : hinted;
+  const isCharacter = raw
+    ? raw.role === "character" || raw.role === "epic-hero"
+    : hinted;
   const attachments = effectiveAttachments(list);
 
   if (isCharacter) {
     const rows = entry.instances
-      .map((inst, i) => ({ inst, i, bodyguard: attachments.get(inst.rosterIndex) }))
+      .map((inst, i) => ({
+        inst,
+        i,
+        bodyguard: attachments.get(inst.rosterIndex),
+      }))
       .filter((r) => r.bodyguard !== undefined);
     // Support units MUST attach (core rules) — warn whether the support role
     // comes from the import hint or the datasheet itself.
     const sheetIsSupport = raw?.attachment_role === "support";
     const unmatchedSupport = entry.instances.some(
       (inst) =>
-        (sheetIsSupport || list.roleHints[String(inst.rosterIndex)] === "support") &&
+        (sheetIsSupport ||
+          list.roleHints[String(inst.rosterIndex)] === "support") &&
         attachments.get(inst.rosterIndex) === undefined,
     );
 
@@ -574,14 +665,19 @@ function AttachmentBlock({
       <div className="space-y-1">
         {rows.map(({ i, bodyguard }) => (
           <p key={i} className="text-sm text-ink-dim">
-            {entry.count > 1 && <span className="text-xs text-ink-faint">#{i + 1} </span>}
+            {entry.count > 1 && (
+              <span className="text-xs text-ink-faint">#{i + 1} </span>
+            )}
             ⟠ Leading{" "}
-            <span className="font-medium text-ink">{rosterUnitLabel(list, bodyguard!)}</span>
+            <span className="font-medium text-ink">
+              {rosterUnitLabel(list, bodyguard!)}
+            </span>
           </p>
         ))}
         {unmatchedSupport && (
           <p className="rounded-md border border-opponent/40 bg-opponent/10 p-2 text-xs text-opponent">
-            Support character — must be attached, but the list didn't say to which unit.
+            Support character — must be attached, but the list didn't say to
+            which unit.
           </p>
         )}
       </div>
@@ -600,7 +696,11 @@ function AttachmentBlock({
       <div className="space-y-2">
         {[...leaders.keys()].map((leaderIndex) => {
           const leaderUnit = list.roster.units[leaderIndex];
-          const view = data.resolveRosterUnit(leaderUnit, data.dataset, factionId);
+          const view = data.resolveRosterUnit(
+            leaderUnit,
+            data.dataset,
+            factionId,
+          );
           // Core abilities (Leader, Waaagh!, Deep Strike…) are tags, not prose
           // — same as the datasheet header, tappable when their rule text is
           // recorded — and empty-text records are skipped rather than
@@ -614,12 +714,18 @@ function AttachmentBlock({
               (a) => a.raw.ability_type !== "core" && abilityText(a).length > 0,
             ) ?? [];
           return (
-            <div key={leaderIndex} className="rounded-md border border-mine/40 bg-mine/5 px-2.5 py-2">
+            <div
+              key={leaderIndex}
+              className="rounded-md border border-mine/40 bg-mine/5 px-2.5 py-2"
+            >
               <div className="text-xs font-bold uppercase tracking-wide text-mine">
                 ⟠ {view?.name ?? leaderUnit.ref.raw_name}
                 {entry.count > 1 && (
                   <span className="ml-1 font-normal text-ink-faint">
-                    → #{entry.instances.findIndex((i) => i.rosterIndex === leaders.get(leaderIndex)) + 1}
+                    → #
+                    {entry.instances.findIndex(
+                      (i) => i.rosterIndex === leaders.get(leaderIndex),
+                    ) + 1}
                   </span>
                 )}
               </div>
@@ -630,8 +736,12 @@ function AttachmentBlock({
               )}
               {buffs.map((a) => (
                 <div key={a.id} className="mt-1.5">
-                  <div className="text-[11px] font-semibold uppercase text-ink-dim">{a.name}</div>
-                  <p className="whitespace-pre-wrap text-sm leading-snug">{abilityText(a)}</p>
+                  <div className="text-[11px] font-semibold uppercase text-ink-dim">
+                    {a.name}
+                  </div>
+                  <p className="whitespace-pre-wrap text-sm leading-snug">
+                    {abilityText(a)}
+                  </p>
                 </div>
               ))}
             </div>
