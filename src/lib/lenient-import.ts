@@ -25,6 +25,19 @@ export interface LenientImport {
   inferred: boolean;
   /** Human-readable descriptions of the inference steps taken. */
   notes: string[];
+  /**
+   * The text for post-import passes that re-read the source (attached-unit
+   * groups, per-model loadouts): the repaired paste when the rewrite kept its
+   * dialect, else the original.
+   */
+  sourceText: string;
+}
+
+interface Rewrite {
+  text: string;
+  notes: string[];
+  /** True when the rewrite is still the pasted dialect (not re-emitted as WTC). */
+  sameDialect: boolean;
 }
 
 /** `12. ` / `12) ` line-number prefix a submission portal prepends. */
@@ -68,32 +81,86 @@ interface LooseList {
  */
 export function importRosterLenient(data: Data40k, text: string): LenientImport {
   const strict = data.tryImportRoster(text);
-  if (strict.ok) return { result: strict, inferred: false, notes: [] };
+  // A strict "success" can still be a misread: a header the adapter got wrong
+  // leaves no faction, and a mangled unit layout leaves no units. Only a
+  // roster with both is trusted outright; otherwise try the rewrites.
+  const usable = (r: ImportResult) => r.ok && r.roster.units.length > 0;
+  if (usable(strict) && strict.ok && strict.roster.faction_id) {
+    return { result: strict, inferred: false, notes: [], sourceText: text };
+  }
 
   for (const rewrite of buildRewrites(data, text)) {
     const result = data.tryImportRoster(rewrite.text);
-    if (result.ok && result.roster.units.length > 0) {
-      return { result, inferred: true, notes: rewrite.notes };
+    if (usable(result) && (result.ok && result.roster.faction_id || !usable(strict))) {
+      return {
+        result,
+        inferred: true,
+        notes: rewrite.notes,
+        sourceText: rewrite.sameDialect ? rewrite.text : text,
+      };
     }
   }
-  return { result: strict, inferred: false, notes: [] };
+  return { result: strict, inferred: false, notes: [], sourceText: text };
 }
 
-function buildRewrites(data: Data40k, text: string): { text: string; notes: string[] }[] {
-  const rewrites: { text: string; notes: string[] }[] = [];
+function buildRewrites(data: Data40k, text: string): Rewrite[] {
+  const rewrites: Rewrite[] = [];
+
+  // A GW app export whose formatting was flattened in the copy is otherwise a
+  // dialect the strict adapters know — repair it before looser inference.
+  const gw = repairFlattenedGw(text);
+  if (gw) rewrites.push({ ...gw, sameDialect: true });
 
   // Line numbers alone may be all that's wrong — a numbered GW app export is
   // otherwise a dialect the strict adapters already know.
   const stripped = stripLineNumbers(text);
-  if (stripped) rewrites.push({ text: stripped.text, notes: [stripped.note] });
+  if (stripped) rewrites.push({ text: stripped.text, notes: [stripped.note], sameDialect: true });
 
   const base = stripped?.text ?? text;
   const loose = parseLoose(data, base);
   if (loose && loose.units.length > 0) {
     const notes = stripped ? [stripped.note, ...loose.notes] : loose.notes;
-    rewrites.push({ text: emitWtcCompact(data, loose), notes });
+    rewrites.push({ text: emitWtcCompact(data, loose), notes, sameDialect: false });
   }
   return rewrites;
+}
+
+/** `Brotherhood Librarian115 Points` — a GW unit line whose ` (…)` got lost. */
+const FLAT_POINTS = /^([^•◦\s(].*?[^\s(])\s?([\d,]+)\s*Points\s*$/;
+/** `Argent Assault and Banishers (3 Detachment Points)` */
+const DETACHMENT_HEADER = /\(\s*\d+\s*Detachment Points?\s*\)\s*$/i;
+/** The list title: `Orks — FKREW (1,995 Points)`. */
+const TITLE_LINE = /\(\s*[\d,]+\s*Points\s*\)\s*$/i;
+
+/**
+ * Repair a GW app export whose formatting was flattened in transit (some
+ * copy paths drop the title line, blank lines and the parentheses around
+ * points): the GW adapter then reads the disposition line as the faction and
+ * finds no units. Restores `Name (N Points)` and a synthesized title line.
+ */
+function repairFlattenedGw(text: string): { text: string; notes: string[] } | null {
+  const lines = text.split(/\r?\n/);
+  const nonBlank = lines.map((l, i) => ({ l: l.trim(), i })).filter((x) => x.l.length > 0);
+  // Shape check: faction line, then the detachment line.
+  if (nonBlank.length < 3 || !DETACHMENT_HEADER.test(nonBlank[1].l)) return null;
+  const notes: string[] = [];
+  let total = 0;
+  let fixed = 0;
+  const out = lines.map((line) => {
+    const m = FLAT_POINTS.exec(line.trim());
+    if (!m || DETACHMENT_HEADER.test(line)) return line;
+    fixed += 1;
+    total += Number(m[2].replace(/,/g, ""));
+    return `${m[1]} (${m[2]} Points)`;
+  });
+  if (fixed > 0) notes.push(`Restored the points format on ${fixed} unit lines`);
+  const hasTitle = TITLE_LINE.test(nonBlank[0].l) && !DETACHMENT_HEADER.test(nonBlank[0].l);
+  if (!hasTitle) {
+    const pts = total > 0 ? total.toLocaleString("en-US") : "0";
+    out.splice(nonBlank[0].i, 0, `${nonBlank[0].l} — Imported list (${pts} Points)`, "");
+    notes.push("Added the missing list title line");
+  }
+  return notes.length > 0 ? { text: out.join("\n"), notes } : null;
 }
 
 /** Strip `N.`/`N)` prefixes when at least half the non-blank lines carry one. */

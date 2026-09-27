@@ -15,6 +15,9 @@ import {
   enhancementLeadGrants,
   enhancementSlots,
   legalityIssues,
+  allyPools,
+  allyRuleOf,
+  allyCapUsage,
   loadoutDataMissing,
   nextSize,
   removeDetachment,
@@ -39,6 +42,7 @@ import { DISPOSITIONS } from "../lib/codex-model";
 import { abilityText } from "../lib/describe";
 import { EXPLORE_FACTION_IDS } from "../lib/flags";
 import { byId } from "../lib/lookup";
+import AllyRuleCard from "../components/AllyRuleCard";
 import { groupLoadoutSpread } from "../lib/group-loadout";
 import { useLists } from "../store/lists";
 import { backState } from "../components/BackBar";
@@ -408,14 +412,19 @@ function BrowserPanel({
   const granted = battlelineGrants(data, content.roster);
   const roleFor = (u: { id: string; raw: { role?: string | null } }) =>
     granted.has(u.id) ? "battleline" : u.raw.role;
-  const all = data.units.byFaction(factionId);
+  const native = data.units.byFaction(factionId);
+  // Ally pools (Imperial Agents for Grey Knights, …) list under their own
+  // headings after the army's datasheets.
+  const pools = allyPools(data, content.roster);
+  const all = [...native, ...pools.flatMap((p) => p.units)];
+  const faction = byId(data.factions, factionId)?.raw ?? null;
   const matches = (u: (typeof all)[number]) =>
     !q ||
     u.name.toLowerCase().includes(q) ||
     (u.raw.keywords ?? []).some((k) => k.toLowerCase().includes(q));
-  const groups = SECTIONS.map((section) => ({
+  const groups = SECTIONS.filter((s) => s.key !== "allied").map((section) => ({
     section,
-    units: all
+    units: native
       .filter((u) =>
         section.roles.length > 0
           ? section.roles.includes(roleFor(u) ?? "")
@@ -423,7 +432,14 @@ function BrowserPanel({
       )
       .filter(matches)
       .sort((a, b) => a.name.localeCompare(b.name)),
-  })).filter((g) => g.units.length > 0);
+  }))
+    .concat(
+      pools.map((p) => ({
+        section: { key: `ally-${p.rule.id}`, label: p.rule.label ?? p.rule.name, roles: [] },
+        units: p.units.filter(matches),
+      })),
+    )
+    .filter((g) => g.units.length > 0);
   const shown = groups.reduce((s, g) => s + g.units.length, 0);
 
   return (
@@ -485,11 +501,13 @@ function BrowserPanel({
                         )}
                       </span>
                       <span className="block text-xs text-ink-faint">
-                        {u.raw.points?.[0]
-                          ? `${u.raw.points[0].cost} pts · ${u.raw.points[0].models} model${
-                              u.raw.points[0].models === 1 ? "" : "s"
-                            }`
-                          : "? pts"}
+                        {(() => {
+                          // Allies price from their host-army tiers.
+                          const tier = data.hostPointsTiers(u.raw, faction)[0];
+                          return tier
+                            ? `${tier.cost} pts · ${tier.models} model${tier.models === 1 ? "" : "s"}`
+                            : "? pts";
+                        })()}
                       </span>
                     </button>
                   </li>
@@ -539,9 +557,11 @@ function UnitGroups({
   // Detachment rules can promote datasheets to Battleline (Kult of Speed's
   // Warbikers, Runt Swarm's Gretchin) — those units section as Battleline.
   const granted = battlelineGrants(data, roster);
+  const pools = allyPools(data, roster);
   const sectionAt = (i: number) => {
     const id = roster.units[i].ref.id;
     if (id && granted.has(id)) return "battleline";
+    if (allyRuleOf(data, roster, i, pools)) return "allied";
     return sectionKeyOf(
       id ? byId(data.units, id, factionId)?.raw.role : undefined,
     );
@@ -612,6 +632,7 @@ function UnitGroups({
       ? data.units
           .byFaction(factionId)
           .map((u) => (granted.has(u.id) ? "battleline" : sectionKeyOf(u.raw.role)))
+          .concat(pools.length > 0 ? ["allied"] : [])
       : [],
   );
 
@@ -640,6 +661,19 @@ function UnitGroups({
               </h2>
               <span className="shrink-0 text-xs tabular-nums text-ink-dim">{pts} pts</span>
             </div>
+            {section.key === "allied" &&
+              own.length > 0 &&
+              pools
+                .filter((p) =>
+                  roster.units.some((_, i) => allyRuleOf(data, roster, i, pools)?.id === p.rule.id),
+                )
+                .map((p) => (
+                  <AllyRuleCard
+                    key={p.rule.id}
+                    rule={p.rule}
+                    usage={allyCapUsage(data, roster, p.rule, pools)}
+                  />
+                ))}
             {own.length > 0 && <ul className="space-y-2">{own.map((e) => e.node)}</ul>}
           </div>
         );
@@ -666,6 +700,9 @@ function UnitRow({
   const name = unit?.name ?? u.ref.raw_name;
   const pts = (u.points ?? 0) + (u.enhancement_points ?? 0);
   const isCharacter = unit?.role === "character" || unit?.role === "epic-hero";
+  const allyRule = allyRuleOf(data, roster, index);
+  // Allies' datasheets live under their own faction (Agents of the Imperium).
+  const sheetFaction = unit?.faction_id ?? roster.faction_id;
   const editBack = useEditBackState();
 
   return (
@@ -673,7 +710,7 @@ function UnitRow({
       <div className="flex items-baseline gap-2">
         {unit && roster.faction_id ? (
           <Link
-            to={`/explore/${roster.faction_id}/${unit.id}`}
+            to={`/explore/${sheetFaction}/${unit.id}`}
             state={editBack}
             className="min-w-0 flex-1 truncate text-sm font-semibold hover:underline"
           >
@@ -721,7 +758,7 @@ function UnitRow({
           </label>
         )}
 
-        {isCharacter && (
+        {isCharacter && !(allyRule?.cannot_be_warlord && !u.is_warlord) && (
           <button
             type="button"
             title="Warlord"
@@ -738,7 +775,7 @@ function UnitRow({
 
         {unit && roster.faction_id && (
           <Link
-            to={`/explore/${roster.faction_id}/${unit.id}`}
+            to={`/explore/${sheetFaction}/${unit.id}`}
             state={editBack}
             className="rounded-md bg-panel px-2.5 py-1.5 text-xs font-semibold text-ink-dim"
           >

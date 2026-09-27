@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import AllyRuleCard from "../components/AllyRuleCard";
 import BackBar from "../components/BackBar";
 import RuleText from "../components/RuleText";
 import UnitListPane from "../components/UnitListPane";
@@ -35,7 +36,21 @@ export default function FactionScreen() {
     a.name.localeCompare(b.name),
   );
   const armyRuleId = faction.raw.faction_rule_id;
-  const armyRule = armyRuleId ? byId(data.abilities, armyRuleId, factionId) : undefined;
+  const armyRuleRecord = armyRuleId ? byId(data.abilities, armyRuleId, factionId) : undefined;
+  // Some army rules are only a DSL stub ("gains the Faction Metadata ability" —
+  // Agents' Assigned Agents); the allied-pool cards below carry the substance.
+  const armyRule =
+    armyRuleRecord && !/Faction Metadata/.test(abilityText(armyRuleRecord))
+      ? armyRuleRecord
+      : undefined;
+  // Pools this army may ally in (detachment-gated ones included, with the gate
+  // named), and pools that field this faction's units in OTHER armies.
+  const allies = data.dataset.alliesFor(
+    factionId,
+    detachments.map((d) => d.id),
+  );
+  const alliedOut = data.alliedRules.all.filter((r) => r.source_faction_id === factionId);
+  const detName = (id: string) => byId(data.detachments, id, factionId)?.name ?? id;
 
   const TABS: { id: Tab; label: string; detail?: string }[] = [
     { id: "rule", label: "Army rule" },
@@ -79,17 +94,42 @@ export default function FactionScreen() {
         </div>
       </div>
 
-      {tab === "rule" &&
-        (armyRule ? (
-          <div className="rounded-lg border border-edge px-3 py-2.5">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-accent">
-              {armyRule.name}
-            </p>
-            <RuleText text={abilityText(armyRule)} />
-          </div>
-        ) : (
-          <p className="py-8 text-center text-xs text-ink-faint">No army rule recorded.</p>
-        ))}
+      {tab === "rule" && (
+        <div className="space-y-2">
+          {armyRule ? (
+            <div className="rounded-lg border border-edge px-3 py-2.5">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-accent">
+                {armyRule.name}
+              </p>
+              <RuleText text={abilityText(armyRule)} />
+            </div>
+          ) : (
+            alliedOut.length === 0 && (
+              <p className="py-8 text-center text-xs text-ink-faint">No army rule recorded.</p>
+            )
+          )}
+          {alliedOut.length > 0 && (
+            <>
+              <h2 className="pt-2 text-xs font-bold uppercase tracking-wide text-ink-dim">
+                {armyRuleRecord && !armyRule ? armyRuleRecord.name : "As allies"}
+              </h2>
+              {alliedOut.map((r) => (
+                <AllyRuleCard key={r.id} rule={r} availableTo />
+              ))}
+            </>
+          )}
+          {allies.length > 0 && (
+            <>
+              <h2 className="pt-2 text-xs font-bold uppercase tracking-wide text-ink-dim">
+                Allies
+              </h2>
+              {allies.map((r) => (
+                <AllyRuleCard key={r.id} rule={r} gate={r.detachment_ids?.map(detName)} />
+              ))}
+            </>
+          )}
+        </div>
+      )}
 
       {tab === "detachments" &&
         (detachments.length > 0 ? (

@@ -8,6 +8,10 @@ import { describe, expect, it } from "vitest";
 import * as data from "@alpaca-software/40kdc-data";
 import type { Data40k } from "../data";
 import { importRosterLenient } from "../lenient-import";
+import { normalizeImportedRoster } from "../normalize";
+import { allyRuleOf, legalityIssues } from "../list-edit";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const d = data as unknown as Data40k;
 
@@ -129,5 +133,36 @@ Warboss (100 pts) - Warlord
     const { result, inferred } = importRosterLenient(d, "just some prose\nwith no points anywhere");
     expect(result.ok).toBe(false);
     expect(inferred).toBe(false);
+  });
+});
+
+describe("flattened GW app export (no title, blank lines or points parens)", () => {
+  const text = readFileSync(join(import.meta.dirname, "gw-flattened-gk-allies.txt"), "utf8");
+
+  it("repairs the dialect instead of accepting a zero-unit strict read", () => {
+    const { result, inferred, notes, sourceText } = importRosterLenient(d, text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(inferred).toBe(true);
+    expect(notes.join(" ")).toMatch(/title/);
+    expect(result.roster.faction_id).toBe("grey-knights");
+    expect(result.roster.detachments.map((x) => x.ref.id)).toEqual(["argent-assault", "banishers"]);
+    expect(result.roster.units).toHaveLength(12);
+    expect(result.roster.units.every((u) => u.ref.id)).toBe(true);
+    expect(sourceText).toContain("Brotherhood Librarian (115 Points)");
+  });
+
+  it("normalizes attachments, disposition and allies from the repaired text", () => {
+    const { result, sourceText } = importRosterLenient(d, text);
+    if (!result.ok) throw new Error(result.message);
+    const { roster, attachmentSeeds } = normalizeImportedRoster(result.roster, d, sourceText);
+    expect(roster.force_disposition).toBe("priority-assets");
+    expect(attachmentSeeds).toEqual({ "0": 1, "2": 3 });
+    expect(roster.units.flatMap((u) => u.wargear.filter((w) => !w.ref.id))).toEqual([]);
+    const artemis = roster.units.findIndex((u) => u.ref.id === "watch-captain-artemis");
+    expect(allyRuleOf(d, roster, artemis)?.id).toBe("agents-of-the-imperium-allies");
+    expect(legalityIssues(d, roster, attachmentSeeds).some((i) => /Imperial Agents/.test(i))).toBe(
+      false,
+    );
   });
 });

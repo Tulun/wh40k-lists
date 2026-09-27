@@ -1,0 +1,104 @@
+Grey Knights
+Argent Assault and Banishers (3 Detachment Points)
+Priority Assets
+Strike Force (2,000 Points)
+ATTACHED UNITS
+Attached unit 1
+Brotherhood Librarian115 Points
+• Attached as: Leader (Character)
+• Warlord
+• 1x Combi-weapon
+• 1x Nemesis force weapon
+• 1x Vortex of Doom
+• Enhancements: Sixty-sixth Seal
+Paladin Squad485 Points
+• Attached as: Bodyguard
+• 1x Paragon
+◦ 1x Nemesis force weapon
+◦ 1x Storm bolter
+• 1x Paladin Ancient
+◦ 1x Ancient’s Banner
+◦ 1x Nemesis force weapon
+◦ 1x Psycannon
+• 8x Paladin
+◦ 1x Apothecary’s Narthecium
+◦ 8x Nemesis force weapon
+◦ 4x Psycannon
+◦ 3x Storm bolter
+Attached unit 2
+Grand Master110 Points
+• Attached as: Leader (Character)
+• 1x Nemesis force weapon
+• 1x Psycannon
+• Enhancements: Psychic Celerity
+Paladin Squad480 Points
+• Attached as: Bodyguard
+• 1x Paragon
+◦ 1x Nemesis force weapon
+◦ 1x Storm bolter
+• 1x Paladin Ancient
+◦ 1x Ancient’s Banner
+◦ 1x Nemesis force weapon
+◦ 1x Psilencer
+• 8x Paladin
+◦ 1x Apothecary’s Narthecium
+◦ 8x Nemesis force weapon
+◦ 4x Psycannon
+◦ 3x Storm bolter
+BATTLELINE
+Brotherhood Terminator Squad140 Points
+• 1x Justicar
+◦ 1x Nemesis force weapon
+◦ 1x Storm bolter
+• 2x Terminator
+◦ 1x Apothecary’s Narthecium
+◦ 2x Nemesis force weapon
+◦ 1x Storm bolter
+• 1x Ancient
+◦ 1x Ancient’s Banner
+◦ 1x Incinerator
+◦ 1x Nemesis force weapon
+Strike Squad115 Points
+• 1x Justicar
+◦ 1x Nemesis force weapon
+◦ 1x Storm bolter
+• 4x Grey Knight
+◦ 4x Nemesis force weapon
+◦ 4x Storm bolter
+DEDICATED TRANSPORTS
+Rhino70 Points
+• 1x Armoured tracks
+• 1x Hunter-killer missile
+• 1x Storm bolter
+• 1x Storm bolter
+OTHER DATASHEETS
+Interceptor Squad125 Points
+• 1x Interceptor Justicar
+◦ 1x Nemesis force weapon
+◦ 1x Storm bolter
+• 4x Interceptor
+◦ 4x Nemesis force weapon
+◦ 4x Storm bolter
+Interceptor Squad125 Points
+• 1x Interceptor Justicar
+◦ 1x Nemesis force weapon
+◦ 1x Storm bolter
+• 4x Interceptor
+◦ 4x Nemesis force weapon
+◦ 4x Storm bolter
+Purgation Squad105 Points
+• 1x Purgator Justicar
+◦ 1x Nemesis force weapon
+◦ 1x Storm bolter
+• 4x Purgator
+◦ 4x Close combat weapon
+◦ 4x Incinerator
+ALLIED UNITS
+Imperial Rhino65 Points
+• 1x Armoured tracks
+• 1x Hunter-killer missile
+• 1x Storm bolter
+Watch Captain Artemis65 Points
+• 1x Hellfire Extremis
+• 1x Master-crafted power weapon
+Exported with App Version: v2.6.0 (3), Data Version: v946

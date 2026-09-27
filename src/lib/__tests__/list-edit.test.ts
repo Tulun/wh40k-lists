@@ -9,6 +9,8 @@ import * as data40k from "@alpaca-software/40kdc-data";
 import {
   addDetachment,
   addUnit,
+  allyPools,
+  allyRuleOf,
   applyWargearOption,
   blankSavedList,
   duplicateUnit,
@@ -551,6 +553,48 @@ describe("from scratch", () => {
     expect(content.roster.detachments[0].ref.id).toBe("war-horde");
     expect(content.roster.units[0].ref.id).toBe("boyz");
     expect(content.roster.points.total_computed).toBeGreaterThan(0);
+  });
+});
+
+describe("allies", () => {
+  function gkList(ids: string[]): ListContent {
+    const list = blankSavedList("1.2.3");
+    let content: ListContent = {
+      roster: list.roster,
+      roleHints: list.roleHints,
+      attachments: list.attachments,
+    };
+    content = setFaction(content, "grey-knights");
+    for (const id of ids) content = addUnit(data40k, content, id);
+    return content;
+  }
+
+  it("Grey Knights are offered the Imperial Agents pool", () => {
+    const pools = allyPools(data40k, gkList([]).roster);
+    const agents = pools.find((p) => p.rule.id === "agents-of-the-imperium-allies");
+    expect(agents?.units.map((u) => u.id)).toContain("inquisitor");
+    expect(agents?.units.every((u) => u.raw.faction_id === "agents-of-the-imperium")).toBe(true);
+  });
+
+  it("allied units price at their host-army cost and are tagged allied", () => {
+    const content = gkList(["strike-squad", "inquisitor"]);
+    expect(allyRuleOf(data40k, content.roster, 0)).toBeNull();
+    expect(allyRuleOf(data40k, content.roster, 1)?.id).toBe("agents-of-the-imperium-allies");
+    const inq = content.roster.units[1];
+    const tier = data40k.hostPointsTiers(
+      data40k.dataset.units.getInFaction("inquisitor", "agents-of-the-imperium")!.raw,
+      data40k.factions.getAny("grey-knights")!.raw,
+    )[0];
+    expect(inq.points).toBe(tier.cost);
+  });
+
+  it("flags over-cap allied characters and an allied warlord", () => {
+    let content = gkList(["inquisitor", "navigator", "ministorum-priest"]);
+    content = setWarlord(content, 0, true);
+    const issues = legalityIssues(data40k, content.roster, content.attachments);
+    expect(issues).toContain("Imperial Agents: 3 Character units (max 2)");
+    expect(issues.some((i) => i.includes("can't be your Warlord"))).toBe(true);
+    expect(enhancementChoices(data40k, content.roster, 0)).toEqual([]);
   });
 });
 

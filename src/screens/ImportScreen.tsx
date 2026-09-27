@@ -57,7 +57,7 @@ export default function ImportScreen() {
     setError(null);
     try {
       const data = await loadMergedData();
-      const { result, inferred, notes } = importRosterLenient(data, text);
+      const { result, inferred, notes, sourceText } = importRosterLenient(data, text);
       if (!result.ok) {
         setError(
           `${result.message}\n\nFormats tried: ${result.trials.map((t) => t.id).join(", ")}` +
@@ -65,10 +65,16 @@ export default function ImportScreen() {
         );
         return;
       }
+      if (result.roster.units.length === 0) {
+        setError(
+          "No units could be read from this list. If it came from the GW app, try copying it again with the app's Share → Copy text option.",
+        );
+        return;
+      }
       const { roster, roleHints, attachmentSeeds } = normalizeImportedRoster(
         result.roster,
         data,
-        text,
+        sourceText,
       );
       setReview({
         data,

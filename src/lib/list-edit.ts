@@ -15,6 +15,7 @@
  * keep their stored points.
  */
 import type {
+  AlliedRule,
   ResolvedRef,
   Roster,
   RosterUnit,
@@ -715,6 +716,120 @@ export function legalityIssues(
     if (unit && loadoutDataMissing(data, unit)) continue;
     for (const v of ul.violations) issues.push(`${unitLabel(ul.unitIndex)}: ${v.message}`);
   }
+  issues.push(...alliedIssues(data, roster));
+  return issues;
+}
+
+/** An allied-rule pool the army may draw from (Imperial Agents, Questoris Allies, …). */
+export interface AllyPool {
+  rule: AlliedRule;
+  units: ReturnType<Data40k["dataset"]["allyUnitsFor"]>;
+}
+
+/**
+ * The ally pools the roster's faction + detachments qualify for, each with
+ * its unit pool — e.g. Grey Knights get Imperial Agents and Questoris Allies.
+ * Units native to the army are left out (a pool may list a shared id).
+ */
+export function allyPools(data: Data40k, roster: Roster): AllyPool[] {
+  const factionId = roster.faction_id;
+  if (!factionId) return [];
+  const detIds = roster.detachments.map((d) => d.ref.id).filter((id): id is string => !!id);
+  return data.dataset
+    .alliesFor(factionId, detIds)
+    .map((rule) => ({
+      rule,
+      units: data.dataset
+        .allyUnitsFor(rule.id)
+        .filter((u) => u.raw.faction_id !== factionId),
+    }))
+    .filter((p) => p.units.length > 0);
+}
+
+/**
+ * The allied rule the unit at `index` is fielded under, or null for a unit
+ * native to the army (or one no offered pool covers).
+ */
+export function allyRuleOf(
+  data: Data40k,
+  roster: Roster,
+  index: number,
+  pools: AllyPool[] = allyPools(data, roster),
+): AlliedRule | null {
+  const ru = roster.units[index];
+  const id = ru?.ref.id;
+  if (!id || !roster.faction_id) return null;
+  if (data.units.getInFaction(id, roster.faction_id)) return null;
+  return pools.find((p) => p.units.some((u) => u.id === id))?.rule ?? null;
+}
+
+/** How many units of one capped keyword an ally pool has used, against its cap. */
+export interface AllyCapUsage {
+  keyword: string;
+  used: number;
+  max: number;
+}
+
+/** Roster indexes fielded under `rule`. */
+function allyMembers(data: Data40k, roster: Roster, rule: AlliedRule, pools: AllyPool[]): number[] {
+  return roster.units
+    .map((_, i) => i)
+    .filter((i) => allyRuleOf(data, roster, i, pools)?.id === rule.id);
+}
+
+/** Per-keyword cap usage for `rule` at the roster's battle size. */
+export function allyCapUsage(
+  data: Data40k,
+  roster: Roster,
+  rule: AlliedRule,
+  pools: AllyPool[] = allyPools(data, roster),
+): AllyCapUsage[] {
+  const size = roster.battle_size ?? "strike-force";
+  const kwSets = allyMembers(data, roster, rule, pools).map((i) => {
+    const unit = unitEntity(data, roster.units[i].ref, roster.faction_id);
+    return new Set(
+      [...(unit?.keywords ?? []), ...(unit?.faction_keywords ?? [])].map((k) => k.toLowerCase()),
+    );
+  });
+  return (rule.keyword_limits ?? [])
+    .filter((l) => l.battle_size === size)
+    .map((l) => ({
+      keyword: l.keyword,
+      used: kwSets.filter((k) => k.has(l.keyword.toLowerCase())).length,
+      max: l.max_count,
+    }));
+}
+
+/**
+ * Allied-rule construction limits the package's checkRoster doesn't enforce:
+ * per-keyword caps (Agents: 2 Characters / 1 Requisitioned / 2 Retinue at
+ * Strike Force), points and unit-count caps, and the no-Warlord /
+ * no-Enhancement riders.
+ */
+export function alliedIssues(data: Data40k, roster: Roster): string[] {
+  const pools = allyPools(data, roster);
+  if (pools.length === 0) return [];
+  const size = roster.battle_size ?? "strike-force";
+  const issues: string[] = [];
+  for (const { rule } of pools) {
+    const label = rule.label ?? rule.name;
+    const members = allyMembers(data, roster, rule, pools).map((i) => roster.units[i]);
+    if (members.length === 0) continue;
+    for (const c of allyCapUsage(data, roster, rule, pools)) {
+      if (c.used > c.max) issues.push(`${label}: ${c.used} ${c.keyword} units (max ${c.max})`);
+    }
+    const ptsCap = rule.points_limits?.find((l) => l.battle_size === size)?.max_points;
+    const pts = members.reduce((s, u) => s + (u.points ?? 0) + (u.enhancement_points ?? 0), 0);
+    if (ptsCap != null && pts > ptsCap) issues.push(`${label}: ${pts} pts (max ${ptsCap})`);
+    if (rule.max_units != null && members.length > rule.max_units)
+      issues.push(`${label}: ${members.length} units (max ${rule.max_units})`);
+    for (const u of members) {
+      if (rule.cannot_be_warlord && u.is_warlord)
+        issues.push(`${u.ref.raw_name}: ${label} units can't be your Warlord`);
+      if (rule.cannot_take_enhancements && u.enhancement)
+        issues.push(`${u.ref.raw_name}: ${label} units can't take Enhancements`);
+    }
+  }
   return issues;
 }
 
@@ -863,6 +978,7 @@ export function enhancementChoices(
   if (!factionId) return [];
   const unit = unitEntity(data, roster.units[index].ref, factionId);
   if (!unit) return [];
+  if (allyRuleOf(data, roster, index)?.cannot_take_enhancements) return [];
   const characterish = unit.role === "character" || unit.role === "epic-hero";
   const keywords = new Set(
     [unit.name, ...(unit.keywords ?? []), ...(unit.faction_keywords ?? [])].map((k) =>

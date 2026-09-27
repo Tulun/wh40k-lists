@@ -15,6 +15,8 @@ export const OPPONENT_SLOT_ENABLED = false;
  */
 export const EXPLORE_FACTION_IDS: readonly string[] | null = [
   "aeldari",
+  // Allied into Grey Knights lists (Imperial Agents).
+  "agents-of-the-imperium",
   "grey-knights",
   "leagues-of-votann",
   "orks",

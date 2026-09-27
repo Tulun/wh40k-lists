@@ -16,6 +16,7 @@ import type { Data40k } from "./data";
 // Value import, but no cycle: list-edit's import from this module is type-only.
 import { enhancementLeadGrants } from "./list-edit";
 import { completeDualModeWargear } from "./wargear-modes";
+import { DISPOSITIONS } from "./codex-model";
 
 type RosterDetachment = Roster["detachments"][number];
 
@@ -295,6 +296,11 @@ export function normalizeImportedRoster(
       for (const model of data.dataset.unitCompositionOf(view.raw)?.models ?? []) {
         modelNames.add(nn(model.name));
       }
+      // Options can name a model the composition omits (GK "Paladin Ancient").
+      for (const opt of data.dataset.wargearOptionsOf(view.raw)) {
+        const name = opt.model_constraint?.model_name;
+        if (name) modelNames.add(nn(name));
+      }
     }
     modelNames.add(nn(unit.ref.raw_name));
     modelNames.add(nn(unit.ref.raw_name).replace(/e?s$/, ""));
@@ -387,7 +393,31 @@ export function normalizeImportedRoster(
     splitDetachment(d, data, roster.faction_id),
   );
 
-  return { roster: { ...roster, units, detachments }, roleHints, attachmentSeeds };
+  const force_disposition =
+    roster.force_disposition ?? (rawText ? headerDisposition(rawText) : null);
+
+  return {
+    roster: { ...roster, units, detachments, force_disposition },
+    roleHints,
+    attachmentSeeds,
+  };
+}
+
+/**
+ * The chosen Force Disposition, when the export's header names exactly one
+ * ("Priority Assets", or "Force Dispositions: Priority Assets"). The GW app
+ * otherwise lists every disposition the detachments grant — with several
+ * named, the choice is ambiguous and stays unset for the editor.
+ */
+export function headerDisposition(rawText: string): string | null {
+  for (const line of rawText.split(/\r?\n/).slice(0, 8)) {
+    const body = line.trim().replace(/^force dispositions?\s*:\s*/i, "");
+    const named = body
+      .split(/\s*,\s*/)
+      .map((part) => DISPOSITIONS.find((d) => d.label.toLowerCase() === part.toLowerCase()));
+    if (named.length > 0 && named.every(Boolean)) return named.length === 1 ? named[0]!.id : null;
+  }
+  return null;
 }
 
 /**
