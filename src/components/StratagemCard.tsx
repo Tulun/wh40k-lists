@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Stratagem } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "../lib/data";
-import { abilityText, dekebabLabel } from "../lib/describe";
+import { abilityText, dekebabLabel, phasesLabel } from "../lib/describe";
 import { byId } from "../lib/lookup";
 import { useLists } from "../store/lists";
 
@@ -19,7 +19,12 @@ const TURN_LABEL: Record<string, string> = {
   "either-turn": "Either turn",
 };
 
-export default function StratagemCard({ data, stratagem, factionId, listId }: Props) {
+export default function StratagemCard({
+  data,
+  stratagem,
+  factionId,
+  listId,
+}: Props) {
   const note = useLists((s) =>
     listId ? (s.lists[listId]?.notes[stratagem.id] ?? "") : "",
   );
@@ -38,10 +43,12 @@ export default function StratagemCard({ data, stratagem, factionId, listId }: Pr
       <summary className="flex cursor-pointer items-baseline gap-2 px-2.5 py-2">
         <span className="min-w-0 flex-1 truncate text-xs font-bold uppercase tracking-wide">
           {stratagem.name}
-          {(text || note) && <span className="ml-1 font-normal text-ink-faint">▸</span>}
+          {(text || note) && (
+            <span className="ml-1 font-normal text-ink-faint">▸</span>
+          )}
         </span>
         <span className="shrink-0 text-[10px] uppercase text-ink-faint">
-          {stratagem.phases.map(dekebabLabel).join("/")}
+          {phasesLabel(stratagem.phases)}
         </span>
         <span className="shrink-0 rounded bg-accent/20 px-1.5 py-px text-[11px] font-bold text-accent">
           {stratagem.cp_cost} CP
@@ -51,21 +58,28 @@ export default function StratagemCard({ data, stratagem, factionId, listId }: Pr
       <div className="border-t border-edge px-2.5 py-2">
         <div className="flex flex-wrap gap-1 text-[10px] uppercase tracking-wide text-ink-faint">
           <span className="rounded bg-panel px-1 py-px">
-            {TURN_LABEL[stratagem.player_turn] ?? dekebabLabel(stratagem.player_turn)}
+            {TURN_LABEL[stratagem.player_turn] ??
+              dekebabLabel(stratagem.player_turn)}
           </span>
           {/* Once-per-phase is the core rule for every stratagem — only
               exceptional timings (Fire Overwatch's once per turn) get a chip,
               matching how the printed cards only state exceptions. */}
           {stratagem.timing !== "once-per-phase" && (
-            <span className="rounded bg-panel px-1 py-px">{dekebabLabel(stratagem.timing)}</span>
+            <span className="rounded bg-panel px-1 py-px">
+              {dekebabLabel(stratagem.timing)}
+            </span>
           )}
           {stratagem.type && (
-            <span className="rounded bg-panel px-1 py-px">{dekebabLabel(stratagem.type)}</span>
+            <span className="rounded bg-panel px-1 py-px">
+              {dekebabLabel(stratagem.type)}
+            </span>
           )}
         </div>
 
         {text ? (
-          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-snug">{text}</p>
+          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-snug">
+            {text}
+          </p>
         ) : (
           <p className="mt-1.5 text-xs italic text-ink-faint">
             Effect not in the dataset yet —{" "}
@@ -81,7 +95,9 @@ export default function StratagemCard({ data, stratagem, factionId, listId }: Pr
         )}
         {tr?.notes && (
           <p className="mt-1.5 text-sm leading-snug text-ink-dim">
-            <span className="text-[10px] uppercase text-ink-faint">Target: </span>
+            <span className="text-[10px] uppercase text-ink-faint">
+              Target:{" "}
+            </span>
             {tr.notes}
           </p>
         )}
@@ -114,7 +130,11 @@ export default function StratagemCard({ data, stratagem, factionId, listId }: Pr
                 onClick={() => setEditing(true)}
                 className="text-left text-xs text-ink-faint underline decoration-dotted"
               >
-                {note ? <span className="text-ink-dim">📝 {note}</span> : "+ add note"}
+                {note ? (
+                  <span className="text-ink-dim">📝 {note}</span>
+                ) : (
+                  "+ add note"
+                )}
               </button>
             )}
           </div>

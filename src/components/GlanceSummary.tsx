@@ -2,9 +2,13 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Roster, Stratagem } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "../lib/data";
-import { abilityText, dekebabLabel } from "../lib/describe";
+import { abilityText, phasesLabel } from "../lib/describe";
 import { byId } from "../lib/lookup";
-import { armyStratagems, sortStratagems, stratagemsByDetachment } from "../lib/stratagems";
+import {
+  armyStratagems,
+  sortStratagems,
+  stratagemsByDetachment,
+} from "../lib/stratagems";
 import { useLists } from "../store/lists";
 
 interface Props {
@@ -33,7 +37,10 @@ export default function GlanceSummary({ data, roster, listId }: Props) {
   }, [open]);
 
   const detachmentIds = roster.detachments.map((d) => d.ref.id);
-  const { detachment, core } = armyStratagems(data.stratagems.all, detachmentIds);
+  const { detachment, core } = armyStratagems(
+    data.stratagems.all,
+    detachmentIds,
+  );
 
   const enhancements = roster.units
     .map((u, index) => ({ u, index }))
@@ -49,7 +56,10 @@ export default function GlanceSummary({ data, roster, listId }: Props) {
         ⚡ Stratagem summary{" "}
         <span className="text-xs font-normal text-ink-faint">
           ({detachment.length + core.length} stratagems
-          {enhancements.length > 0 ? ` · ${enhancements.length} enhancements` : ""})
+          {enhancements.length > 0
+            ? ` · ${enhancements.length} enhancements`
+            : ""}
+          )
         </span>
       </button>
 
@@ -85,11 +95,22 @@ export default function GlanceSummary({ data, roster, listId }: Props) {
                 {enhancements.length > 0 && (
                   <Section label="Enhancements">
                     {enhancements.map(({ u, index }) => {
-                      const entity = byId(data.enhancements, u.enhancement!.id, roster.faction_id);
-                      const ability = byId(data.abilities, entity?.ability_id, roster.faction_id);
+                      const entity = byId(
+                        data.enhancements,
+                        u.enhancement!.id,
+                        roster.faction_id,
+                      );
+                      const ability = byId(
+                        data.abilities,
+                        entity?.ability_id,
+                        roster.faction_id,
+                      );
                       const bearer =
-                        data.resolveRosterUnit(u, data.dataset, roster.faction_id)?.name ??
-                        u.ref.raw_name;
+                        data.resolveRosterUnit(
+                          u,
+                          data.dataset,
+                          roster.faction_id,
+                        )?.name ?? u.ref.raw_name;
                       const pts = u.enhancement_points ?? entity?.cost;
                       return (
                         <SummaryRow
@@ -111,24 +132,40 @@ export default function GlanceSummary({ data, roster, listId }: Props) {
 
                 {/* One section per detachment — a multi-detachment army's
                     tricks read per detachment, not as one long pile. */}
-                {stratagemsByDetachment(detachment, detachmentIds).map((group) => (
-                  <Section
-                    key={group.id}
-                    label={`${
-                      byId(data.detachments, group.id, roster.faction_id)?.name ??
-                      roster.detachments.find((d) => d.ref.id === group.id)?.ref.raw_name ??
-                      "Detachment"
-                    } stratagems`}
-                  >
-                    {group.stratagems.map((s) => (
-                      <StratagemRow key={s.id} data={data} stratagem={s} roster={roster} note={notes?.[s.id]} />
-                    ))}
-                  </Section>
-                ))}
+                {stratagemsByDetachment(detachment, detachmentIds).map(
+                  (group) => (
+                    <Section
+                      key={group.id}
+                      label={`${
+                        byId(data.detachments, group.id, roster.faction_id)
+                          ?.name ??
+                        roster.detachments.find((d) => d.ref.id === group.id)
+                          ?.ref.raw_name ??
+                        "Detachment"
+                      } stratagems`}
+                    >
+                      {group.stratagems.map((s) => (
+                        <StratagemRow
+                          key={s.id}
+                          data={data}
+                          stratagem={s}
+                          roster={roster}
+                          note={notes?.[s.id]}
+                        />
+                      ))}
+                    </Section>
+                  ),
+                )}
 
                 <Section label="Core stratagems">
                   {sortStratagems(core).map((s) => (
-                    <StratagemRow key={s.id} data={data} stratagem={s} roster={roster} note={notes?.[s.id]} />
+                    <StratagemRow
+                      key={s.id}
+                      data={data}
+                      stratagem={s}
+                      roster={roster}
+                      note={notes?.[s.id]}
+                    />
                   ))}
                 </Section>
               </div>
@@ -140,7 +177,13 @@ export default function GlanceSummary({ data, roster, listId }: Props) {
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <p className="pb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
@@ -173,7 +216,7 @@ function StratagemRow({
           {stratagem.player_turn === "opponent-turn" && (
             <span className="text-opponent">Opp · </span>
           )}
-          {stratagem.phases.map(dekebabLabel).join("/")}
+          {phasesLabel(stratagem.phases)}
         </>
       }
       badge={`${stratagem.cp_cost} CP`}
@@ -207,7 +250,11 @@ function SummaryRow({
         <span className="min-w-0 flex-1 truncate text-xs font-bold uppercase tracking-wide">
           {title}
         </span>
-        {meta && <span className="shrink-0 text-[10px] uppercase text-ink-faint">{meta}</span>}
+        {meta && (
+          <span className="shrink-0 text-[10px] uppercase text-ink-faint">
+            {meta}
+          </span>
+        )}
         {badge && (
           <span className="shrink-0 rounded bg-accent/20 px-1.5 py-px text-[11px] font-bold text-accent">
             {badge}
@@ -223,7 +270,9 @@ function SummaryRow({
           {text}
         </p>
       ) : (
-        <p className="mt-0.5 text-xs italic text-ink-faint">Effect not in the dataset yet</p>
+        <p className="mt-0.5 text-xs italic text-ink-faint">
+          Effect not in the dataset yet
+        </p>
       )}
       {note && <p className="mt-0.5 text-xs text-accent">📝 {note}</p>}
     </button>

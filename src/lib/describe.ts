@@ -30,12 +30,26 @@ export function dekebabLabel(s: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+const ALL_PHASES = ["command", "movement", "shooting", "charge", "fight"];
+
+/**
+ * A stratagem's phases for display: "Any phase" when it covers every phase,
+ * otherwise the phase names joined with `sep`.
+ */
+export function phasesLabel(phases: readonly string[], sep = "/"): string {
+  if (ALL_PHASES.every((p) => phases.includes(p))) return "Any phase";
+  return phases.map(dekebabLabel).join(sep);
+}
+
 export function formatRange(range: number | "Melee" | string): string {
   return typeof range === "number" ? `${range}"` : String(range);
 }
 
 /** Save like 5 → `5+`; invuln 4 → `4++`. */
-export function formatSave(sv: number | null | undefined, invuln = false): string {
+export function formatSave(
+  sv: number | null | undefined,
+  invuln = false,
+): string {
   if (sv == null) return "—";
   return `${sv}+${invuln ? "+" : ""}`;
 }
@@ -84,7 +98,10 @@ export function pointsTierLabels(tiers: readonly PointsTier[]): string[] {
  * Display text for an ability: overlay-authored `leak_text` prose wins over
  * the DSL renderer (overlay records carry only a placeholder effect).
  */
-export function abilityText(ability: { describe(): string; raw: unknown }): string {
+export function abilityText(ability: {
+  describe(): string;
+  raw: unknown;
+}): string {
   const raw = ability.raw as { leak_text?: unknown; authored_by?: unknown };
   const leak = raw.leak_text;
   if (typeof leak === "string" && leak.length > 0) return leak;
@@ -131,7 +148,13 @@ export function wargearOptionText(
     const counts = new Map<string, number>();
     for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
     return [...counts]
-      .map(([id, n]) => (n > 1 ? `${n}× ${nameOf(id)}` : countOne ? `1 ${nameOf(id)}` : nameOf(id)))
+      .map(([id, n]) =>
+        n > 1
+          ? `${n}× ${nameOf(id)}`
+          : countOne
+            ? `1 ${nameOf(id)}`
+            : nameOf(id),
+      )
       .join(" and ");
   };
 
@@ -141,7 +164,9 @@ export function wargearOptionText(
   let suffix = "";
   if (!mc || (mc.any_number && !mc.max_count)) {
     subject =
-      who === "model" ? "Any number of models can each" : `Any number of ${who} models can each`;
+      who === "model"
+        ? "Any number of models can each"
+        : `Any number of ${who} models can each`;
   } else if (mc.any_number && mc.max_count) {
     // Multi-take mount: "up to 2 seeker missiles" per model.
     subject = who === "model" ? "Each model can" : `Each ${who} can`;
@@ -156,7 +181,9 @@ export function wargearOptionText(
   }
   if (option.additional_cost) suffix += ` for +${option.additional_cost} pts`;
 
-  const branches = option.replacement_choice ?? (option.replacement ? [option.replacement] : []);
+  const branches =
+    option.replacement_choice ??
+    (option.replacement ? [option.replacement] : []);
   const verb = option.replaces
     ? `replace their ${itemList(option.replaces, false)} with`
     : "be equipped with";
@@ -166,7 +193,9 @@ export function wargearOptionText(
       choices: branches.map((b) => itemList(b, true)),
     };
   }
-  return { text: `${subject} ${verb} ${itemList(branches[0] ?? [], true)}${suffix}.` };
+  return {
+    text: `${subject} ${verb} ${itemList(branches[0] ?? [], true)}${suffix}.`,
+  };
 }
 
 /** "Feel No Pain 5+" among ability names → "5+++" (the x+++ convention). */

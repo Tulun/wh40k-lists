@@ -1,6 +1,6 @@
 import type { EditableDetachment, EditableStratagem } from "../lib/codex-model";
 import { DISPOSITIONS } from "../lib/codex-model";
-import { dekebabLabel } from "../lib/describe";
+import { dekebabLabel, phasesLabel } from "../lib/describe";
 
 const BAND_HEAD =
   "bg-band px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white";
@@ -11,10 +11,17 @@ const TURN_LABELS: Record<EditableStratagem["playerTurn"], string> = {
   either: "Either player's turn",
 };
 
+/** "Shooting / Fight phase", or just "Any phase" for an every-phase stratagem. */
+function phaseText(phases: string[]): string | null {
+  if (phases.length === 0) return null;
+  const label = phasesLabel(phases, " / ");
+  return label === "Any phase" ? label : `${label} phase`;
+}
+
 function StratagemBox({ strat }: { strat: EditableStratagem }) {
   const meta = [
     TURN_LABELS[strat.playerTurn],
-    strat.phases.length > 0 ? strat.phases.map(dekebabLabel).join(" / ") + " phase" : null,
+    phaseText(strat.phases),
     // Once per phase is the core rule for every stratagem — only exceptional
     // timings are worth a chip, matching the printed cards.
     strat.timing !== "once-per-phase" ? dekebabLabel(strat.timing) : null,
@@ -76,7 +83,9 @@ export default function DetachmentCard({ det }: { det: EditableDetachment }) {
           <div className={BAND_HEAD}>Detachment rule</div>
           <div className="px-3 py-2 text-[13px] leading-snug">
             {det.ruleName && (
-              <p className="mb-1 font-bold uppercase tracking-wide text-band-hi">{det.ruleName}</p>
+              <p className="mb-1 font-bold uppercase tracking-wide text-band-hi">
+                {det.ruleName}
+              </p>
             )}
             <p className="whitespace-pre-wrap">{det.ruleText}</p>
           </div>

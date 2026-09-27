@@ -3,7 +3,11 @@
  * that appears in the dataset corpus.
  */
 import { describe, expect, it } from "vitest";
-import { wargearOptionText, type WargearOptionLike } from "../describe";
+import {
+  phasesLabel,
+  wargearOptionText,
+  type WargearOptionLike,
+} from "../describe";
 
 const names: Record<string, string> = {
   shoota: "Kustom Shoota",
@@ -18,8 +22,14 @@ const text = (o: WargearOptionLike) => wargearOptionText(o, nameOf);
 describe("wargearOptionText", () => {
   it("any-number swap", () => {
     expect(
-      text({ model_constraint: { any_number: true }, replaces: ["shoota"], replacement: ["rokkit"] }),
-    ).toEqual({ text: "Any number of models can each replace their Kustom Shoota with 1 Kombi-rokkit." });
+      text({
+        model_constraint: { any_number: true },
+        replaces: ["shoota"],
+        replacement: ["rokkit"],
+      }),
+    ).toEqual({
+      text: "Any number of models can each replace their Kustom Shoota with 1 Kombi-rokkit.",
+    });
   });
 
   it("per-N model-name swap with a pick-one choice", () => {
@@ -37,11 +47,21 @@ describe("wargearOptionText", () => {
 
   it("flat allowances: 1 model vs up-to-K models", () => {
     expect(
-      text({ model_constraint: { max_count: 1 }, replaces: ["klaw"], replacement: ["choppa"] }).text,
+      text({
+        model_constraint: { max_count: 1 },
+        replaces: ["klaw"],
+        replacement: ["choppa"],
+      }).text,
     ).toBe("1 model can replace their Power Klaw with 1 Big Choppa.");
     expect(
-      text({ model_constraint: { max_count: 2 }, replaces: ["klaw"], replacement: ["choppa"] }).text,
-    ).toBe("Up to 2 models can each replace their Power Klaw with 1 Big Choppa.");
+      text({
+        model_constraint: { max_count: 2 },
+        replaces: ["klaw"],
+        replacement: ["choppa"],
+      }).text,
+    ).toBe(
+      "Up to 2 models can each replace their Power Klaw with 1 Big Choppa.",
+    );
   });
 
   it("multi-take add-on mount with a cost", () => {
@@ -51,12 +71,25 @@ describe("wargearOptionText", () => {
         replacement: ["drone"],
         additional_cost: 10,
       }).text,
-    ).toBe("Each model can be equipped with 1 Gun Drone, up to 2 times per model for +10 pts.");
+    ).toBe(
+      "Each model can be equipped with 1 Gun Drone, up to 2 times per model for +10 pts.",
+    );
   });
 
   it("unconstrained option reads as any-number", () => {
     expect(text({ replacement: ["drone"] }).text).toBe(
       "Any number of models can each be equipped with 1 Gun Drone.",
     );
+  });
+});
+
+describe("phasesLabel", () => {
+  it("collapses every phase to Any phase", () => {
+    expect(
+      phasesLabel(["command", "movement", "shooting", "charge", "fight"]),
+    ).toBe("Any phase");
+  });
+  it("joins a partial list", () => {
+    expect(phasesLabel(["shooting", "fight"], " / ")).toBe("Shooting / Fight");
   });
 });
