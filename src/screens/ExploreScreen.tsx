@@ -1,13 +1,16 @@
 import { Link } from "react-router-dom";
+import DispositionMatchups from "../components/DispositionMatchups";
 import { useDataset } from "../hooks/useDataset";
 import { EXPLORE_FACTION_IDS } from "../lib/flags";
 import { codexBadge, useCodex } from "../store/codex";
+import { useActiveList } from "../store/lists";
 
 const BADGE_LABEL = { replace: "Codex", patched: "Edited" } as const;
 
 export default function ExploreScreen() {
   const data = useDataset();
   const doc = useCodex((s) => s.doc);
+  const activeList = useActiveList();
 
   if (!data) {
     return <p className="py-16 text-center text-xs text-ink-faint">Loading dataset…</p>;
@@ -44,6 +47,7 @@ export default function ExploreScreen() {
           </li>
         ))}
       </ul>
+      <DispositionMatchups data={data} initial={activeList?.roster.force_disposition} />
     </div>
   );
 }
