@@ -353,8 +353,9 @@ const SECTIONS: { key: string; label: string; roles: string[] }[] = [
   { key: "battleline", label: "Battleline", roles: ["battleline"] },
   { key: "transports", label: "Dedicated Transports", roles: ["dedicated-transport"] },
   { key: "fortifications", label: "Fortifications", roles: ["fortification"] },
-  { key: "allied", label: "Allied", roles: ["allied"] },
   { key: "other", label: "Other Datasheets", roles: [] }, // catch-all
+  // Allies sit below everything native to the army.
+  { key: "allied", label: "Allied", roles: ["allied"] },
 ];
 const KNOWN_ROLES = new Set(SECTIONS.flatMap((s) => s.roles));
 const sectionKeyOf = (role: string | null | undefined) =>

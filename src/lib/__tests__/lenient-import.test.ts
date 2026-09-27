@@ -9,6 +9,7 @@ import * as data from "@alpaca-software/40kdc-data";
 import type { Data40k } from "../data";
 import { importRosterLenient } from "../lenient-import";
 import { normalizeImportedRoster } from "../normalize";
+import { organizeArmy } from "../organize";
 import { allyRuleOf, legalityIssues } from "../list-edit";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -164,5 +165,23 @@ describe("flattened GW app export (no title, blank lines or points parens)", () 
     expect(legalityIssues(d, roster, attachmentSeeds).some((i) => /Imperial Agents/.test(i))).toBe(
       false,
     );
+  });
+
+  it("lays allied units out last, below Other units", () => {
+    const { result, sourceText } = importRosterLenient(d, text);
+    if (!result.ok) throw new Error(result.message);
+    const { roster, attachmentSeeds } = normalizeImportedRoster(result.roster, d, sourceText);
+    const sections = organizeArmy(d, { roster, attachments: attachmentSeeds } as never);
+    const last = sections[sections.length - 1];
+    expect(last.label).toBe("Allied units");
+    expect(last.blocks.map((b) => roster.units[b.indices[0]].ref.id).sort()).toEqual([
+      "imperial-rhino",
+      "watch-captain-artemis",
+    ]);
+    // Artemis is a character, but an allied one — not in the army's Characters.
+    const chars = sections.find((s) => s.label === "Characters");
+    expect(
+      chars?.blocks.some((b) => roster.units[b.indices[0]].ref.id === "watch-captain-artemis"),
+    ).toBeFalsy();
   });
 });

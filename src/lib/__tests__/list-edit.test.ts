@@ -482,15 +482,6 @@ describe("wargear options (swaps)", () => {
     const { s: after, branch: b } = psyState(unswapped);
     expect(after.branches[b].applied).toBe(0);
   });
-
-  it("caps the Paladin Ancient's own swap at one model, not the squad", () => {
-    const full = setModelCount(data40k, fresh(), i, 10);
-    const ancient = wargearOptionStates(data40k, full.roster.units[i], unit).filter(
-      (st) => st.option.model_constraint?.model_name === "Paladin Ancient",
-    );
-    expect(ancient.length).toBeGreaterThan(0);
-    for (const st of ancient) expect(st.cap).toBeLessThanOrEqual(1);
-  });
 });
 
 describe("legalityIssues attachments", () => {

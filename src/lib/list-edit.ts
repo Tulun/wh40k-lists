@@ -406,11 +406,17 @@ function optionBranches(option: WargearOption): string[][] {
 }
 
 /**
- * The unit's authored wargear options with how often each is currently taken —
- * inferred from the loadout as the smallest count among a branch's added ids
- * BEYOND the base loadout. The base must be subtracted or a branch that adds a
- * weapon the unit also carries by default (Tankbustas' extra Busta Rokkit
- * Launcha atop 5 default ones) reads as already taken.
+ * The unit's authored wargear options with how often each is currently taken,
+ * inferred from the loadout's difference from the base loadout.
+ *
+ * Swaps are attributed ONCE: each branch's net change (adds minus replaces —
+ * so "storm bolter → storm bolter + Ancient's banner" is just +1 banner) claims
+ * from a shared pool of observed changes, most specific branch first. A model
+ * with psycannon + banner therefore counts for the Ancient option only, not
+ * also for the plain psycannon swap, and a psycannon in the bag while every
+ * storm bolter is still carried counts for nothing (Deff Dread's double Extra
+ * Klaw case). Identical option records merge into one state with their caps
+ * summed — the schema's only way to say "up to 2 per 5 models".
  */
 export function wargearOptionStates(
   data: Data40k,
@@ -420,38 +426,84 @@ export function wargearOptionStates(
   const { options, models } = loadoutCtx(data, unit);
   const counts = wargearCounts(rosterUnit);
   const base = data.baseLoadout(unit, rosterUnit.model_count, options, models).counts;
-  return options.map((option) => {
-    // A branch's adds alone can't identify the option when another option adds
-    // the same item (Deff Dread: two different swaps both grant an Extra Klaw).
-    // The swap also removes `replaces`, so cap by how many are actually gone.
-    const replaces = option.replaces ?? [];
-    const removedCap =
-      replaces.length > 0
-        ? Math.max(
-            0,
-            Math.min(...replaces.map((id) => (base.get(id) ?? 0) - (counts.get(id) ?? 0))),
-          )
-        : Infinity;
-    const branches = optionBranches(option).map((ids) => ({
-      ids,
-      applied:
-        ids.length > 0
-          ? Math.max(
-              0,
-              Math.min(
-                removedCap,
-                ...ids.map((id) => (counts.get(id) ?? 0) - (base.get(id) ?? 0)),
-              ),
-            )
-          : 0,
-    }));
-    return {
-      option,
-      branches,
-      cap: data.optionCap(option, rosterUnit.model_count, models),
-      totalApplied: branches.reduce((s, b) => s + b.applied, 0),
-    };
-  });
+
+  // Merge identical options (same swap, same constraint).
+  const groups: { option: WargearOption; cap: number }[] = [];
+  const byKey = new Map<string, number>();
+  for (const option of options) {
+    const mc = option.model_constraint ?? {};
+    const key = JSON.stringify([
+      [...(option.replaces ?? [])].sort(),
+      optionBranches(option).map((b) => [...b].sort()),
+      mc.model_name ?? null,
+      mc.per_n_models ?? null,
+      mc.max_count ?? null,
+      !!mc.any_number,
+    ]);
+    const cap = data.optionCap(option, rosterUnit.model_count, models);
+    const at = byKey.get(key);
+    if (at != null) groups[at].cap += cap;
+    else {
+      byKey.set(key, groups.length);
+      groups.push({ option, cap });
+    }
+  }
+
+  // Observed change pools: net gains and net losses against the base loadout.
+  const gained = new Map<string, number>();
+  const lost = new Map<string, number>();
+  for (const id of new Set([...counts.keys(), ...base.keys()])) {
+    const d = (counts.get(id) ?? 0) - (base.get(id) ?? 0);
+    if (d > 0) gained.set(id, d);
+    if (d < 0) lost.set(id, -d);
+  }
+
+  const net = (option: WargearOption, ids: string[]) => {
+    const change = new Map<string, number>();
+    for (const id of ids) change.set(id, (change.get(id) ?? 0) + 1);
+    for (const id of option.replaces ?? []) change.set(id, (change.get(id) ?? 0) - 1);
+    return change;
+  };
+  const states: WargearOptionState[] = groups.map(({ option, cap }) => ({
+    option,
+    branches: optionBranches(option).map((ids) => ({ ids, applied: 0 })),
+    cap,
+    totalApplied: 0,
+  }));
+  const slots = states.flatMap((st) =>
+    st.branches.map((b) => ({ st, b, change: net(st.option, b.ids) })),
+  );
+  // Most specific first: more distinct net-added items, then more removed.
+  const size = (c: Map<string, number>, sign: 1 | -1) =>
+    [...c.values()].filter((v) => v * sign > 0).length;
+  slots.sort((x, y) => size(y.change, 1) - size(x.change, 1) || size(y.change, -1) - size(x.change, -1));
+
+  const claimable = (change: Map<string, number>) => {
+    let n = Infinity;
+    for (const [id, v] of change) {
+      if (v > 0) n = Math.min(n, Math.floor((gained.get(id) ?? 0) / v));
+      if (v < 0) n = Math.min(n, Math.floor((lost.get(id) ?? 0) / -v));
+    }
+    // A branch with no net effect can't be observed in the loadout.
+    return n === Infinity ? 0 : n;
+  };
+  const claim = (slot: (typeof slots)[number], n: number) => {
+    if (n <= 0) return;
+    for (const [id, v] of slot.change) {
+      const pool = v > 0 ? gained : lost;
+      pool.set(id, (pool.get(id) ?? 0) - Math.abs(v) * n);
+    }
+    slot.b.applied += n;
+    slot.st.totalApplied += n;
+  };
+  // Pass 1 respects each option's cap so a merged/duplicate option's share
+  // stays available to its siblings; pass 2 hands any remainder to the first
+  // matching branch so an over-cap import still surfaces as a violation.
+  for (const slot of slots) {
+    claim(slot, Math.min(claimable(slot.change), Math.max(0, slot.st.cap - slot.st.totalApplied)));
+  }
+  for (const slot of slots) claim(slot, claimable(slot.change));
+  return states;
 }
 
 /**

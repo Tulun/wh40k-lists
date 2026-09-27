@@ -6,7 +6,7 @@
 import type { Roster } from "@alpaca-software/40kdc-data";
 import type { SavedList } from "../store/schema";
 import type { Data40k } from "./data";
-import { battlelineGrants } from "./list-edit";
+import { allyPools, allyRuleOf, battlelineGrants } from "./list-edit";
 import { byId } from "./lookup";
 
 export interface ArmyBlock {
@@ -58,7 +58,11 @@ export function organizeArmy(data: Data40k | null, list: SavedList): ArmySection
 
   // Detachment-granted Battleline (Kult of Speed's Warbikers…) sorts as such.
   const granted = data ? battlelineGrants(data, roster) : new Set<string>();
+  // Units fielded under an allied rule (Imperial Agents…) go last, whatever
+  // their own role — an allied Character is not one of the army's Characters.
+  const pools = data ? allyPools(data, roster) : [];
   const rankAt = (i: number) => {
+    if (data && allyRuleOf(data, roster, i, pools)) return ROLE_RANK.allied;
     const id = roster.units[i].ref.id;
     if (id && granted.has(id)) return ROLE_RANK.battleline;
     const role = id && data ? byId(data.units, id, roster.faction_id)?.raw.role : undefined;

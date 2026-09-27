@@ -17,6 +17,7 @@ import type { CompiledRecords } from "./codex-compile";
 import { compileFaction, compilePatches, dedupeWeaponKeywords } from "./codex-compile";
 import type { Data40k } from "./data";
 import { REPLACE_FACTION_IDS } from "./flags";
+import { applyDataFixes } from "./data-fixes";
 
 /** Collections whose `.all` returns wrapper views carrying `.raw`. */
 const rawOf = <T>(entry: T | { raw: T }): T =>
@@ -243,7 +244,7 @@ export function applyRecordPatches(base: RawData, compiled: CompiledRecords): Ra
 export function applyCodex(mod: Data40k, doc: CodexDoc): Dataset | null {
   let raw = rawFromDataset(mod.dataset);
   const knownKeywordIds = new Set(mod.weaponKeywords.all.map((k) => k.id));
-  let changed = false;
+  let changed = applyDataFixes(raw);
   const replaceIds = new Set([
     ...REPLACE_FACTION_IDS,
     ...Object.keys(doc.factions).filter((id) => doc.factions[id].mode === "replace"),

@@ -17,6 +17,7 @@ import type { Data40k } from "./data";
 import { enhancementLeadGrants } from "./list-edit";
 import { completeDualModeWargear } from "./wargear-modes";
 import { DISPOSITIONS } from "./codex-model";
+import { fixedModelAliases } from "./data-fixes";
 
 type RosterDetachment = Roster["detachments"][number];
 
@@ -295,6 +296,9 @@ export function normalizeImportedRoster(
       for (const p of view.raw.profiles) if (p.name) modelNames.add(nn(p.name));
       for (const model of data.dataset.unitCompositionOf(view.raw)?.models ?? []) {
         modelNames.add(nn(model.name));
+      }
+      for (const alias of fixedModelAliases(view.raw.id, view.raw.faction_id ?? null)) {
+        modelNames.add(nn(alias));
       }
       // Options can name a model the composition omits (GK "Paladin Ancient").
       for (const opt of data.dataset.wargearOptionsOf(view.raw)) {
