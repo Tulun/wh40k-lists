@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@alpaca-software/40kdc-data": "^1.4.5",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.0",

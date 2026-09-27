@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import type { Data40k } from "../lib/data";
 import { DISPOSITION_SHORT, DISPOSITIONS } from "../lib/codex-model";
 
@@ -52,19 +53,22 @@ export default function DispositionMatchups({
       </div>
       <ul className="overflow-hidden rounded-lg border border-edge">
         {DISPOSITIONS.map((opp) => (
-          <li
-            key={opp.id}
-            className="flex items-baseline gap-3 border-b border-edge px-3 py-2 last:border-b-0"
-          >
-            <span className="w-24 shrink-0 text-xs text-ink-faint">
-              vs {DISPOSITION_SHORT[opp.id] ?? opp.label}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold">{primary(mine, opp.id)}</span>
-              <span className="block text-[11px] text-ink-faint">
-                They play {primary(opp.id, mine)}
+          <li key={opp.id} className="border-b border-edge last:border-b-0">
+            <Link
+              to={`/missions?me=${mine}&opp=${opp.id}`}
+              className="flex items-baseline gap-3 px-3 py-2 hover:bg-panel active:bg-panel"
+            >
+              <span className="w-24 shrink-0 text-xs text-ink-faint">
+                vs {DISPOSITION_SHORT[opp.id] ?? opp.label}
               </span>
-            </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{primary(mine, opp.id)}</span>
+                <span className="block text-[11px] text-ink-faint">
+                  They play {primary(opp.id, mine)}
+                </span>
+              </span>
+              <span className="self-center text-xs text-ink-faint">Map ›</span>
+            </Link>
           </li>
         ))}
       </ul>

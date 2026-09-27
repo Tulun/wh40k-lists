@@ -20,7 +20,8 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        // mjs: the pdf.js worker for mission maps.
+        globPatterns: ["**/*.{js,mjs,css,html,svg,png,woff2}"],
         // The embedded dataset chunk is far larger than workbox's 2MB default.
         maximumFileSizeToCacheInBytes: 40 * 1024 * 1024,
         // Take over on the launch that downloads the new build — without these
