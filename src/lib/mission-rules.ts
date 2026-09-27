@@ -30,6 +30,9 @@ interface Award {
 }
 
 export interface ScoringRow {
+  /** Card section header: "Any battle round", "Second battle round onwards"… */
+  section: string;
+  /** "End of your turn" — the card's WHEN line. */
   when: string;
   condition: string;
   vp: string;
@@ -39,12 +42,22 @@ export interface ScoringRow {
   exclusiveGroup?: string;
 }
 
+/** A mission action, laid out like the card's reverse (our wording). */
+export interface MissionAction {
+  name: string;
+  starts: string;
+  units?: string;
+  useLimit: string;
+  effect?: string;
+}
+
 export interface PrimaryRules {
   id: string;
   name: string;
   /** Community summary with its "X against Y." matchup preamble dropped. */
   summary?: string;
   rows: ScoringRow[];
+  actions: MissionAction[];
   vpPerRoundCap?: number;
   vpPerGameCap?: number;
 }
@@ -52,26 +65,44 @@ export interface PrimaryRules {
 const humanize = (s: string) => s.replace(/-/g, " ");
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
-function describeRounds(r?: { min?: number; max?: number }): string {
-  if (!r) return "";
-  const { min, max } = r;
-  if (min != null && max != null) return min === max ? `round ${min}` : `rounds ${min}–${max}`;
-  if (min != null) return `round ${min}+`;
-  if (max != null) return `rounds 1–${max}`;
-  return "";
+const ORDINAL = ["", "First", "Second", "Third", "Fourth", "Fifth"];
+const ordinal = (r: number) => ORDINAL[r] ?? `Round ${r}`;
+
+/** The card's section header for a battle-round window. */
+export function describeRounds(r?: { min?: number; max?: number }): string {
+  const min = r?.min ?? 1;
+  const max = r?.max ?? 5;
+  if (min <= 1 && max >= 5) return "Any battle round";
+  if (min === max) return `${ordinal(min)} battle round`;
+  if (max >= 5) return `${ordinal(min)} battle round onwards`;
+  return `Battle rounds ${min}–${max}`;
 }
 
-export function describeTrigger(t: Trigger = {}): string {
+/**
+ * The WHEN line. A Command-phase check that runs into the fifth round moves
+ * to the end of your turn in that round (per the printed cards; the dataset
+ * only models it where the round-5 payout differs).
+ */
+export function describeWhen(t: Trigger = {}): string {
   const either = t.player_turn === "either";
-  let base: string;
-  if (t.timing === "end-of-battle") base = "End of the battle";
-  else if (t.timing === "end-of-phase" && t.phase) {
-    base = `End of ${either ? "either player's" : "your"} ${t.phase[0].toUpperCase()}${t.phase.slice(1)} phase`;
-  } else if (t.timing === "start-of-turn")
-    base = either ? "Start of either turn" : "Start of your turn";
-  else base = either ? "End of either player's turn" : "End of your turn";
-  const rounds = describeRounds(t.battle_round);
-  return rounds ? `${base} · ${rounds}` : base;
+  const whose = either ? "either player's" : "your";
+  if (t.timing === "end-of-battle") return "End of the battle";
+  if (t.timing === "start-of-turn") return `Start of ${whose} turn`;
+  if (t.timing === "end-of-phase" && t.phase) {
+    const phase = `End of ${whose} ${t.phase[0].toUpperCase()}${t.phase.slice(1)} phase`;
+    const reachesRound5 = (t.battle_round?.max ?? 5) >= 5;
+    return t.phase === "command" && reachesRound5
+      ? `${phase} (or end of your turn in the fifth battle round)`
+      : phase;
+  }
+  return `End of ${whose} turn`;
+}
+
+export function describeTrigger(t: Trigger = {}): { section: string; when: string } {
+  return {
+    section: t.timing === "end-of-battle" ? "End of the battle" : describeRounds(t.battle_round),
+    when: describeWhen(t),
+  };
 }
 
 const n = (v: unknown) => (typeof v === "number" ? v : undefined);
@@ -183,7 +214,7 @@ export function describePer(per: string): string {
 
 export function scoringRows(awards: unknown[]): ScoringRow[] {
   return (awards as Award[]).map((a) => ({
-    when: describeTrigger(a.trigger),
+    ...describeTrigger(a.trigger),
     // A gated count reads "Control your home objective: each non-home objective you control".
     condition:
       a.when && a.per
@@ -204,6 +235,84 @@ export function stripMatchupPreamble(text: string): string {
   return text.replace(/^[A-Za-z-]+ (?:mirror|against [A-Za-z-]+)\.\s*/, "");
 }
 
+interface RawAction {
+  action_id?: string;
+  starts?: string;
+  timing?: string;
+  player_turn?: string;
+  battle_round?: { min?: number };
+  use_limit?: number;
+  use_limit_scope?: string;
+  units?: Condition;
+  completes?: Condition;
+  effect?: { type?: string; modifier?: { tag?: string } };
+}
+
+const titleCase = (id: string) => humanize(id).replace(/\b\w/g, (m) => m.toUpperCase());
+
+function actionUnits(a: RawAction): string | undefined {
+  const unitsRole = a.units?.parameters?.objective_role;
+  if (unitsRole === "central") return "A unit within range of a central objective";
+  const p = a.completes?.parameters ?? {};
+  const filter = (p.target_filter ?? {}) as Record<string, unknown>;
+  switch (p.target_kind) {
+    case "objective":
+      if (filter.objective_role === "central") return "A unit within range of a central objective";
+      return filter.exclude === "home"
+        ? "A unit within range of an objective (not your home objective)"
+        : "A unit within range of an objective";
+    case "terrain":
+      return filter.in_enemy_territory
+        ? "A unit within a terrain area in the opponent's territory"
+        : "A unit within range of an objective or within a terrain area";
+    case "enemy-unit":
+      return "Targets an enemy unit";
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Player-facing actions only: each has a start window and a completion.
+ * (Setup/bookkeeping entries like marker placement have neither.)
+ */
+export function missionActions(actions: unknown[]): MissionAction[] {
+  return (actions as RawAction[])
+    .filter((a) => a.action_id && a.completes && (a.starts || a.timing))
+    .map((a) => {
+      const from =
+        a.battle_round?.min && a.battle_round.min > 1
+          ? ` (${ordinal(a.battle_round.min).toLowerCase()} battle round onwards)`
+          : "";
+      const starts = a.starts
+        ? `Your ${a.starts[0].toUpperCase()}${a.starts.slice(1)} phase`
+        : a.timing === "start-of-turn"
+          ? "Start of your turn"
+          : "End of your turn";
+      const tag = a.effect?.modifier?.tag;
+      const target =
+        a.effect?.type === "objective-tag"
+          ? "the objective"
+          : a.effect?.type === "terrain-area-tag"
+            ? "the terrain area"
+            : "the enemy unit";
+      return {
+        name: titleCase(a.action_id!),
+        starts: starts + from,
+        units: actionUnits(a),
+        useLimit:
+          a.use_limit == null
+            ? "Unlimited"
+            : a.use_limit === 1
+              ? a.use_limit_scope === "per-game"
+                ? "Once per battle"
+                : "Once per turn"
+              : `Up to ${a.use_limit} per turn`,
+        effect: tag ? `Marks ${target} as ${tag}` : undefined,
+      };
+    });
+}
+
 export function primaryRules(data: Data40k, missionId: string): PrimaryRules | undefined {
   const card = data.missionCards.all.find((c) => c.id === missionId && c.card_type === "primary");
   const mission = data.missions.all.find((m) => m.id === missionId);
@@ -213,6 +322,7 @@ export function primaryRules(data: Data40k, missionId: string): PrimaryRules | u
     name: card?.name ?? mission?.name ?? missionId,
     summary: card?.text ? stripMatchupPreamble(card.text) : undefined,
     rows: scoringRows(card?.awards ?? []),
+    actions: missionActions(card?.actions ?? []),
     vpPerRoundCap: mission?.vp_per_round_cap,
     vpPerGameCap: mission?.vp_per_game_cap,
   };
