@@ -241,8 +241,21 @@ function docFor(pack: MissionPack): Promise<PDFDocumentProxy> {
  */
 const CROP = { x0: 0.13, x1: 0.87, y0: 0.07, y1: 0.92 };
 
+/** Width ÷ height of a page's cropped map area. */
+export async function missionPageAspect(pack: MissionPack, pageNumber: number): Promise<number> {
+  const base = (await (await docFor(pack)).getPage(pageNumber)).getViewport({ scale: 1 });
+  return (base.width * (CROP.x1 - CROP.x0)) / (base.height * (CROP.y1 - CROP.y0));
+}
+
+/**
+ * iOS Safari refuses canvases over ~16.7M pixels; stay well under it so a
+ * zoom-sized render never comes out blank.
+ */
+const MAX_CANVAS_PIXELS = 10_000_000;
+
 /**
  * Draw one map page into the canvas at `cssWidth`, sharp on hi-dpi screens.
+ * `oversample` renders extra pixels so the canvas stays crisp when zoomed.
  * Aborting cancels the render, since pdf.js rejects overlapping renders into
  * one canvas.
  */
@@ -252,6 +265,7 @@ export async function renderMissionPage(
   canvas: HTMLCanvasElement,
   cssWidth: number,
   signal: AbortSignal,
+  oversample = 1,
 ): Promise<void> {
   const doc = await docFor(pack);
   const page = await doc.getPage(pageNumber);
@@ -260,7 +274,10 @@ export async function renderMissionPage(
   const cropW = base.width * (CROP.x1 - CROP.x0);
   const cropH = base.height * (CROP.y1 - CROP.y0);
   const dpr = Math.min(window.devicePixelRatio || 1, 3);
-  const scale = (cssWidth / cropW) * dpr;
+  const scale = Math.min(
+    (cssWidth / cropW) * dpr * oversample,
+    Math.sqrt(MAX_CANVAS_PIXELS / (cropW * cropH)),
+  );
   const viewport = page.getViewport({ scale });
   canvas.width = Math.round(cropW * scale);
   canvas.height = Math.round(cropH * scale);

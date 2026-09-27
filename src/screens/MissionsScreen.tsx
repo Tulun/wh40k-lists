@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
+import MapLightbox from "../components/MapLightbox";
 import PrimaryMissionCard from "../components/PrimaryMissionCard";
 import { useDataset } from "../hooks/useDataset";
 import { DISPOSITION_SHORT, DISPOSITIONS } from "../lib/codex-model";
@@ -325,10 +326,12 @@ function formatDate(iso: string): string {
 }
 
 function MapCanvas({ pack, page }: { pack: MissionPack; page: number }) {
-  const boxRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLSpanElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
   const [failed, setFailed] = useState<string | null>(null);
+  const [enlarged, setEnlarged] = useState(false);
+  const closeEnlarged = useCallback(() => setEnlarged(false), []);
 
   useEffect(() => {
     const box = boxRef.current;
@@ -350,9 +353,24 @@ function MapCanvas({ pack, page }: { pack: MissionPack; page: number }) {
   }, [pack, page, width]);
 
   return (
-    <div ref={boxRef} className="mx-auto w-full max-w-xl overflow-hidden rounded-lg bg-white">
-      <canvas ref={canvasRef} className="block" />
-      {failed && <p className="p-3 text-xs text-red-600">Couldn't draw the map: {failed}</p>}
-    </div>
+    <>
+      <button
+        type="button"
+        onClick={() => setEnlarged(true)}
+        aria-label="Enlarge map"
+        className="relative mx-auto block w-full max-w-xl cursor-zoom-in overflow-hidden rounded-lg bg-white"
+      >
+        <span ref={boxRef} className="block">
+          <canvas ref={canvasRef} className="block" />
+        </span>
+        <span className="absolute top-2 right-2 rounded-full bg-black/60 px-2 py-1 text-[11px] font-semibold text-white">
+          ⤢ Enlarge
+        </span>
+        {failed && (
+          <span className="block p-3 text-xs text-red-600">Couldn't draw the map: {failed}</span>
+        )}
+      </button>
+      {enlarged && <MapLightbox pack={pack} page={page} onClose={closeEnlarged} />}
+    </>
   );
 }
