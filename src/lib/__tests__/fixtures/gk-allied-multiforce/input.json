@@ -1,0 +1,47 @@
+{
+  "id": "fixture-gk-allied",
+  "name": "Allied Test List",
+  "generatedBy": "List Forge",
+  "gameSystemId": "fixture",
+  "gameSystemName": "Warhammer 40,000",
+  "roster": {
+    "name": "Allied Test List",
+    "costs": [{ "name": "pts", "typeId": "pts-type", "value": 315 }],
+    "forces": [
+      {
+        "id": "force-gk",
+        "name": "Army Roster",
+        "selections": [
+          {
+            "id": "unit-gmndk",
+            "name": "Grand Master in Nemesis Dreadknight",
+            "type": "model",
+            "number": 1,
+            "categories": [
+              { "name": "Character", "primary": true },
+              { "name": "Faction: Grey Knights", "primary": false }
+            ],
+            "costs": [{ "name": "pts", "typeId": "pts-type", "value": 225 }]
+          }
+        ]
+      },
+      {
+        "id": "force-agents",
+        "name": "Allied Force",
+        "selections": [
+          {
+            "id": "unit-callidus",
+            "name": "Callidus Assassin",
+            "type": "model",
+            "number": 1,
+            "categories": [
+              { "name": "Character", "primary": true },
+              { "name": "Faction: Agents of the Imperium", "primary": false }
+            ],
+            "costs": [{ "name": "pts", "typeId": "pts-type", "value": 90 }]
+          }
+        ]
+      }
+    ]
+  }
+}

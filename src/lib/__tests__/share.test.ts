@@ -30,8 +30,8 @@ describe("shareText", () => {
   it("shows enhancements and per-unit wargear", () => {
     // The header's single ENHANCEMENT line names the first enhanced unit in
     // output order (Bannernob sorts first); the rest ride as body lines.
-    expect(out).toContain("ENHANCEMENT: Git-Spotter Squig (on Char1: Bannernob)");
-    expect(out).toContain("Enhancement: Da Kaptin");
+    expect(out).toContain("ENHANCEMENT: Da Boss is Watchin' (on Char1: Bannernob)");
+    expect(out).toContain("Enhancement: Follow Me Ladz");
     expect(out).toMatch(/Beastboss on Squigosaur \(105 pts\): .*Beastchoppa/);
     expect(out).toMatch(/Squighog Boyz \(270 pts\)/);
   });
@@ -119,22 +119,25 @@ describe("shareText", () => {
     // The enhancement rides along as a body line, but Boyz stays untagged —
     // its datasheet role decides, not the enhancement.
     expect(outE).not.toMatch(/Char\d+: \d+x Boyz/);
-    expect(outE).toMatch(/x Boyz \(\d+ pts\).*\nEnhancement: Extra Sneaky/);
+    const boyzBlock = outE.split("\n\n").find((b) => /^\d+x Boyz \(\d+ pts\)/.test(b));
+    expect(boyzBlock).toContain("\nEnhancement: Extra Sneaky");
     // The single header ENHANCEMENT line still pairs with the first enhanced
     // unit in output order (the Bannernob, a real character).
-    expect(outE).toContain("ENHANCEMENT: Git-Spotter Squig (on Char1: Bannernob)");
+    expect(outE).toContain("ENHANCEMENT: Da Boss is Watchin' (on Char1: Bannernob)");
   });
 
   it("puts a blank line between unit blocks, keeping Enhancement lines attached", () => {
     const body = out.slice(out.lastIndexOf("+++"));
     // Units are separated by exactly one blank line…
-    expect(body).toMatch(/Squigosaur.*\nEnhancement: Da Kaptin\n\n/);
+    expect(body).toMatch(/Squigosaur.*\nEnhancement: Follow Me Ladz\n\n/);
     // …and no unit line directly follows another without one.
     const lines = out.split("\n");
     const start = lines.map((l) => l.startsWith("+++")).lastIndexOf(true) + 2;
     for (let i = start; i < lines.length - 1; i++) {
       if (lines[i] === "" || lines[i + 1] === "") continue;
-      expect(lines[i + 1].startsWith("Enhancement:")).toBe(true);
+      // Only a unit's continuation lines (Enhancement, Attachment, per-model
+      // "•" breakdowns) may follow it without a blank line.
+      expect(lines[i + 1]).toMatch(/^(?:Enhancement:|Attachment:|\s*[•◦])/);
     }
   });
 });

@@ -450,7 +450,9 @@ export function compileFaction(
     id: factionId,
     name,
     keywords: [name],
-    ...(factionRuleId ? { faction_rule_id: factionRuleId } : {}),
+    // The schema wants at least one id; a codex without an army rule yet
+    // compiles to none, which nothing downstream requires.
+    faction_rule_ids: (factionRuleId ? [factionRuleId] : []) as [string, ...string[]],
     game_version: GV_REF,
   };
   for (const sheet of entry.datasheets) compileDatasheet(factionId, sheet, out);

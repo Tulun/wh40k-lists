@@ -7,7 +7,7 @@ import UnitListPane from "../components/UnitListPane";
 import { useDataset } from "../hooks/useDataset";
 import { DISPOSITIONS } from "../lib/codex-model";
 import { abilityText } from "../lib/describe";
-import { byId } from "../lib/lookup";
+import { armyRules, byId } from "../lib/lookup";
 import { codexBadge, useCodex } from "../store/codex";
 
 type Tab = "rule" | "detachments" | "units";
@@ -35,14 +35,12 @@ export default function FactionScreen() {
   const detachments = [...data.detachments.byFaction(factionId)].sort((a, b) =>
     a.name.localeCompare(b.name),
   );
-  const armyRuleId = faction.raw.faction_rule_id;
-  const armyRuleRecord = armyRuleId ? byId(data.abilities, armyRuleId, factionId) : undefined;
+  const allArmyRules = armyRules(data, factionId);
   // Some army rules are only a DSL stub ("gains the Faction Metadata ability" —
   // Agents' Assigned Agents); the allied-pool cards below carry the substance.
-  const armyRule =
-    armyRuleRecord && !/Faction Metadata/.test(abilityText(armyRuleRecord))
-      ? armyRuleRecord
-      : undefined;
+  const isStub = (r: (typeof allArmyRules)[number]) => /Faction Metadata/.test(abilityText(r));
+  const shownRules = allArmyRules.filter((r) => !isStub(r));
+  const stubName = allArmyRules.find(isStub)?.name;
   // Pools this army may ally in (detachment-gated ones included, with the gate
   // named), and pools that field this faction's units in OTHER armies.
   const allies = data.dataset.alliesFor(
@@ -96,13 +94,15 @@ export default function FactionScreen() {
 
       {tab === "rule" && (
         <div className="space-y-2">
-          {armyRule ? (
-            <div className="rounded-lg border border-edge px-3 py-2.5">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-accent">
-                {armyRule.name}
-              </p>
-              <RuleText text={abilityText(armyRule)} />
-            </div>
+          {shownRules.length > 0 ? (
+            shownRules.map((rule) => (
+              <div key={rule.id} className="rounded-lg border border-edge px-3 py-2.5">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-accent">
+                  {rule.name}
+                </p>
+                <RuleText text={abilityText(rule)} />
+              </div>
+            ))
           ) : (
             alliedOut.length === 0 && (
               <p className="py-8 text-center text-xs text-ink-faint">No army rule recorded.</p>
@@ -111,7 +111,7 @@ export default function FactionScreen() {
           {alliedOut.length > 0 && (
             <>
               <h2 className="pt-2 text-xs font-bold uppercase tracking-wide text-ink-dim">
-                {armyRuleRecord && !armyRule ? armyRuleRecord.name : "As allies"}
+                {stubName ?? "As allies"}
               </h2>
               {alliedOut.map((r) => (
                 <AllyRuleCard key={r.id} rule={r} availableTo />

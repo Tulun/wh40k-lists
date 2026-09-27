@@ -13,6 +13,26 @@ import type { SavedList, Slot } from "../store/schema";
 
 declare const __DATA_PKG_VERSION__: string;
 
+/** Remembered army tab (per device — a viewing convenience, never synced). */
+const TAB_KEY = "40k-viewer-lists-tab";
+/** Tab/filter id for lists with no faction or no disposition recorded. */
+const NONE = "·none";
+
+function readTab(): string | null {
+  try {
+    return localStorage.getItem(TAB_KEY);
+  } catch {
+    return null;
+  }
+}
+function writeTab(id: string) {
+  try {
+    localStorage.setItem(TAB_KEY, id);
+  } catch {
+    // Storage blocked — the tab just won't be remembered.
+  }
+}
+
 export default function ListsScreen() {
   const lists = useLists((s) => s.lists);
   const slots = useLists((s) => s.slots);
@@ -30,6 +50,9 @@ export default function ListsScreen() {
   const [deleting, setDeleting] = useState<SavedList | null>(null);
   /** Order within each disposition subgroup. */
   const [sortBy, setSortBy] = useState<"latest" | "name">("latest");
+  const [pickedTab, setPickedTab] = useState<string | null>(readTab);
+  /** Disposition chip within the tab; null = all. */
+  const [dispoFilter, setDispoFilter] = useState<string | null>(null);
 
   /** Copy the shareable text (WTC-compact) for pasting into Discord/Facebook. */
   async function share(list: SavedList) {
@@ -49,36 +72,48 @@ export default function ListsScreen() {
       : (a, b) => (b.updated ?? b.importedAt).localeCompare(a.updated ?? a.importedAt),
   );
 
-  // Group by faction, then by the list's chosen Force Disposition within each
-  // faction. Only lists with a recorded faction get a header; the rest render
-  // unlabeled at the end. Lists without a disposition render last, unlabeled.
-  const groups = new Map<string, { label: string | null; subs: Map<string, SavedList[]> }>();
+  // One tab per army with saved lists (lists with no faction share an
+  // "Other" tab at the end); inside a tab, one filter chip per Force
+  // Disposition present, plus "Unknown" for lists without one.
+  const factionName = (fid: string) =>
+    fid === NONE ? "Other" : (data?.factions.getAny(fid)?.name ?? fid);
+  const byFaction = new Map<string, SavedList[]>();
   for (const list of all) {
-    const fid = list.roster.faction_id;
-    const key = fid ?? "";
-    if (!groups.has(key)) {
-      groups.set(key, {
-        label: fid ? (data?.factions.getAny(fid)?.name ?? fid) : null,
-        subs: new Map(),
-      });
-    }
-    const subs = groups.get(key)!.subs;
-    const dispo = list.roster.force_disposition ?? "";
-    if (!subs.has(dispo)) subs.set(dispo, []);
-    subs.get(dispo)!.push(list);
+    const key = list.roster.faction_id ?? NONE;
+    if (!byFaction.has(key)) byFaction.set(key, []);
+    byFaction.get(key)!.push(list);
   }
+  const tabs = [...byFaction.keys()].sort((a, b) =>
+    a === NONE ? 1 : b === NONE ? -1 : factionName(a).localeCompare(factionName(b)),
+  );
+  const currentList = slots.mine ? (lists[slots.mine] ?? null) : null;
+  // Remembered tab → the active army's faction → the first tab.
+  const tab =
+    [pickedTab, currentList?.roster.faction_id ?? null, tabs[0]].find(
+      (t): t is string => t != null && byFaction.has(t),
+    ) ?? null;
+  const tabLists = tab ? (byFaction.get(tab) ?? []) : [];
+
+  const dispoOf = (list: SavedList) => list.roster.force_disposition ?? NONE;
   const dispoOrder = (id: string) =>
-    id === "" ? DISPOSITIONS.length : DISPOSITIONS.findIndex((d) => d.id === id);
-  const grouped = [...groups.values()]
-    .sort((a, b) => {
-      if (a.label == null) return 1;
-      if (b.label == null) return -1;
-      return a.label.localeCompare(b.label);
-    })
-    .map((g) => ({
-      ...g,
-      subs: [...g.subs.entries()].sort((a, b) => dispoOrder(a[0]) - dispoOrder(b[0])),
-    }));
+    id === NONE ? DISPOSITIONS.length : DISPOSITIONS.findIndex((d) => d.id === id);
+  const dispoLabel = (id: string) =>
+    id === NONE ? "Unknown" : (DISPOSITIONS.find((d) => d.id === id)?.label ?? id);
+  const dispoCounts = new Map<string, number>();
+  for (const list of tabLists) dispoCounts.set(dispoOf(list), (dispoCounts.get(dispoOf(list)) ?? 0) + 1);
+  const dispos = [...dispoCounts.keys()].sort((a, b) => dispoOrder(a) - dispoOrder(b));
+  const dispo = dispoFilter && dispoCounts.has(dispoFilter) ? dispoFilter : null;
+  // "All" keeps the per-disposition subheaders; a picked chip shows one flat grid.
+  const sections = (dispo ? [dispo] : dispos).map((id) => ({
+    id,
+    lists: tabLists.filter((l) => dispoOf(l) === id),
+  }));
+
+  function pickTab(id: string) {
+    setPickedTab(id);
+    setDispoFilter(null);
+    writeTab(id);
+  }
 
   /** Clone the list under a new id; it lands at the top as the most recent edit. */
   function duplicate(list: SavedList, name: string) {
@@ -104,8 +139,6 @@ export default function ListsScreen() {
       slots.mine === list.id ? "mine" : slots.opponent === list.id ? "opponent" : activeSlot;
     use(slot, list.id);
   }
-
-  const currentList = slots.mine ? (lists[slots.mine] ?? null) : null;
 
   /** "Dread Mob (Take & Hold, Recon)" for each detachment on the list. */
   const detachmentSummary = (list: SavedList) =>
@@ -257,6 +290,8 @@ export default function ListsScreen() {
           type="button"
           onClick={() => {
             const list = blankSavedList(__DATA_PKG_VERSION__);
+            // Start the new list in the army being browsed.
+            if (tab && tab !== NONE) list.roster.faction_id = tab;
             saveList(list);
             navigate(`/lists/${list.id}/edit`);
           }}
@@ -301,29 +336,65 @@ export default function ListsScreen() {
         </div>
       )}
 
-      {grouped.map((group) => (
-        <div key={group.label ?? "·no-faction"}>
-          {group.label && (
-            <div className="mb-2 mt-2 px-1 text-sm font-bold uppercase tracking-wide text-ink-dim">
-              {group.label}
-            </div>
-          )}
-          <div className="space-y-2">
-            {group.subs.map(([dispo, subLists]) => (
-              <div key={dispo || "·no-dispo"}>
-                {group.subs.length > 1 && (
-                  <div className="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">
-                    {dispo
-                      ? (DISPOSITIONS.find((d) => d.id === dispo)?.label ?? dispo)
-                      : "No disposition"}
-                  </div>
-                )}
-                <ul className="grid gap-2 lg:grid-cols-2">{subLists.map(renderCard)}</ul>
-              </div>
+      {tabs.length > 0 && (
+        <div className="sticky top-12 z-10 -mx-3 space-y-1.5 border-b border-edge bg-surface/95 px-3 pb-2 pt-1.5 backdrop-blur">
+          {/* Army tabs — scroll sideways on narrow screens rather than wrap. */}
+          <div role="tablist" className="flex gap-1 overflow-x-auto">
+            {tabs.map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => pickTab(id)}
+                className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  tab === id ? "bg-panel text-accent" : "text-ink-dim hover:text-ink"
+                }`}
+              >
+                {factionName(id)}
+                <span className="ml-1.5 text-xs font-normal tabular-nums text-ink-faint">
+                  {byFaction.get(id)!.length}
+                </span>
+              </button>
             ))}
           </div>
+          {dispos.length > 1 && (
+            <div className="flex gap-1.5 overflow-x-auto">
+              {[null, ...dispos].map((id) => (
+                <button
+                  key={id ?? "·all"}
+                  type="button"
+                  aria-pressed={dispo === id}
+                  onClick={() => setDispoFilter(id)}
+                  className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                    dispo === id
+                      ? "border-accent/60 bg-accent/15 text-accent"
+                      : "border-edge text-ink-dim hover:text-ink"
+                  }`}
+                >
+                  {id == null ? "All" : dispoLabel(id)}
+                  <span className="ml-1 font-normal tabular-nums text-ink-faint">
+                    {id == null ? tabLists.length : dispoCounts.get(id)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-      ))}
+      )}
+
+      <div className="space-y-3">
+        {sections.map((section) => (
+          <div key={section.id}>
+            {!dispo && dispos.length > 1 && (
+              <div className="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+                {dispoLabel(section.id)}
+              </div>
+            )}
+            <ul className="grid gap-2 lg:grid-cols-2">{section.lists.map(renderCard)}</ul>
+          </div>
+        ))}
+      </div>
 
       {deleting && (
         <ConfirmDialog

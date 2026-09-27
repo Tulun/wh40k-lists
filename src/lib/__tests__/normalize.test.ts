@@ -75,7 +75,7 @@ describe("normalizeImportedRoster", () => {
           wargear: [
             { ref: unresolved("Leader (Character)"), count: 1 },
             { ref: unresolved("Ammo Runt"), count: 2 },
-            { ref: unresolved("Bomb Squig"), count: 1 },
+            { ref: unresolved("Lucky Tooth"), count: 1 },
             { ref: resolved("choppa"), count: 5 },
           ],
         }),
@@ -96,8 +96,8 @@ describe("normalizeImportedRoster", () => {
     const ammoRunt = nobzGear.find((w) => w.ref.raw_name === "Ammo Runt")!;
     expect(ammoRunt.ref.resolved).toBe(true);
     expect(ammoRunt.ref.id).toBe("ammo-runt");
-    const bombSquig = nobzGear.find((w) => w.ref.raw_name === "Bomb Squig")!;
-    expect(bombSquig.ref.resolved).toBe(false); // not in the dataset — kept as text
+    const tooth = nobzGear.find((w) => w.ref.raw_name === "Lucky Tooth")!;
+    expect(tooth.ref.resolved).toBe(false); // not in the dataset — kept as text
     expect(out.units[1].wargear).toHaveLength(0);
   });
 
@@ -227,14 +227,14 @@ describe("normalizeImportedRoster", () => {
     const r = roster({
       detachments: [
         {
-          ref: unresolved("Freebooter Krew and More Dakka! (3 Detachment Points)"),
+          ref: unresolved("War Horde and Dread Mob (3 Detachment Points)"),
           dp_cost: null,
         },
       ],
     });
 
     const { roster: out } = normalizeImportedRoster(r, data40k);
-    expect(out.detachments.map((d) => d.ref.id)).toEqual(["freebooter-krew", "more-dakka"]);
+    expect(out.detachments.map((d) => d.ref.id)).toEqual(["war-horde", "dread-mob"]);
     expect(out.detachments.every((d) => d.ref.resolved)).toBe(true);
   });
 
@@ -350,14 +350,14 @@ Deff Dread (130 pts)
     // list with a trailing ", and", and one name the dataset doesn't know.
     const r = roster({
       detachments: [
-        { ref: unresolved("Bully Boys, Dread mob, and Wreckas"), dp_cost: null },
+        { ref: unresolved("Bully Boys, Dread mob, and Snotling Parade"), dp_cost: null },
       ],
     });
     const { roster: out } = normalizeImportedRoster(r, data40k);
     expect(out.detachments.map((d) => d.ref.id)).toEqual(["bully-boyz", "dread-mob", null]);
     // The unknown part keeps its own row (and picker) instead of dragging the
     // resolved parts back into one unresolved blob.
-    expect(out.detachments[2].ref.raw_name).toBe("Wreckas");
+    expect(out.detachments[2].ref.raw_name).toBe("Snotling Parade");
     expect(out.detachments[2].ref.resolved).toBe(false);
   });
 

@@ -99,7 +99,7 @@ export function buildMergedRaw(base: RawData, compiled: CompiledRecords): RawDat
   for (const u of removedUnits) for (const id of u.ability_ids ?? []) abilityIdsGone.add(id);
   for (const s of removedStratagems) if (s.ability_id) abilityIdsGone.add(s.ability_id);
   for (const e of removedEnhancements) if (e.ability_id) abilityIdsGone.add(e.ability_id);
-  for (const f of removedFactions) if (f.faction_rule_id) abilityIdsGone.add(f.faction_rule_id);
+  for (const f of removedFactions) for (const id of f.faction_rule_ids ?? []) abilityIdsGone.add(id);
   for (const d of removedDetachments) for (const id of detachmentRuleIds(d)) abilityIdsGone.add(id);
 
   for (const u of survivingUnits) for (const id of u.ability_ids ?? []) abilityIdsGone.delete(id);
@@ -110,7 +110,7 @@ export function buildMergedRaw(base: RawData, compiled: CompiledRecords): RawDat
     for (const id of detachmentRuleIds(d)) abilityIdsGone.delete(id);
   }
   for (const f of base.factions) {
-    if (f.id !== factionId && f.faction_rule_id) abilityIdsGone.delete(f.faction_rule_id);
+    if (f.id !== factionId) for (const id of f.faction_rule_ids ?? []) abilityIdsGone.delete(id);
   }
 
   // Weapons: no faction column — remove those only the removed units carried.

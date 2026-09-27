@@ -25,6 +25,13 @@ export function byId<V>(
  * tag with no text of its own — render sites fall back to this ability.
  */
 export function armyRule(data: Data40k, factionId: string | null | undefined) {
+  return armyRules(data, factionId)[0];
+}
+
+/** Every army rule the faction carries (11e factions can have several). */
+export function armyRules(data: Data40k, factionId: string | null | undefined) {
   const faction = factionId ? data.factions.getAny(factionId) : undefined;
-  return byId(data.abilities, faction?.raw.faction_rule_id, factionId);
+  return (faction?.raw.faction_rule_ids ?? [])
+    .map((id) => byId(data.abilities, id, factionId))
+    .filter((a) => a != null);
 }

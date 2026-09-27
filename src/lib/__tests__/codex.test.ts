@@ -36,8 +36,8 @@ function unit(id: string, faction_id: string, extra: Partial<Unit> = {}): Unit {
 function syntheticBase(): RawData {
   const raw = mod.emptyRawData();
   raw.factions.push(
-    { id: "orks", name: "Orks", faction_rule_id: "waaagh-old", game_version: GV },
-    { id: "bystanders", name: "Bystanders", game_version: GV },
+    { id: "orks", name: "Orks", faction_rule_ids: ["waaagh-old"], game_version: GV },
+    { id: "bystanders", name: "Bystanders", game_version: GV } as never,
   );
   raw.units.push(
     unit("boyz-old", "orks", {
@@ -195,7 +195,7 @@ describe("compileFaction", () => {
   const compiled = compileFaction("orks", REPLACE_ORKS);
 
   it("emits the faction with an army-rule ability carrying leak_text", () => {
-    expect(compiled.faction?.faction_rule_id).toBe("orks--army-rule");
+    expect(compiled.faction?.faction_rule_ids).toEqual(["orks--army-rule"]);
     const rule = compiled.abilities.find((a) => a.ability_id === "orks--army-rule");
     expect(rule?.leak_text).toBe("New army rule prose.");
     expect(rule?.ability_type).toBe("faction");
@@ -339,7 +339,7 @@ describe("buildMergedRaw (replace mode)", () => {
 
   it("replaces the faction's units and record, leaving others alone", () => {
     expect(ids(merged.units)).toEqual(["bystander-unit", "new-ladz", "new-bignob"]);
-    expect(merged.factions.find((f) => f.id === "orks")?.faction_rule_id).toBe("orks--army-rule");
+    expect(merged.factions.find((f) => f.id === "orks")?.faction_rule_ids).toEqual(["orks--army-rule"]);
     expect(merged.factions.find((f) => f.id === "bystanders")).toBeDefined();
   });
 

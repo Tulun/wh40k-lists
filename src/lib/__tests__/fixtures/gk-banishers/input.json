@@ -1,0 +1,189 @@
+{
+  "id": "fixture-gk-banishers",
+  "name": "Banishers Test List",
+  "generatedBy": "List Forge",
+  "gameSystemId": "fixture",
+  "gameSystemName": "Warhammer 40,000",
+  "roster": {
+    "name": "Banishers Test List",
+    "costs": [{ "name": "pts", "typeId": "pts-type", "value": 585 }],
+    "forces": [
+      {
+        "id": "force-1",
+        "name": "Army Roster",
+        "selections": [
+          {
+            "id": "cfg-detachment",
+            "name": "Detachment",
+            "type": "upgrade",
+            "number": 1,
+            "categories": [{ "name": "Configuration", "primary": true }],
+            "selections": [
+              {
+                "id": "detachment-banishers",
+                "name": "Banishers",
+                "type": "upgrade",
+                "number": 1,
+                "group": "Detachments"
+              }
+            ]
+          },
+          {
+            "id": "cfg-battle-size",
+            "name": "Battle Size",
+            "type": "upgrade",
+            "number": 1,
+            "categories": [{ "name": "Configuration", "primary": true }],
+            "selections": [
+              {
+                "id": "battle-size-strike-force",
+                "name": "2. Strike Force (2000 Point limit)",
+                "type": "upgrade",
+                "number": 1,
+                "costs": [{ "name": "pts", "typeId": "pts-type", "value": 0 }]
+              }
+            ]
+          },
+          {
+            "id": "unit-crowe",
+            "name": "Castellan Crowe",
+            "type": "model",
+            "number": 1,
+            "categories": [
+              { "name": "Faction: Grey Knights", "primary": false },
+              { "name": "Epic Hero", "primary": true },
+              { "name": "Character", "primary": false },
+              { "name": "Infantry", "primary": false }
+            ],
+            "costs": [{ "name": "pts", "typeId": "pts-type", "value": 90 }],
+            "selections": [
+              {
+                "id": "w-black-blade",
+                "name": "Black Blade of Antwyr",
+                "type": "upgrade",
+                "number": 1,
+                "categories": [{ "name": "Melee Weapon", "primary": false }]
+              },
+              {
+                "id": "w-purifying-flame",
+                "name": "Purifying Flame",
+                "type": "upgrade",
+                "number": 1,
+                "categories": [{ "name": "Psychic Weapon", "primary": false }]
+              },
+              {
+                "id": "w-storm-bolter",
+                "name": "Storm bolter",
+                "type": "upgrade",
+                "number": 1,
+                "categories": [{ "name": "Ranged Weapon", "primary": false }]
+              }
+            ]
+          },
+          {
+            "id": "unit-gmndk",
+            "name": "Grand Master in Nemesis Dreadknight",
+            "type": "model",
+            "number": 1,
+            "categories": [
+              { "name": "Character", "primary": true },
+              { "name": "Vehicle", "primary": false },
+              { "name": "Faction: Grey Knights", "primary": false }
+            ],
+            "costs": [{ "name": "pts", "typeId": "pts-type", "value": 225 }],
+            "selections": [
+              {
+                "id": "w-heavy-psycannon",
+                "name": "Heavy psycannon",
+                "type": "upgrade",
+                "number": 1,
+                "group": "9831",
+                "categories": [
+                  { "name": "Psychic Weapon", "primary": false },
+                  { "name": "Ranged Weapon", "primary": false }
+                ]
+              },
+              {
+                "id": "w-fragstorm",
+                "name": "Fragstorm grenade launcher",
+                "type": "upgrade",
+                "number": 1,
+                "group": "9831",
+                "categories": [{ "name": "Ranged Weapon", "primary": false }]
+              },
+              {
+                "id": "w-greathammer",
+                "name": "Nemesis daemon greathammer",
+                "type": "upgrade",
+                "number": 1,
+                "group": "9831",
+                "categories": [
+                  { "name": "Psychic Weapon", "primary": false },
+                  { "name": "Melee Weapon", "primary": false }
+                ]
+              },
+              {
+                "id": "enh-pyresoul",
+                "name": "Pyresoul (Psychic)",
+                "type": "upgrade",
+                "number": 1,
+                "group": "Enhancements::Banishers Enhancements",
+                "costs": [{ "name": "pts", "typeId": "pts-type", "value": 20 }]
+              },
+              {
+                "id": "marker-warlord",
+                "name": "Warlord",
+                "type": "upgrade",
+                "number": 1,
+                "categories": [{ "name": "Warlord", "primary": false }]
+              }
+            ]
+          },
+          {
+            "id": "unit-purifier-squad",
+            "name": "Purifier Squad",
+            "type": "unit",
+            "number": 1,
+            "categories": [
+              { "name": "Faction: Grey Knights", "primary": false },
+              { "name": "Infantry", "primary": true }
+            ],
+            "costs": [{ "name": "pts", "typeId": "pts-type", "value": 250 }],
+            "selections": [
+              {
+                "id": "model-knight-of-the-flame",
+                "name": "Knight of the Flame",
+                "type": "model",
+                "number": 1,
+                "selections": [
+                  {
+                    "id": "w-kotf-flame",
+                    "name": "Purifying Flame",
+                    "type": "upgrade",
+                    "number": 1,
+                    "categories": [{ "name": "Psychic Weapon", "primary": false }]
+                  }
+                ]
+              },
+              {
+                "id": "model-purifiers",
+                "name": "Purifier",
+                "type": "model",
+                "number": 9,
+                "selections": [
+                  {
+                    "id": "w-purifier-storm-bolter",
+                    "name": "Storm bolter",
+                    "type": "upgrade",
+                    "number": 9,
+                    "categories": [{ "name": "Ranged Weapon", "primary": false }]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -63,6 +63,12 @@ export function shareText(data: Data40k, list: SavedList): string {
 }
 
 /**
+ * Lines the serializer prints UNDER a unit line — its Enhancement, its
+ * Attachment ("leader -> Boyz") and per-model "• 9x Boy: …" breakdowns.
+ */
+const isContinuation = (line: string) => /^(?:Enhancement:|Attachment:|\s*[•◦])/.test(line);
+
+/**
  * The dataset-free serializer only tags `CharN:` on units it can infer are
  * characters (warlord, enhancement, attachment). We have the dataset, so
  * re-tag every unit whose datasheet role is character/epic-hero, renumbering
@@ -93,11 +99,11 @@ function remarkCharacters(text: string, data: Data40k, roster: Roster): string {
   }
   if (headerEnd === -1) return text;
 
-  // Body: one line per unit in roster order (Enhancement lines ride along).
+  // Body: one line per unit in roster order (continuation lines ride along).
   let unitIdx = -1;
   for (let i = headerEnd + 1; i < lines.length; i++) {
     const line = lines[i];
-    if (line.trim() === "" || line.startsWith("Enhancement:")) continue;
+    if (line.trim() === "" || isContinuation(line)) continue;
     unitIdx += 1;
     const stripped = line.replace(/^Char\d+: /, "");
     const slot = slots[unitIdx];
@@ -131,7 +137,7 @@ function remarkCharacters(text: string, data: Data40k, roster: Roster): string {
 
 /**
  * The serializer emits units as contiguous lines; a blank line between blocks
- * reads better in chat. An "Enhancement:" line belongs to the unit above it.
+ * reads better in chat. Continuation lines belong to the unit above them.
  * `labels` (one per unit, aligned with output order) become "== Section =="
  * header lines wherever the section changes.
  */
@@ -148,7 +154,7 @@ function spaceUnitBlocks(text: string, labels: readonly string[]): string {
   const units = lines.slice(headerEnd + 1).filter((l) => l.trim() !== "");
   const blocks: string[][] = [];
   for (const line of units) {
-    if (line.startsWith("Enhancement:") && blocks.length > 0) blocks[blocks.length - 1].push(line);
+    if (isContinuation(line) && blocks.length > 0) blocks[blocks.length - 1].push(line);
     else blocks.push([line]);
   }
   const rendered: string[] = [];

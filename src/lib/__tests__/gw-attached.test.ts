@@ -28,7 +28,7 @@ describe("GW 11e export with attached units", () => {
     roster.units.map((u, i) => ({ u, i })).filter(({ u }) => u.ref.id === id)[nth]?.i;
 
   it("splits the dual detachment header", () => {
-    expect(roster.detachments.map((d) => d.ref.id)).toEqual(["freebooter-krew", "more-dakka"]);
+    expect(roster.detachments.map((d) => d.ref.id)).toEqual(["war-horde", "dread-mob"]);
   });
 
   it("pairs all five attached-unit groups, including the Support Bannernob", () => {
@@ -51,7 +51,7 @@ describe("GW 11e export with attached units", () => {
     expect(beastboss.is_warlord).toBe(true);
     expect(beastboss.enhancement?.resolved).toBe(true);
     const bannernob = roster.units[indexOf("bannernob")!];
-    expect(bannernob.enhancement?.id).toBe("git-spotter-squig-freebooter-krew");
+    expect(bannernob.enhancement?.id).toBe("da-boss-is-watchin-war-horde");
   });
 
   it("rebuilds loadout groups from ◦ nesting so carrier tags work", () => {

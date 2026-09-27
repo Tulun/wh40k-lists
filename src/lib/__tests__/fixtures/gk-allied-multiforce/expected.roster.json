@@ -1,0 +1,89 @@
+{
+  "name": "Allied Test List",
+  "source": {
+    "format": "listforge",
+    "generated_by": "List Forge"
+  },
+  "faction_id": "grey-knights",
+  "detachments": [],
+  "battle_size": null,
+  "force_disposition": null,
+  "points": {
+    "declared_limit": null,
+    "detachment_cap": null,
+    "total_reported": 315,
+    "total_computed": 315
+  },
+  "units": [
+    {
+      "ref": {
+        "id": "grand-master-in-nemesis-dreadknight",
+        "raw_name": "Grand Master in Nemesis Dreadknight",
+        "resolved": true,
+        "candidates": []
+      },
+      "model_count": 1,
+      "points": 225,
+      "is_warlord": false,
+      "enhancement": null,
+      "enhancement_points": null,
+      "wargear": [
+        {
+          "ref": {
+            "id": "dreadfists",
+            "raw_name": "Dreadfists",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 1
+        }
+      ],
+      "leader_attachment": null
+    },
+    {
+      "ref": {
+        "id": "callidus-assassin",
+        "raw_name": "Callidus Assassin",
+        "resolved": true,
+        "candidates": []
+      },
+      "model_count": 1,
+      "points": 90,
+      "is_warlord": false,
+      "enhancement": null,
+      "enhancement_points": null,
+      "wargear": [
+        {
+          "ref": {
+            "id": "neural-shredder",
+            "raw_name": "Neural shredder",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 1
+        },
+        {
+          "ref": {
+            "id": "phase-sword-and-poison-blades",
+            "raw_name": "Phase sword and poison blades",
+            "resolved": true,
+            "candidates": []
+          },
+          "count": 1
+        }
+      ],
+      "leader_attachment": null
+    }
+  ],
+  "game_version": {
+    "edition": "11th",
+    "dataslate": "pre-launch-provisional"
+  },
+  "diagnostics": {
+    "resolved_units": 2,
+    "unresolved_units": 0,
+    "resolved_weapons": 3,
+    "unresolved_weapons": 0,
+    "warnings": []
+  }
+}

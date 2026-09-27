@@ -120,24 +120,46 @@ describe("duplicateUnit", () => {
 });
 
 describe("setModelCount", () => {
-  it("resizes Boyz, repricing from the dataset and scaling base weapons", () => {
-    const i = indexOf(base, "boyz");
-    const u = base.roster.units[i];
-    const unit = data40k.units.getInFaction("boyz", "orks")!.raw;
-    const bigger = nextSize(data40k, unit, u.model_count, 1);
-    if (bigger == null) return; // dataset only prices one size — nothing to test
-    const next = setModelCount(data40k, base, i, bigger);
-    const resized = next.roster.units[i];
+  it("resizes a squad, repricing from the dataset and scaling base weapons", () => {
+    // Paladins with one storm bolter → psycannon swap taken, grown by a model.
+    const list = blankSavedList("1.2.3");
+    let c: ListContent = {
+      roster: list.roster,
+      roleHints: list.roleHints,
+      attachments: list.attachments,
+    };
+    c = addUnit(data40k, setFaction(c, "grey-knights"), "paladin-squad");
+    const unit = data40k.units.getInFaction("paladin-squad", "grey-knights")!.raw;
+    const swap = wargearOptionStates(data40k, c.roster.units[0], unit).find(
+      (st) =>
+        st.option.model_constraint?.model_name === "Paladin" &&
+        st.branches.some((b) => b.ids.includes("psycannon")),
+    )!;
+    c = applyWargearOption(
+      data40k,
+      c,
+      0,
+      swap.option.id,
+      swap.branches.findIndex((b) => b.ids.includes("psycannon")),
+      1,
+    );
+    const u = c.roster.units[0];
+    const bigger = nextSize(data40k, unit, u.model_count, 1)!;
+    const next = setModelCount(data40k, c, 0, bigger);
+    const resized = next.roster.units[0];
     expect(resized.model_count).toBe(bigger);
-    expect(resized.points).toBe(data40k.baseUnitPoints(unit, bigger));
+    expect(resized.points).toBe(
+      data40k.baseUnitPoints(unit, bigger) + data40k.wargearPoints(unit, wargearCounts(resized)),
+    );
     // Each added model brings its default gear (base-loadout delta), while
-    // the existing swap (the Boss Nob's power klaw) is kept as-is.
+    // the existing swap is kept as-is.
     const counts = wargearCounts(resized);
     const before = wargearCounts(u);
     const added = bigger - u.model_count;
-    expect(counts.get("slugga")).toBe((before.get("slugga") ?? 0) + added);
-    expect(counts.get("choppa")).toBe((before.get("choppa") ?? 0) + added);
-    expect(counts.get("power-klaw")).toBe(before.get("power-klaw"));
+    for (const id of ["storm-bolter-paladin-squad", "nemesis-force-weapon-paladin-squad"]) {
+      expect(counts.get(id)).toBe((before.get(id) ?? 0) + added);
+    }
+    expect(counts.get("psycannon")).toBe(before.get("psycannon"));
     expect(next.roster.points.total_computed).toBe(total(next));
   });
 
@@ -390,58 +412,84 @@ describe("enhancements", () => {
 });
 
 describe("wargear options (swaps)", () => {
-  // Stock Boyz author a Boss Nob big-choppa → power-klaw swap; the fixture
-  // squad took it (klaw 1, big choppa 0).
-  const i = indexOf(base, "boyz");
-  const unit = data40k.units.getInFaction("boyz", "orks")!.raw;
-
-  function klawState(content: ListContent) {
-    const states = wargearOptionStates(data40k, content.roster.units[i], unit);
-    const s = states.find((st) =>
-      st.branches.some((b) => b.ids.includes("power-klaw")),
-    )!;
-    return { s, branch: s.branches.findIndex((b) => b.ids.includes("power-klaw")) };
+  // A Grey Knights Paladin Squad with one Paladin's storm bolter swapped for
+  // a psycannon — upstream's Paladin options are clean one-branch-per-weapon
+  // swaps, unlike the Ork Boyz sheet (duplicated mfm/codex option sets).
+  const SB = "storm-bolter-paladin-squad";
+  const unit = data40k.units.getInFaction("paladin-squad", "grey-knights")!.raw;
+  function fresh(): ListContent {
+    const list = blankSavedList("1.2.3");
+    let c: ListContent = {
+      roster: list.roster,
+      roleHints: list.roleHints,
+      attachments: list.attachments,
+    };
+    c = setFaction(c, "grey-knights");
+    return addUnit(data40k, c, "paladin-squad");
   }
+  const i = 0;
 
-  it("reads the taken swap out of the imported loadout", () => {
-    const { s, branch } = klawState(base);
+  function psyState(content: ListContent) {
+    const states = wargearOptionStates(data40k, content.roster.units[i], unit);
+    const s = states.find(
+      (st) =>
+        st.option.model_constraint?.model_name === "Paladin" &&
+        st.branches.some((b) => b.ids.includes("psycannon")),
+    )!;
+    return { s, branch: s.branches.findIndex((b) => b.ids.includes("psycannon")) };
+  }
+  const empty = fresh();
+  const first = psyState(empty);
+  const base = applyWargearOption(data40k, empty, i, first.s.option.id, first.branch, 1);
+
+  it("reads the taken swap out of the loadout", () => {
+    const { s, branch } = psyState(base);
     expect(s.branches[branch].applied).toBe(1);
     expect(s.cap).toBeGreaterThanOrEqual(1);
-    expect(s.option.replaces).toContain("big-choppa");
+    expect(s.option.replaces).toContain(SB);
   });
 
   it("un-taking the swap returns the replaced weapon", () => {
-    const { s, branch } = klawState(base);
+    const { s, branch } = psyState(base);
+    const before = wargearCounts(base.roster.units[i]);
     const next = applyWargearOption(data40k, base, i, s.option.id, branch, -1);
     const counts = wargearCounts(next.roster.units[i]);
-    expect(counts.get("power-klaw") ?? 0).toBe(0);
-    expect(counts.get("big-choppa")).toBe(1);
+    expect(counts.get("psycannon") ?? 0).toBe(0);
+    expect(counts.get(SB)).toBe((before.get(SB) ?? 0) + 1);
     // …and taking it again swaps back.
     const again = applyWargearOption(data40k, next, i, s.option.id, branch, 1);
-    const counts2 = wargearCounts(again.roster.units[i]);
-    expect(counts2.get("power-klaw")).toBe(1);
-    expect(counts2.get("big-choppa") ?? 0).toBe(0);
+    expect(wargearCounts(again.roster.units[i]).get("psycannon")).toBe(1);
   });
 
   it("refuses a swap when the replaced weapon isn't there", () => {
-    const { s, branch } = klawState(base);
-    // Already swapped: big choppa count is 0, so taking it again must refuse.
-    const refused = applyWargearOption(data40k, base, i, s.option.id, branch, 1);
-    expect(refused).toBe(base);
+    const { s, branch } = psyState(base);
+    const stripped = structuredClone(base);
+    stripped.roster.units[i].wargear = stripped.roster.units[i].wargear.filter(
+      (w) => w.ref.id !== SB,
+    );
+    expect(applyWargearOption(data40k, stripped, i, s.option.id, branch, 1)).toBe(stripped);
   });
 
   it("doesn't read a swap as taken while the replaced weapon is still carried", () => {
-    // A power klaw in the bag with the big choppa STILL present means the swap
-    // wasn't made — the klaw came from elsewhere (e.g. another option adding
-    // the same item, like the Deff Dread's two Extra Klaw swaps).
-    const { s, branch } = klawState(base);
+    // A psycannon in the bag with every storm bolter STILL present means the
+    // swap wasn't made — the gun came from elsewhere.
+    const { s, branch } = psyState(base);
     const unswapped = applyWargearOption(data40k, base, i, s.option.id, branch, -1);
     unswapped.roster.units[i].wargear.push({
-      ref: { id: "power-klaw", raw_name: "Power Klaw", resolved: true, candidates: [] },
+      ref: { id: "psycannon", raw_name: "Psycannon", resolved: true, candidates: [] },
       count: 1,
     });
-    const { s: after, branch: b } = klawState(unswapped);
+    const { s: after, branch: b } = psyState(unswapped);
     expect(after.branches[b].applied).toBe(0);
+  });
+
+  it("caps the Paladin Ancient's own swap at one model, not the squad", () => {
+    const full = setModelCount(data40k, fresh(), i, 10);
+    const ancient = wargearOptionStates(data40k, full.roster.units[i], unit).filter(
+      (st) => st.option.model_constraint?.model_name === "Paladin Ancient",
+    );
+    expect(ancient.length).toBeGreaterThan(0);
+    for (const st of ancient) expect(st.cap).toBeLessThanOrEqual(1);
   });
 });
 
