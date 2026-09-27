@@ -20,9 +20,14 @@ import {
   wargearOptionStates,
 } from "../list-edit";
 import { normalizeImportedRoster } from "../normalize";
+import { abilityText } from "../describe";
+import { byId } from "../lookup";
 
 const d = mergedData(data40k as never, emptyCodexDoc());
-const text = readFileSync(join(import.meta.dirname, "gw-flattened-gk-allies.txt"), "utf8");
+const text = readFileSync(
+  join(import.meta.dirname, "gw-flattened-gk-allies.txt"),
+  "utf8",
+);
 const { result, sourceText } = importRosterLenient(d, text);
 if (!result.ok) throw new Error(result.message);
 const n = normalizeImportedRoster(result.roster, d, sourceText);
@@ -37,8 +42,14 @@ function states(id: string, size?: number) {
   const c = size ? setModelCount(d, content, i, size) : content;
   const unit = d.units.getInFaction(id, "grey-knights")!.raw;
   const byKind = (kind: string) =>
-    wargearOptionStates(d, c.roster.units[i], unit).find((s) => s.option.id.endsWith(kind))!;
-  return { guns: byKind("guns-1"), narthecium: byKind("narthecium"), ancient: byKind("ancient") };
+    wargearOptionStates(d, c.roster.units[i], unit).find((s) =>
+      s.option.id.endsWith(kind),
+    )!;
+  return {
+    guns: byKind("guns-1"),
+    narthecium: byKind("narthecium"),
+    ancient: byKind("ancient"),
+  };
 }
 
 describe("Grey Knights squad fixes", () => {
@@ -82,13 +93,17 @@ describe("Grey Knights squad fixes", () => {
 
   it("the imported list reads clean, with Ancient rows treated as models", () => {
     expect(legalityIssues(d, content.roster, content.attachments)).toEqual([]);
-    expect(content.roster.units.flatMap((u) => u.wargear.filter((w) => !w.ref.id))).toEqual([]);
+    expect(
+      content.roster.units.flatMap((u) => u.wargear.filter((w) => !w.ref.id)),
+    ).toEqual([]);
   });
 
   it("gear the sheet can't carry is flagged plainly and removable", () => {
     // A saved list from the old data: the "Ancient" model line matched to
     // the Fury of the Ancients weapon, banner/incinerator since removed.
-    const i = content.roster.units.findIndex((u) => u.ref.id === "brotherhood-terminator-squad");
+    const i = content.roster.units.findIndex(
+      (u) => u.ref.id === "brotherhood-terminator-squad",
+    );
     const stale = structuredClone(content);
     const ru = stale.roster.units[i];
     ru.wargear = ru.wargear.filter(
@@ -96,16 +111,81 @@ describe("Grey Knights squad fixes", () => {
     );
     ru.wargear.find((w) => w.ref.id === "storm-bolter")!.count = 3;
     ru.wargear.push({
-      ref: { id: "fury-of-the-ancients", raw_name: "Ancient", resolved: true, candidates: [] },
+      ref: {
+        id: "fury-of-the-ancients",
+        raw_name: "Ancient",
+        resolved: true,
+        candidates: [],
+      },
       count: 1,
     });
-    const unit = d.units.getInFaction("brotherhood-terminator-squad", "grey-knights")!.raw;
+    const unit = d.units.getInFaction(
+      "brotherhood-terminator-squad",
+      "grey-knights",
+    )!.raw;
     expect(strayWargearIds(d, ru, unit)).toEqual(["fury-of-the-ancients"]);
     const issues = legalityIssues(d, stale.roster, stale.attachments);
-    expect(issues.some((m) => /Fury of the Ancients isn't on this datasheet/.test(m))).toBe(true);
+    expect(
+      issues.some((m) =>
+        /Fury of the Ancients isn't on this datasheet/.test(m),
+      ),
+    ).toBe(true);
     expect(issues.some((m) => /whole-model/.test(m))).toBe(false);
     const fixed = removeWargear(d, stale, i, "fury-of-the-ancients");
     expect(strayWargearIds(d, fixed.roster.units[i], unit)).toEqual([]);
     expect(legalityIssues(d, fixed.roster, fixed.attachments)).toEqual([]);
+  });
+});
+
+describe("ability and enhancement text fixes", () => {
+  const text = (id: string) =>
+    abilityText(byId(d.abilities, id, "grey-knights")!);
+
+  it("scopes Sanctic Hood's Feel No Pain to Psychic Attacks", () => {
+    const hood = d.units
+      .getInFaction("brotherhood-librarian", "grey-knights")!
+      .abilities.find((a) => a.id === "sanctic-hood")!;
+    expect(abilityText(hood)).toMatch(
+      /Feel No Pain 4\+ ability against Psychic Attacks/,
+    );
+  });
+
+  it("links paraphrased text to enhancements upstream left blank", () => {
+    for (const id of [
+      "sixty-sixth-seal-banishers",
+      "sigil-of-the-hunt-banishers",
+      "ephemeral-tome-banishers",
+      "pyresoul-psychic-banishers",
+      "vigilance-of-titan-argent-assault",
+      "psychic-celerity-argent-assault",
+    ]) {
+      const enh = byId(d.enhancements, id, "grey-knights")!;
+      expect(enh.ability_id).toBe(id);
+      expect(text(id).length).toBeGreaterThan(20);
+    }
+    expect(text("sixty-sixth-seal-banishers")).toMatch(/Armour Penetration/);
+  });
+
+  it("links paraphrased text to Argent Assault and Banishers stratagems", () => {
+    for (const id of [
+      "truesilver-aegis-argent-assault",
+      "a-threat-ended-argent-assault",
+      "aura-of-vengeance-argent-assault",
+      "hexwrought-reprisal-banishers",
+      "warding-chant-banishers",
+      "chaos-bane-banishers",
+      "celerity-banishers",
+      "circle-of-sanctuary-banishers",
+      "shadow-of-anarch-banishers",
+    ]) {
+      expect(byId(d.stratagems, id, "grey-knights")!.ability_id).toBe(id);
+      expect(text(id)).toMatch(/^When: .*\nTarget: .*\nEffect: /);
+    }
+  });
+
+  it("rewords Dauntless Champions", () => {
+    expect(text("dauntless-champions")).toMatch(
+      /^Each time a friendly PALADIN SQUAD/,
+    );
   });
 });
