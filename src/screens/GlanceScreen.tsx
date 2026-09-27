@@ -4,16 +4,21 @@ import { backState } from "../components/BackBar";
 import CardColumns from "../components/CardColumns";
 import FilterInput from "../components/FilterInput";
 import GlanceSummary from "../components/GlanceSummary";
+import RuleText from "../components/RuleText";
 import StratagemCard from "../components/StratagemCard";
 import { MicroStats } from "../components/StatLine";
 import { useDataset } from "../hooks/useDataset";
 import type { Data40k } from "../lib/data";
 import { dedupeRoster, unitKey, type DisplayEntry } from "../lib/dedupe";
-import { fnpFromAbilityNames } from "../lib/describe";
-import { byId } from "../lib/lookup";
+import { abilityText, fnpFromAbilityNames } from "../lib/describe";
+import { armyRules, byId } from "../lib/lookup";
 import { organizeArmy } from "../lib/organize";
 import { shareText } from "../lib/share";
-import { armyStratagems, sortStratagems, stratagemsByDetachment } from "../lib/stratagems";
+import {
+  armyStratagems,
+  sortStratagems,
+  stratagemsByDetachment,
+} from "../lib/stratagems";
 import { useActiveList, useLists } from "../store/lists";
 
 export default function GlanceScreen() {
@@ -40,9 +45,13 @@ export default function GlanceScreen() {
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
         <p className="text-sm text-ink-dim">
-          No list in the <span className="font-semibold">{activeSlot}</span> slot yet.
+          No list in the <span className="font-semibold">{activeSlot}</span>{" "}
+          slot yet.
         </p>
-        <Link to="/import" className="rounded-md bg-accent px-6 py-3 text-sm font-bold text-surface">
+        <Link
+          to="/import"
+          className="rounded-md bg-accent px-6 py-3 text-sm font-bold text-surface"
+        >
           Import a list
         </Link>
         <Link to="/lists" className="text-xs text-ink-faint underline">
@@ -54,7 +63,9 @@ export default function GlanceScreen() {
 
   const roster = list.roster;
   const resolveAt = (i: number) =>
-    data ? data.resolveRosterUnit(roster.units[i], data.dataset, roster.faction_id) : undefined;
+    data
+      ? data.resolveRosterUnit(roster.units[i], data.dataset, roster.faction_id)
+      : undefined;
 
   // Attached bricks first in their own section, then role sections — the
   // same layout the share export prints.
@@ -91,7 +102,10 @@ export default function GlanceScreen() {
           {withEnhancements.map((e) => {
             const pts =
               e.instances[0].enhancementPoints ??
-              (data ? byId(data.enhancements, e.enhancement?.id, roster.faction_id)?.cost : null);
+              (data
+                ? byId(data.enhancements, e.enhancement?.id, roster.faction_id)
+                    ?.cost
+                : null);
             return (
               <Link
                 key={e.key}
@@ -99,7 +113,9 @@ export default function GlanceScreen() {
                 className="rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs text-accent"
               >
                 ✦ {enhancementName(data, e, roster.faction_id)} → {e.name}
-                {pts != null && <span className="text-accent/70"> · {pts} pts</span>}
+                {pts != null && (
+                  <span className="text-accent/70"> · {pts} pts</span>
+                )}
               </Link>
             );
           })}
@@ -118,12 +134,14 @@ export default function GlanceScreen() {
           const ru = roster.units[index];
           const view = resolveAt(index);
           const profile = view?.raw.profiles[0];
-          const fnp = view ? fnpFromAbilityNames(view.abilities.map((a) => a.name)) : null;
+          const fnp = view
+            ? fnpFromAbilityNames(view.abilities.map((a) => a.name))
+            : null;
           const pts = (ru.points ?? 0) + (ru.enhancement_points ?? 0);
           const enhName = ru.enhancement
             ? data
-              ? (byId(data.enhancements, ru.enhancement.id, roster.faction_id)?.name ??
-                ru.enhancement.raw_name)
+              ? (byId(data.enhancements, ru.enhancement.id, roster.faction_id)
+                  ?.name ?? ru.enhancement.raw_name)
               : ru.enhancement.raw_name
             : null;
           return (
@@ -139,7 +157,9 @@ export default function GlanceScreen() {
                   {view?.name ?? ru.ref.raw_name}
                   {ru.enhancement && <span className="text-accent"> ✦</span>}
                   {!ru.ref.id && (
-                    <span className="ml-1 text-[10px] text-opponent">unmatched</span>
+                    <span className="ml-1 text-[10px] text-opponent">
+                      unmatched
+                    </span>
                   )}
                 </span>
                 {profile ? (
@@ -149,8 +169,11 @@ export default function GlanceScreen() {
                 )}
               </div>
               <div className="mt-0.5 truncate text-[11px] text-ink-faint">
-                {ru.model_count} model{ru.model_count === 1 ? "" : "s"} · {pts} pts
-                {enhName && <span className="text-accent/80"> · ✦ {enhName}</span>}
+                {ru.model_count} model{ru.model_count === 1 ? "" : "s"} · {pts}{" "}
+                pts
+                {enhName && (
+                  <span className="text-accent/80"> · ✦ {enhName}</span>
+                )}
               </div>
             </Link>
           );
@@ -166,7 +189,10 @@ export default function GlanceScreen() {
           return (
             <ul className="space-y-2">
               {hits.map((index) => (
-                <li key={index} className="overflow-hidden rounded-lg border border-edge">
+                <li
+                  key={index}
+                  className="overflow-hidden rounded-lg border border-edge"
+                >
                   {row(index, false)}
                 </li>
               ))}
@@ -209,7 +235,8 @@ function enhancementName(
   factionId: string | null,
 ): string {
   const ref = entry.enhancement!;
-  if (ref.id && data) return byId(data.enhancements, ref.id, factionId)?.name ?? ref.raw_name;
+  if (ref.id && data)
+    return byId(data.enhancements, ref.id, factionId)?.name ?? ref.raw_name;
   return ref.raw_name;
 }
 
@@ -228,7 +255,10 @@ function ArmyHeader({
   onShare?: () => void;
   copied?: boolean;
 }) {
-  const faction = data && roster.faction_id ? data.factions.getAny(roster.faction_id) : undefined;
+  const faction =
+    data && roster.faction_id
+      ? data.factions.getAny(roster.faction_id)
+      : undefined;
 
   return (
     <div className="rounded-lg border border-edge bg-panel/50 px-3 py-2">
@@ -256,9 +286,32 @@ function ArmyHeader({
         )}
         <span className="shrink-0 text-xs text-ink-dim">
           {roster.points.total_computed}
-          {roster.points.declared_limit ? `/${roster.points.declared_limit}` : ""} pts
+          {roster.points.declared_limit
+            ? `/${roster.points.declared_limit}`
+            : ""}{" "}
+          pts
         </span>
       </div>
+      {data &&
+        armyRules(data, roster.faction_id)
+          // Stub rules ("gains the Faction Metadata ability") have no substance.
+          .filter((rule) => !/Faction Metadata/.test(abilityText(rule)))
+          .map((rule) => (
+            <details key={rule.id} className="group mt-1">
+              <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-semibold uppercase tracking-wide text-accent [&::-webkit-details-marker]:hidden">
+                <span className="min-w-0 flex-1 truncate">{rule.name}</span>
+                <span
+                  aria-hidden
+                  className="transition-transform group-open:rotate-90"
+                >
+                  ›
+                </span>
+              </summary>
+              <div className="mt-1.5 border-l-2 border-accent/40 pl-2.5">
+                <RuleText text={abilityText(rule)} />
+              </div>
+            </details>
+          ))}
       {roster.detachments.map((detachment, i) => {
         const entity = data
           ? byId(data.detachments, detachment.ref.id, roster.faction_id)
@@ -296,7 +349,9 @@ function ArmyHeader({
                       key={id}
                       className="mt-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-accent"
                     >
-                      <span className="min-w-0 flex-1 truncate">{ability.name}</span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {ability.name}
+                      </span>
                       <span aria-hidden>›</span>
                     </div>
                   );
@@ -304,7 +359,11 @@ function ArmyHeader({
             </Link>
           );
         }
-        return <div key={detachment.ref.id ?? `${detachment.ref.raw_name}-${i}`}>{header}</div>;
+        return (
+          <div key={detachment.ref.id ?? `${detachment.ref.raw_name}-${i}`}>
+            {header}
+          </div>
+        );
       })}
     </div>
   );
@@ -321,7 +380,10 @@ function StratagemSection({
 }) {
   if (!data) return null;
   const detachmentIds = roster.detachments.map((d) => d.ref.id);
-  const { detachment, core } = armyStratagems(data.stratagems.all, detachmentIds);
+  const { detachment, core } = armyStratagems(
+    data.stratagems.all,
+    detachmentIds,
+  );
 
   return (
     <details className="rounded-lg border border-edge">
@@ -342,12 +404,19 @@ function StratagemSection({
               }`}
             >
               {byId(data.detachments, group.id, roster.faction_id)?.name ??
-                roster.detachments.find((d) => d.ref.id === group.id)?.ref.raw_name ??
+                roster.detachments.find((d) => d.ref.id === group.id)?.ref
+                  .raw_name ??
                 "Detachment"}
             </div>
             <CardColumns>
               {group.stratagems.map((s) => (
-                <StratagemCard key={s.id} data={data} stratagem={s} factionId={roster.faction_id} listId={listId} />
+                <StratagemCard
+                  key={s.id}
+                  data={data}
+                  stratagem={s}
+                  factionId={roster.faction_id}
+                  listId={listId}
+                />
               ))}
             </CardColumns>
           </div>
@@ -357,7 +426,13 @@ function StratagemSection({
         </div>
         <CardColumns>
           {sortStratagems(core).map((s) => (
-            <StratagemCard key={s.id} data={data} stratagem={s} factionId={roster.faction_id} listId={listId} />
+            <StratagemCard
+              key={s.id}
+              data={data}
+              stratagem={s}
+              factionId={roster.faction_id}
+              listId={listId}
+            />
           ))}
         </CardColumns>
       </div>

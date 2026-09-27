@@ -208,22 +208,62 @@ const RULE_TEXT: Record<string, { text: string; effect?: Effect }> = {
 /**
  * Rewordings of upstream abilities whose DSL is right but renders clumsily
  * (the structured effect stays, so the cruncher still applies it). Keyed by
- * ability id; paraphrased prose.
+ * faction, then ability id — ids are shared across factions (Truesilver
+ * Aegis, Ancient's Banner), so a rewording must not leak. Paraphrased prose.
  */
-const ABILITY_TEXT: Record<string, string> = {
-  "dauntless-champions":
-    "Each time a friendly PALADIN SQUAD unit is selected to fight, until it has " +
-    "resolved its attacks: if an attack's Strength is lower than the target's " +
-    "Toughness, add 1 to that attack's Wound roll.",
-  "channelled-force":
-    "Each time a GREY KNIGHTS unit from your army is selected to fight, it can take " +
-    "a Leadership test. If it passes, pick one of these; until the end of the phase, " +
-    "the unit's melee weapons that have [PSYCHIC] also gain it:\n" +
-    "• [SUSTAINED HITS 1]\n" +
-    "• [LETHAL HITS]",
-  "truesilver-aegis-aura":
-    'While a friendly GREY KNIGHTS unit is wholly within 6" of this model, models ' +
-    "in that unit have Feel No Pain 6+ against mortal wounds.",
+const ABILITY_TEXT: Record<string, Record<string, string>> = {
+  "grey-knights": {
+    "dauntless-champions":
+      "Each time a friendly PALADIN SQUAD unit is selected to fight, until it has " +
+      "resolved its attacks: if an attack's Strength is lower than the target's " +
+      "Toughness, add 1 to that attack's Wound roll.",
+    "channelled-force":
+      "Each time a GREY KNIGHTS unit from your army is selected to fight, it can take " +
+      "a Leadership test. If it passes, pick one of these; until the end of the phase, " +
+      "the unit's melee weapons that have [PSYCHIC] also gain it:\n" +
+      "• [SUSTAINED HITS 1]\n" +
+      "• [LETHAL HITS]",
+    "gate-of-infinity":
+      "If your Army Faction is GREY KNIGHTS: at the end of your opponent's Fight phase, " +
+      "you can pick units from your army that are on the battlefield and not within " +
+      "Engagement Range of any enemy units, as long as every model in them has this " +
+      "ability. How many you can pick depends on battle size:\n\n" +
+      "Incursion: up to 2 units\n" +
+      "Strike Force: up to 3 units\n" +
+      "Onslaught: up to 4 units\n\n" +
+      "Put those units into Strategic Reserves. They can make an ingress move in your " +
+      "next Movement phase, even if that is your first turn.",
+    "force-edge-psychic":
+      "Each time a model in this unit makes a melee attack against a unit that isn't a " +
+      "MONSTER or VEHICLE, that attack gets +1 to its Armour Penetration (e.g. AP -1 " +
+      "becomes AP -2).",
+    "righteous-persecution":
+      "In your Shooting phase, after this unit has shot, pick one enemy unit (other than " +
+      "a MONSTER or VEHICLE) that was hit by one or more of those attacks. That unit is " +
+      "pinned until the start of your next turn. While pinned, subtract 2 from its Move " +
+      "characteristic and from its Charge rolls.",
+    "attuned-onslaught-psychic":
+      "Each time this unit makes a Charge move, until the end of the turn, melee weapons " +
+      "equipped by PALADIN SQUAD models in this unit get +1 Damage.",
+    "ancient-s-banner": "Models in the bearer's unit get +1 Objective Control.",
+    "apothecary-s-narthecium":
+      "In your Command phase, if the bearer hasn't been destroyed, you can return 1 " +
+      "destroyed model (not a CHARACTER) to the bearer's unit.",
+    "might-of-titan-psychic":
+      "Once per battle, at the start of the Fight phase, this model can use this ability. " +
+      "If it does, until the end of the phase, its melee weapons get +3 Attacks and +3 Strength.",
+    "warrior-strategist":
+      "Once per battle round, one model from your army with this ability can use it when " +
+      "its unit is targeted with a Stratagem. If it does, that use of the Stratagem costs " +
+      "1CP less.",
+    "sanctifying-ritual-psychic":
+      "At the end of your Command phase, if this unit is within range of an objective " +
+      "marker you control, that objective stays under your control until your opponent's " +
+      "Level of Control over it is higher than yours at the end of a phase.",
+    "truesilver-aegis-aura":
+      'While a friendly GREY KNIGHTS unit is wholly within 6" of this model, models ' +
+      "in that unit have Feel No Pain 6+ against mortal wounds.",
+  },
 };
 
 /**
@@ -299,7 +339,9 @@ function applyAbilityFixes(raw: RawData): boolean {
     });
   }
   raw.abilities = raw.abilities.map((a) => {
-    const text = ABILITY_TEXT[a.ability_id];
+    const text = a.faction_id
+      ? ABILITY_TEXT[a.faction_id]?.[a.ability_id]
+      : undefined;
     if (!text) return a;
     changed = true;
     return { ...a, leak_text: text } as AbilityRecord;

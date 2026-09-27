@@ -200,9 +200,35 @@ describe("ability and enhancement text fixes", () => {
     ).toContain("self-repair");
   });
 
-  it("rewords Dauntless Champions", () => {
+  it("keeps Grey Knights rewordings off other factions' same-id abilities", () => {
+    for (const [id, faction] of [
+      ["truesilver-aegis-aura", "adeptus-astartes"],
+      ["ancient-s-banner", "agents-of-the-imperium"],
+    ]) {
+      const a = byId(d.abilities, id, faction)!;
+      expect(a.raw.faction_id).toBe(faction);
+      expect((a.raw as { leak_text?: string }).leak_text).toBeUndefined();
+    }
+  });
+
+  it("rewords clumsy upstream abilities", () => {
     expect(text("dauntless-champions")).toMatch(
       /^Each time a friendly PALADIN SQUAD/,
+    );
+    expect(text("channelled-force")).toMatch(/\[LETHAL HITS\]$/);
+    expect(text("gate-of-infinity")).toMatch(/Strike Force: up to 3 units/);
+    expect(text("force-edge-psychic")).toMatch(/isn't a MONSTER or VEHICLE/);
+    expect(text("righteous-persecution")).toMatch(
+      /pinned until the start of your next turn/,
+    );
+    expect(text("attuned-onslaught-psychic")).toMatch(/\+1 Damage/);
+    expect(text("apothecary-s-narthecium")).toMatch(/^In your Command phase/);
+    expect(text("might-of-titan-psychic")).toMatch(
+      /^Once per battle, at the start of the Fight phase/,
+    );
+    expect(text("warrior-strategist")).toMatch(/costs 1CP less/);
+    expect(text("sanctifying-ritual-psychic")).toMatch(
+      /^At the end of your Command phase/,
     );
   });
 });
