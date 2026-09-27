@@ -1,4 +1,5 @@
 import type { PrimaryRules, ScoringRow } from "../lib/mission-rules";
+import MissionPhotos from "./MissionPhotos";
 
 /**
  * One primary mission, laid out like the printed card: section bars
@@ -27,6 +28,8 @@ export default function PrimaryMissionCard({
       {rules && (
         <div className="space-y-3 px-3 pb-3">
           {rules.summary && <p className="text-xs leading-relaxed text-ink-dim">{rules.summary}</p>}
+
+          <MissionPhotos missionId={rules.id} />
 
           {groupRows(rules.rows).map((g, i) => (
             <section key={i}>
