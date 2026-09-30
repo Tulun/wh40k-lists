@@ -429,12 +429,15 @@ function emptyCompiled(factionId: string): CompiledRecords {
  * A "replace"-mode faction: the whole hand-authored codex. `fallbackName`
  * (the upstream faction's display name) is used when the entry carries no
  * real name of its own — entries created lazily by the store get the faction
- * id as a placeholder.
+ * id as a placeholder. `upstream` (the faction record being superseded) lends
+ * its identity fields — keywords ("Imperium", which ally rules match on),
+ * aliases, logo, parent — so replacing a codex doesn't orphan them.
  */
 export function compileFaction(
   factionId: string,
   entry: ReplaceFaction,
   fallbackName?: string,
+  upstream?: Faction,
 ): CompiledRecords {
   const out = emptyCompiled(factionId);
   const name = entry.name && entry.name !== factionId ? entry.name : (fallbackName ?? entry.name);
@@ -447,9 +450,10 @@ export function compileFaction(
     );
   }
   out.faction = {
+    ...upstream,
     id: factionId,
     name,
-    keywords: [name],
+    keywords: upstream?.keywords?.length ? upstream.keywords : [name],
     // The schema wants at least one id; a codex without an army rule yet
     // compiles to none, which nothing downstream requires.
     faction_rule_ids: (factionRuleId ? [factionRuleId] : []) as [string, ...string[]],

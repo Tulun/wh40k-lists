@@ -10,10 +10,13 @@
 export const OPPONENT_SLOT_ENABLED = false;
 
 /**
- * Factions shown in Explore. `null` means all of them. Deep links to other
- * factions keep working — this only trims the browse list.
+ * The played factions: offered in the list editor's faction picker, the
+ * codex editor and the crunch lab. `null` means all of them. (The Explore
+ * screen itself lists only REPLACE_FACTION_IDS — the transcribed codexes.)
  */
 export const EXPLORE_FACTION_IDS: readonly string[] | null = [
+  // 11e Space Marines codex (hand-transcribed, replaces upstream).
+  "adeptus-astartes",
   "aeldari",
   // Allied into Grey Knights lists (Imperial Agents).
   "agents-of-the-imperium",
@@ -27,7 +30,7 @@ export const EXPLORE_FACTION_IDS: readonly string[] | null = [
  * upstream data wholesale). Everything else is edited in patch mode —
  * record-level fixes on top of upstream.
  */
-export const REPLACE_FACTION_IDS: readonly string[] = ["orks"];
+export const REPLACE_FACTION_IDS: readonly string[] = ["adeptus-astartes", "orks"];
 
 /**
  * QR sync hand-off: the connected device can show a QR code that carries the

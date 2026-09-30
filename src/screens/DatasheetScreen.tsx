@@ -35,7 +35,7 @@ export default function DatasheetScreen() {
   if (!unit || !factionId) {
     return (
       <p className="py-16 text-center text-sm text-ink-dim">
-        Datasheet not found. <Link to="/explore" className="underline">Back to factions</Link>
+        Datasheet not found. <Link to="/explore" className="underline">Back to codexes</Link>
       </p>
     );
   }

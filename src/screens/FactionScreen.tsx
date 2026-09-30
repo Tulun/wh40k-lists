@@ -26,7 +26,7 @@ export default function FactionScreen() {
   if (!faction || !factionId) {
     return (
       <p className="py-16 text-center text-sm text-ink-dim">
-        Faction not found. <Link to="/explore" className="underline">Back to factions</Link>
+        Faction not found. <Link to="/explore" className="underline">Back to codexes</Link>
       </p>
     );
   }
@@ -58,7 +58,7 @@ export default function FactionScreen() {
 
   return (
     <div className="space-y-3">
-      <BackBar fallback={{ to: "/explore", label: "All factions" }} />
+      <BackBar fallback={{ to: "/explore", label: "Codexes" }} />
       <div className="flex items-baseline gap-2">
         <h1 className="flex-1 text-lg font-bold">{faction.name}</h1>
         {codexBadge(doc, factionId) && (
@@ -70,7 +70,7 @@ export default function FactionScreen() {
           edit
         </Link>
         <Link to="/explore" className="text-xs text-ink-faint underline">
-          all factions
+          all codexes
         </Link>
       </div>
 

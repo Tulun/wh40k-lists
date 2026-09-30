@@ -255,7 +255,8 @@ export function applyCodex(mod: Data40k, doc: CodexDoc): Dataset | null {
       docEntry?.mode === "replace"
         ? docEntry
         : { mode: "replace", name: "", armyRule: null, datasheets: [], detachments: [] };
-    const compiled = compileFaction(factionId, entry, mod.factions.getAny(factionId)?.name);
+    const upstream = mod.factions.getAny(factionId);
+    const compiled = compileFaction(factionId, entry, upstream?.name, upstream?.raw);
     dedupeWeaponKeywords(compiled, knownKeywordIds);
     for (const k of compiled.weaponKeywords) knownKeywordIds.add(k.id);
     raw = buildMergedRaw(raw, compiled);

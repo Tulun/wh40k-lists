@@ -267,6 +267,24 @@ const ABILITY_TEXT: Record<string, Record<string, string>> = {
 };
 
 /**
+ * Rewordings of core (faction-less) abilities, keyed by ability id. Fire
+ * Overwatch: upstream's note only names snap shooting, so the card spells
+ * the shooting type out (core rule 15.09, checked against the GW app Sep
+ * 2026 — its hits are no longer Critical Hits). Paraphrased prose.
+ */
+const CORE_ABILITY_TEXT: Record<string, string> = {
+  "fire-overwatch":
+    "At the end of your opponent's Movement phase, one friendly unengaged unit " +
+    "(excluding TITANIC) shoots using snap shooting.\n" +
+    "Snap shooting:\n" +
+    '- Target only one visible, eligible enemy unit within 24" of your unit.\n' +
+    "- Attacks hit only on an unmodified hit roll of 6, whatever the weapon's " +
+    "BS or modifiers, and those hits are not Critical Hits.\n" +
+    "- Hit rolls cannot be re-rolled.\n" +
+    "- After shooting, your unit cannot start an action until the end of the phase.",
+};
+
+/**
  * Structural effect replacements, keyed by ability id. Truesilver Aegis
  * (Grey Knights Rhino) is an aura of FNP 6+ vs mortal wounds for GREY KNIGHTS
  * units; upstream made it a blanket FNP 6+ on the Rhino itself.
@@ -341,7 +359,7 @@ function applyAbilityFixes(raw: RawData): boolean {
   raw.abilities = raw.abilities.map((a) => {
     const text = a.faction_id
       ? ABILITY_TEXT[a.faction_id]?.[a.ability_id]
-      : undefined;
+      : CORE_ABILITY_TEXT[a.ability_id];
     if (!text) return a;
     changed = true;
     return { ...a, leak_text: text } as AbilityRecord;
@@ -392,9 +410,73 @@ function applyAbilityFixes(raw: RawData): boolean {
   return changed;
 }
 
+/**
+ * Grey Knights points per MFM v1.5 (Sep 30 2026) where upstream still ships
+ * v1.4: each unit's tier costs in upstream tier order (sizes and ordinal bands
+ * are unchanged, only the costs moved). Skipped if upstream reshapes the
+ * tiers — then re-check against the MFM rather than guess.
+ */
+const POINTS: Record<string, Record<string, number[]>> = {
+  "grey-knights": {
+    "brother-captain": [100],
+    "brotherhood-champion": [75],
+    "brotherhood-chaplain": [70],
+    "brotherhood-librarian": [95, 105],
+    "brotherhood-techmarine": [75],
+    "brotherhood-terminator-squad": [150, 185, 315, 380],
+    "castellan-crowe": [105],
+    "grand-master": [100],
+    "grand-master-in-nemesis-dreadknight": [210, 225],
+    "grand-master-voldus": [130],
+    "interceptor-squad": [135, 270, 145, 280],
+    "nemesis-dreadknight": [205, 220],
+    "paladin-squad": [185, 230, 385, 490, 225, 270, 425, 530],
+    "purgation-squad": [115, 230, 125, 240],
+    "purifier-squad": [145, 290, 155, 300],
+    "strike-squad": [125, 250],
+  },
+};
+
+/** MFM per-copy wargear surcharges upstream lacks: faction → unit → item → pts. */
+const WARGEAR_COSTS: Record<string, Record<string, Record<string, number>>> = {
+  "grey-knights": { "stormraven-gunship": { "hurricane-bolter": 10 } },
+};
+
+/** Force dispositions per MFM where upstream is behind: faction → detachment. */
+const DISPOSITIONS: Record<string, Record<string, string[]>> = {
+  "grey-knights": { "warpbane-task-force": ["take-and-hold", "purge-the-foe"] },
+};
+
+function applyPointsFixes(raw: RawData): boolean {
+  let changed = false;
+  raw.units = raw.units.map((u) => {
+    let next = u;
+    const costs = POINTS[u.faction_id]?.[u.id];
+    if (costs && u.points?.length === costs.length) {
+      next = { ...next, points: u.points.map((p, i) => ({ ...p, cost: costs[i] })) };
+    }
+    const gear = WARGEAR_COSTS[u.faction_id]?.[u.id];
+    if (gear) {
+      const kept = (u.wargear_costs ?? []).filter((c) => !(c.item_id in gear));
+      const added = Object.entries(gear).map(([item_id, cost]) => ({ item_id, cost }));
+      next = { ...next, wargear_costs: [...kept, ...added] } as typeof u;
+    }
+    if (next !== u) changed = true;
+    return next;
+  });
+  raw.detachments = raw.detachments.map((d) => {
+    const dispositions = DISPOSITIONS[d.faction_id]?.[d.id];
+    if (!dispositions) return d;
+    changed = true;
+    return { ...d, force_dispositions: dispositions } as typeof d;
+  });
+  return changed;
+}
+
 /** Apply every fix whose records are present; returns true when anything changed. */
 export function applyDataFixes(raw: RawData): boolean {
   let changed = applyAbilityFixes(raw);
+  if (applyPointsFixes(raw)) changed = true;
   for (const fix of SQUADS) {
     const comp = raw.unitCompositions.find(
       (c) => c.unit_id === fix.unitId && c.faction_id === fix.factionId,

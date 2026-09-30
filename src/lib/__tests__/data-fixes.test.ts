@@ -37,6 +37,13 @@ const content = repriceAll(d, {
   attachments: n.attachmentSeeds,
 });
 
+// The fixture was written at MFM v1.4 prices; repriced at v1.5 it runs over
+// 2,000, which is not what these tests are about.
+const issuesOf = (c: typeof content) =>
+  legalityIssues(d, c.roster, c.attachments).filter(
+    (m) => !/army totals/.test(m),
+  );
+
 function states(id: string, size?: number) {
   const i = content.roster.units.findIndex((u) => u.ref.id === id);
   const c = size ? setModelCount(d, content, i, size) : content;
@@ -92,7 +99,7 @@ describe("Grey Knights squad fixes", () => {
   });
 
   it("the imported list reads clean, with Ancient rows treated as models", () => {
-    expect(legalityIssues(d, content.roster, content.attachments)).toEqual([]);
+    expect(issuesOf(content)).toEqual([]);
     expect(
       content.roster.units.flatMap((u) => u.wargear.filter((w) => !w.ref.id)),
     ).toEqual([]);
@@ -127,13 +134,15 @@ describe("Grey Knights squad fixes", () => {
     const issues = legalityIssues(d, stale.roster, stale.attachments);
     expect(
       issues.some((m) =>
-        /Fury of the Ancients isn't on this datasheet/.test(m),
+        // The weapon's own record left with the replaced Space Marines
+        // codex, so the message falls back to the id.
+        /fury.of.the.ancients isn't on this datasheet/i.test(m),
       ),
     ).toBe(true);
     expect(issues.some((m) => /whole-model/.test(m))).toBe(false);
     const fixed = removeWargear(d, stale, i, "fury-of-the-ancients");
     expect(strayWargearIds(d, fixed.roster.units[i], unit)).toEqual([]);
-    expect(legalityIssues(d, fixed.roster, fixed.attachments)).toEqual([]);
+    expect(issuesOf(fixed)).toEqual([]);
   });
 });
 
@@ -195,7 +204,7 @@ describe("ability and enhancement text fixes", () => {
     // Other factions' Rhinos keep Self Repair.
     expect(
       d.units
-        .getInFaction("rhino", "adeptus-astartes")!
+        .getInFaction("imperial-rhino", "agents-of-the-imperium")!
         .abilities.map((a) => a.id),
     ).toContain("self-repair");
   });
@@ -230,5 +239,24 @@ describe("ability and enhancement text fixes", () => {
     expect(text("sanctifying-ritual-psychic")).toMatch(
       /^At the end of your Command phase/,
     );
+  });
+
+  it("prices Grey Knights per MFM v1.5", () => {
+    const pts = (id: string) =>
+      d.units.getInFaction(id, "grey-knights")!.raw.points!.map((p) => p.cost);
+    expect(pts("strike-squad")).toEqual([125, 250]);
+    expect(pts("paladin-squad")).toEqual([
+      185, 230, 385, 490, 225, 270, 425, 530,
+    ]);
+    const raven = d.units.getInFaction("stormraven-gunship", "grey-knights")!;
+    expect(raven.raw.wargear_costs).toContainEqual({
+      item_id: "hurricane-bolter",
+      cost: 10,
+    });
+  });
+
+  it("rewords core stratagems", () => {
+    const overwatch = byId(d.abilities, "fire-overwatch")!;
+    expect(abilityText(overwatch)).toMatch(/hits are not Critical Hits/);
   });
 });
