@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import DispositionMatchups from "../components/DispositionMatchups";
 import { useDataset } from "../hooks/useDataset";
-import { REPLACE_FACTION_IDS } from "../lib/flags";
+import { CODEX_LIST_FACTION_IDS } from "../lib/flags";
 import { codexBadge, useCodex } from "../store/codex";
 import { useActiveList } from "../store/lists";
 
@@ -16,18 +16,19 @@ export default function ExploreScreen() {
     return <p className="py-16 text-center text-xs text-ink-faint">Loading dataset…</p>;
   }
 
-  // Codexes only: the hand-transcribed 11e books. Other factions stay
-  // reachable by deep link (list editor, datasheet links).
+  // Codexes only: the hand-transcribed 11e books plus the hand-synced
+  // upstream factions. Others stay reachable by deep link (list editor,
+  // datasheet links).
   const factions = data.factions.all
-    .filter((f) => REPLACE_FACTION_IDS.includes(f.id))
+    .filter((f) => CODEX_LIST_FACTION_IDS.includes(f.id))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="space-y-3">
       <h1 className="text-lg font-bold">Codexes</h1>
       <p className="text-xs text-ink-dim">
-        Datasheets from the transcribed 11th edition codexes, list or no list. Handy for checking
-        what a unit does.
+        Datasheets for the 11th edition armies, list or no list. Handy for checking what a unit
+        does.
       </p>
       <ul className="space-y-2">
         {factions.map((f) => (

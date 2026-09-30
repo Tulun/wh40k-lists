@@ -12,11 +12,13 @@ export const OPPONENT_SLOT_ENABLED = false;
 /**
  * The played factions: offered in the list editor's faction picker, the
  * codex editor and the crunch lab. `null` means all of them. (The Explore
- * screen itself lists only REPLACE_FACTION_IDS — the transcribed codexes.)
+ * screen itself lists only CODEX_LIST_FACTION_IDS.)
  */
 export const EXPLORE_FACTION_IDS: readonly string[] | null = [
   // 11e Space Marines codex (hand-transcribed, replaces upstream).
   "adeptus-astartes",
+  // 11e Custodes codex (hand-transcribed, replaces upstream; no points yet).
+  "adeptus-custodes",
   "aeldari",
   // Allied into Grey Knights lists (Imperial Agents).
   "agents-of-the-imperium",
@@ -30,7 +32,22 @@ export const EXPLORE_FACTION_IDS: readonly string[] | null = [
  * upstream data wholesale). Everything else is edited in patch mode —
  * record-level fixes on top of upstream.
  */
-export const REPLACE_FACTION_IDS: readonly string[] = ["adeptus-astartes", "orks"];
+export const REPLACE_FACTION_IDS: readonly string[] = [
+  "adeptus-astartes",
+  "adeptus-custodes",
+  "orks",
+];
+
+/**
+ * Factions listed on the Explore (Codexes) screen: the transcribed codexes
+ * plus the upstream factions kept current by hand (Grey Knights, MFM-synced
+ * via data-fixes.ts, and the Imperial Agents they ally in).
+ */
+export const CODEX_LIST_FACTION_IDS: readonly string[] = [
+  ...REPLACE_FACTION_IDS,
+  "agents-of-the-imperium",
+  "grey-knights",
+];
 
 /**
  * QR sync hand-off: the connected device can show a QR code that carries the
