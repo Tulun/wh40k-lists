@@ -295,14 +295,18 @@ export function sizeRange(unit: Unit): { min: number; max: number } | null {
   };
 }
 
-/** The next valid model count from `current` in direction `dir`, or null at the edge. */
+/**
+ * The next valid model count from `current` in direction `dir`, or null at the
+ * edge. Steps between the tops of the points tiers (Paladins 4 → 5 → 8 → 10,
+ * Strike Squads 5 → 10): a tier costs the same at every size it covers, so an
+ * in-between size is just the bigger one with models missing.
+ */
 export function nextSize(data: Data40k, unit: Unit, current: number, dir: 1 | -1): number | null {
-  const range = sizeRange(unit);
-  if (!range) return null;
-  for (let n = current + dir; n >= range.min && n <= range.max; n += dir) {
-    if (!data.pointsTierMissing(unit, n)) return n;
-  }
-  return null;
+  const sizes = [...new Set((unit.points ?? []).map((t) => t.models_max ?? t.models))]
+    .filter((n) => !data.pointsTierMissing(unit, n))
+    .sort((a, b) => a - b);
+  const next = dir > 0 ? sizes.find((n) => n > current) : [...sizes].reverse().find((n) => n < current);
+  return next ?? null;
 }
 
 /**
@@ -419,7 +423,9 @@ export function setWeaponCount(
   }
   const { options, models } = loadoutCtx(data, unit);
   const bounds = data.weaponBounds(unit, u.model_count, options, models);
+  const before = new Map(counts);
   counts.set(weaponId, data.clampWeaponCount(bounds, weaponId, requested));
+  if (breaksBudget(unit, u.model_count, before, counts)) return content;
   u.wargear = wargearFromCounts(data, counts, next.roster.faction_id, u.wargear);
   u.loadout_groups = regenGroups(
     data, unit, u.model_count, options, models, wargearCounts(u), next.roster.faction_id,
@@ -541,7 +547,55 @@ export function wargearOptionStates(
     claim(slot, Math.min(claimable(slot.change), Math.max(0, slot.st.cap - slot.st.totalApplied)));
   }
   for (const slot of slots) claim(slot, claimable(slot.change));
+
+  // Shared allowances ("for every 5 models, 1 Interceptor can take one of …")
+  // live in `wargear_budgets`, not in the options — every option record is
+  // `any_number`, so without this each swap could be taken by every model.
+  for (const budget of unit.wargear_budgets ?? []) {
+    const items = new Set(budget.items ?? []);
+    const room = budgetRoom(budget, rosterUnit.model_count, counts);
+    for (const st of states) {
+      const costs = st.branches
+        .map((b) => budgetCost(items, b.ids, st.option.replaces))
+        .filter((c) => c > 0);
+      if (costs.length === 0) continue;
+      st.cap = Math.min(st.cap, st.totalApplied + Math.floor(Math.max(0, room) / Math.min(...costs)));
+    }
+  }
   return states;
+}
+
+type WargearBudget = NonNullable<Unit["wargear_budgets"]>[number];
+
+/** Allowance left in one shared budget (negative when already over). */
+function budgetRoom(budget: WargearBudget, modelCount: number, counts: Map<string, number>): number {
+  // `per_models === 0` is a flat per-unit cap; otherwise a ratio.
+  const cap = budget.per_models
+    ? Math.floor((modelCount * budget.count) / budget.per_models)
+    : budget.count;
+  const used = (budget.items ?? []).reduce((sum, id) => sum + (counts.get(id) ?? 0), 0);
+  return cap - used;
+}
+
+/** Budget items one take of a swap branch spends, net of any it gives back. */
+function budgetCost(items: Set<string>, added: string[], replaces: string[] | undefined): number {
+  return (
+    added.filter((id) => items.has(id)).length -
+    (replaces ?? []).filter((id) => items.has(id)).length
+  );
+}
+
+/** True when `after` pushes any shared budget further over its allowance than `before`. */
+function breaksBudget(
+  unit: Unit,
+  modelCount: number,
+  before: Map<string, number>,
+  after: Map<string, number>,
+): boolean {
+  return (unit.wargear_budgets ?? []).some((b) => {
+    const next = budgetRoom(b, modelCount, after);
+    return next < 0 && next < budgetRoom(b, modelCount, before);
+  });
 }
 
 /**
@@ -572,8 +626,10 @@ export function applyWargearOption(
   for (const id of removed) {
     if ((counts.get(id) ?? 0) <= 0) return content;
   }
+  const before = new Map(counts);
   for (const id of removed) counts.set(id, (counts.get(id) ?? 0) - 1);
   for (const id of added) counts.set(id, (counts.get(id) ?? 0) + 1);
+  if (breaksBudget(unit, u.model_count, before, counts)) return content;
   u.wargear = wargearFromCounts(data, counts, next.roster.faction_id, u.wargear);
   u.loadout_groups = regenGroups(
     data, unit, u.model_count, options, models, wargearCounts(u), next.roster.faction_id,

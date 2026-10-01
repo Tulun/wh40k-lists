@@ -1,4 +1,4 @@
-import { formatSave } from "../lib/describe";
+import { formatRange, formatSave } from "../lib/describe";
 
 export interface Profile {
   name?: string | null;
@@ -9,11 +9,11 @@ export interface Profile {
   Sv: number;
   invuln_sv?: number | null;
   Ld: number;
-  OC: number;
+  OC: number | string;
 }
 
 const CELLS: { label: string; render: (p: Profile) => string }[] = [
-  { label: "M", render: (p) => `${p.M}"` },
+  { label: "M", render: (p) => formatRange(p.M) },
   { label: "T", render: (p) => String(p.T) },
   { label: "Sv", render: (p) => formatSave(p.Sv) },
   { label: "Inv", render: (p) => (p.invuln_sv != null ? formatSave(p.invuln_sv, true) : "—") },

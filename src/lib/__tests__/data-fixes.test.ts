@@ -11,9 +11,12 @@ import { emptyCodexDoc } from "../codex-model";
 import { mergedData } from "../data";
 import { importRosterLenient } from "../lenient-import";
 import {
+  addUnit,
+  blankSavedList,
   legalityIssues,
   removeWargear,
   repriceAll,
+  setFaction,
   setModelCount,
   strayWargearIds,
   wargearCounts,
@@ -250,7 +253,7 @@ describe("ability and enhancement text fixes", () => {
     ]);
     const raven = d.units.getInFaction("stormraven-gunship", "grey-knights")!;
     expect(raven.raw.wargear_costs).toContainEqual({
-      item_id: "hurricane-bolter",
+      item_id: "hurricane-bolter-stormraven-gunship",
       cost: 10,
     });
   });
@@ -258,5 +261,73 @@ describe("ability and enhancement text fixes", () => {
   it("rewords core stratagems", () => {
     const overwatch = byId(d.abilities, "fire-overwatch")!;
     expect(abilityText(overwatch)).toMatch(/hits are not Critical Hits/);
+  });
+});
+
+describe("Faction Pack v1.2 datasheet fixes", () => {
+  const stats = (id: string, faction = "grey-knights") =>
+    byId(d.weapons, id, faction)!.raw.profiles[0].stats;
+  const unit = (id: string) => byId(d.units, id, "grey-knights")!.raw;
+
+  it("gives every Grey Knights storm bolter S5 AP-1", () => {
+    for (const id of ["storm-bolter", "storm-bolter-paladin-squad", "storm-bolter-grand-master"]) {
+      expect(stats(id)).toMatchObject({ S: 5, AP: -1 });
+    }
+    expect(stats("storm-bolter", "adeptus-astartes")).toMatchObject({ S: 4, AP: 0 });
+  });
+
+  it("buffs close combat weapons and the Librarian's combi-weapon", () => {
+    expect(stats("close-combat-weapon")).toMatchObject({ S: 5 });
+    expect(stats("combi-weapon")).toMatchObject({ S: 5, AP: -1 });
+  });
+
+  it("buffs only the Stormraven's hurricane bolter, keeping its surcharge", () => {
+    const raven = unit("stormraven-gunship");
+    expect(raven.weapon_ids).toContain("hurricane-bolter-stormraven-gunship");
+    expect(raven.weapon_ids).not.toContain("hurricane-bolter");
+    expect(raven.wargear_costs).toEqual([
+      { item_id: "hurricane-bolter-stormraven-gunship", cost: 10 },
+    ]);
+    expect(stats("hurricane-bolter-stormraven-gunship")).toMatchObject({ S: 5, AP: -1 });
+    expect(stats("hurricane-bolter")).toMatchObject({ S: 4, AP: 0 });
+    expect(unit("land-raider-crusader").weapon_ids).toContain("hurricane-bolter");
+  });
+
+  it("heals a saved Stormraven's retired hurricane bolter id", () => {
+    let c = setFaction({ roster: blankSavedList("t").roster, roleHints: {}, attachments: {} }, "grey-knights");
+    c = addUnit(d, c, "stormraven-gunship");
+    c.roster.units[0].wargear = c.roster.units[0].wargear.map((w) =>
+      w.ref.id === "hurricane-bolter-stormraven-gunship"
+        ? { ...w, ref: { ...w.ref, id: "hurricane-bolter" } }
+        : w,
+    );
+    const healed = repriceAll(d, c).roster.units[0];
+    expect(wargearCounts(healed).has("hurricane-bolter")).toBe(false);
+    expect(strayWargearIds(d, healed, unit("stormraven-gunship"))).toEqual([]);
+  });
+
+  it("sets toughness, keywords and flyer profiles", () => {
+    expect(unit("paladin-squad").profiles[0].T).toBe(6);
+    expect(unit("interceptor-squad").profiles[0].T).toBe(5);
+    expect(unit("nemesis-dreadknight").profiles[0].T).toBe(9);
+    expect(unit("rhino").keywords).toContain("Frame");
+    const talon = unit("stormtalon-gunship");
+    expect(talon.profiles[0]).toMatchObject({ M: "-", OC: "-" });
+    expect(talon.ability_ids).not.toContain("hover");
+  });
+
+  it("gives the updated enhancements and stratagems rules text", () => {
+    for (const id of [
+      "one-foot-in-the-future-augurium-task-force",
+      "eye-of-the-augurium-hallowed-conclave",
+      "sigil-of-exigence-sanctic-spearhead",
+    ]) {
+      const e = d.enhancements.all.find((x) => x.id === id)!;
+      expect(e.ability_id).toBe(id);
+    }
+    const strat = d.stratagems.all.find(
+      (x) => x.id === "precognitive-strategies-hallowed-conclave",
+    )!;
+    expect(abilityText(byId(d.abilities, strat.ability_id!, "grey-knights")!)).toContain('8"');
   });
 });

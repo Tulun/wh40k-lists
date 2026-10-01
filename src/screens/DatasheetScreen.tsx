@@ -160,7 +160,7 @@ export default function DatasheetScreen() {
             {wargearOptions.length > 0 && (
               <ul className="list-disc space-y-1.5 pl-4">
                 {wargearOptions.map((o) => {
-                  const t = wargearOptionText(o, gearName);
+                  const t = wargearOptionText(o, gearName, raw.wargear_budgets ?? []);
                   return (
                     <li key={o.id}>
                       {t.text}

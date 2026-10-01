@@ -41,7 +41,15 @@ export function rawFromDataset(ds: Dataset): RawData {
     enhancements: all(ds.enhancements),
     leaderAttachments: [...ds.leaderAttachments],
     unitCompositions: [...ds.unitCompositions],
-    wargearOptions: all(ds.wargearOptions),
+    // Not `ds.wargearOptions.all`: that collection dedupes by bare id, and
+    // shared chassis reuse option ids across factions (razorback-wgo-mfm-1 is
+    // both SM's and GK's) — the first faction wins and the rest vanish. The
+    // (faction, unit) index behind `wargearOptionsOf` keeps every copy.
+    wargearOptions: [
+      ...(
+        ds as unknown as { wargearOptionsByUnit: Map<string, RawData["wargearOptions"]> }
+      ).wargearOptionsByUnit.values(),
+    ].flat(),
     wargear: all(ds.wargear),
     gameVersions: [...ds.gameVersions],
     missions: all(ds.missions),

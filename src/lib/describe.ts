@@ -126,6 +126,13 @@ export interface WargearOptionLike {
   additional_cost?: number | null;
 }
 
+/** A unit's shared swap allowance (`wargear_budgets`): `count` per `per_models` (0 = flat). */
+export interface WargearBudgetLike {
+  items: readonly string[];
+  count: number;
+  per_models: number;
+}
+
 export interface WargearOptionText {
   /** The sentence; ends with a colon when `choices` follow. */
   text: string;
@@ -141,6 +148,7 @@ export interface WargearOptionText {
 export function wargearOptionText(
   option: WargearOptionLike,
   nameOf: (id: string) => string,
+  budgets: readonly WargearBudgetLike[] = [],
 ): WargearOptionText {
   // countOne: additions spell out "1 Kombi-rokkit"; the replaced side reads as
   // a possessive ("their Kustom Shoota"), so a lone copy goes uncounted there.
@@ -162,7 +170,35 @@ export function wargearOptionText(
   const who = mc?.model_name ?? "model";
   let subject: string;
   let suffix = "";
-  if (!mc || (mc.any_number && !mc.max_count)) {
+  let branches =
+    option.replacement_choice ??
+    (option.replacement ? [option.replacement] : []);
+  // An "any number" record whose additions draw on a shared budget is really
+  // capped by it ("for every 5 models, up to 2 Purifiers…").
+  const budget = budgets.find((b) => branches.some((br) => br.some((id) => b.items.includes(id))));
+  if (budget && (!mc || mc.any_number)) {
+    // The budget counts every item a take adds (Purifiers: gun AND close
+    // combat weapon, 8 per 10), so scale to swaps and reduce: 2 per 5.
+    const spent = (br: readonly string[]) =>
+      br.filter((id) => budget.items.includes(id)).length -
+      (option.replaces ?? []).filter((id) => budget.items.includes(id)).length;
+    const cost = Math.max(1, Math.min(...branches.map(spent).filter((c) => c > 0)));
+    let swaps = Math.floor(budget.count / cost);
+    let per = budget.per_models;
+    const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+    const g = per ? gcd(swaps, per) : 1;
+    swaps /= g;
+    per /= g;
+    const many = swaps > 1 ? `up to ${swaps} ${who} models can each` : `1 ${who} can`;
+    subject = per
+      ? `For every ${per} models in this unit, ${many}`
+      : many.charAt(0).toUpperCase() + many.slice(1);
+    // Lead each branch with what differs (the gun), as the datasheet prints it.
+    const shared = (id: string) => branches.every((br) => br.includes(id));
+    branches = branches.map((br) =>
+      [...br].sort((a, b) => Number(shared(a)) - Number(shared(b))),
+    );
+  } else if (!mc || (mc.any_number && !mc.max_count)) {
     subject =
       who === "model"
         ? "Any number of models can each"
@@ -181,9 +217,6 @@ export function wargearOptionText(
   }
   if (option.additional_cost) suffix += ` for +${option.additional_cost} pts`;
 
-  const branches =
-    option.replacement_choice ??
-    (option.replacement ? [option.replacement] : []);
   const verb = option.replaces
     ? `replace their ${itemList(option.replaces, false)} with`
     : "be equipped with";

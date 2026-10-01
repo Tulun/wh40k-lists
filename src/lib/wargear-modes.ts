@@ -13,6 +13,7 @@
  */
 import type { Roster, RosterUnit } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "./data";
+import { fixedWargearAliases } from "./data-fixes";
 
 type WargearItem = RosterUnit["wargear"][number];
 
@@ -89,7 +90,16 @@ export function completeRosterWargear(data: Data40k, roster: Roster): Roster {
     if (!unit.ref.resolved) return unit;
     const view = data.resolveRosterUnit(unit, data.dataset, roster.faction_id);
     if (!view) return unit;
-    const wargear = completeDualModeWargear(view.weapons, unit.wargear, data.normalizeName);
+    // Ids a data fix retired on this unit (a weapon split off a shared record).
+    const aliases = fixedWargearAliases(view.raw.id, view.raw.faction_id ?? null);
+    const healed = unit.wargear.some((w) => w.ref.id && w.ref.id in aliases)
+      ? unit.wargear.map((w) =>
+          w.ref.id && w.ref.id in aliases
+            ? { ...w, ref: { ...w.ref, id: aliases[w.ref.id] } }
+            : w,
+        )
+      : unit.wargear;
+    const wargear = completeDualModeWargear(view.weapons, healed, data.normalizeName);
     if (wargear === unit.wargear) return unit;
     changed = true;
     return { ...unit, wargear };

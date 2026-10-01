@@ -93,6 +93,11 @@ export function fixedModelAliases(
  * prefers) and, where the DSL can express it, a real effect for the damage
  * cruncher. Keyed by enhancement / stratagem id.
  */
+const EYE_OF_THE_AUGURIUM =
+  "GREY KNIGHTS model only. The bearer's unit can be targeted with the Heroic " +
+  "Intervention Stratagem even if another unit has already used it this phase. If it " +
+  "is, that use costs 1CP less and doesn't stop other units using that Stratagem this phase.";
+
 const RULE_TEXT: Record<string, { text: string; effect?: Effect }> = {
   "sixty-sixth-seal-banishers": {
     text:
@@ -185,6 +190,46 @@ const RULE_TEXT: Record<string, { text: string; effect?: Effect }> = {
       'Target: One GREY KNIGHTS PSYKER unit from your army within 8" of that enemy unit and not within Engagement Range of any enemy units.\n' +
       'Effect: Your unit can make a Normal move of up to 6", or, if it has Deep Strike, it can be placed into Strategic Reserves.',
   },
+  // Faction Pack v1.2 (Sep 30 2026) Rules Updates, as amended.
+  "one-foot-in-the-future-augurium-task-force": {
+    text:
+      "GREY KNIGHTS model only. When the bearer's unit ends an ingress move, it can use " +
+      'this Enhancement: the unit can make a normal move of up to D6", and can\'t ' +
+      "declare a charge for the rest of the turn.",
+  },
+  "eye-of-the-augurium-hallowed-conclave": {
+    text: EYE_OF_THE_AUGURIUM,
+  },
+  "eye-of-the-augurim-hallowed-conclave": {
+    text: EYE_OF_THE_AUGURIUM,
+  },
+  "sigil-of-exigence-sanctic-spearhead": {
+    text:
+      "GREY KNIGHTS model only. Once per battle, in your opponent's Shooting phase, when " +
+      "the bearer's unit is picked as the target of a ranged attack, you can remove the " +
+      "unit and set it back up anywhere on the battlefield more than 8\" horizontally " +
+      "from every enemy unit. If it is no longer an eligible target, your opponent can " +
+      "pick new targets for any attacks aimed at it. (Usable in your opponent's first turn.)",
+  },
+  "aggressive-anticipation-augurium-task-force": {
+    text:
+      "When: Your Shooting phase or the Fight phase.\n" +
+      "Target: One GREY KNIGHTS PSYKER unit from your army that hasn't been selected to shoot or fight this phase.\n" +
+      "Effect: Your unit's attacks can re-roll Hit rolls.",
+  },
+  "combat-manifestation-brotherhood-strike": {
+    text:
+      "When: Your Movement phase.\n" +
+      "Target: One GREY KNIGHTS unit from your army arriving via Deep Strike this phase.\n" +
+      'Effect: Set your unit up anywhere on the battlefield more than 6" horizontally from ' +
+      "every enemy unit; until the end of the turn it can't declare a charge.",
+  },
+  "precognitive-strategies-hallowed-conclave": {
+    text:
+      "When: Your opponent's Movement phase, just after an enemy unit ends a Normal, Advance or Fall Back move.\n" +
+      'Target: One GREY KNIGHTS INFANTRY unit from your army within 8" of that enemy unit and not within Engagement Range of any enemy units.\n' +
+      'Effect: Your unit can make a Normal move of up to D6".',
+  },
   "truesilver-aegis-argent-assault": {
     text:
       "When: Any phase, when a friendly PALADIN SQUAD unit suffers a mortal wound.\n" +
@@ -213,6 +258,20 @@ const RULE_TEXT: Record<string, { text: string; effect?: Effect }> = {
  */
 const ABILITY_TEXT: Record<string, Record<string, string>> = {
   "grey-knights": {
+    "champion-of-the-order-of-purifiers-psychic":
+      "While this model is leading a unit, Purifying Flame weapons equipped by models in " +
+      "that unit get +1 Attacks.",
+    "sanctity-of-purpose":
+      "Each time a model in this unit makes an attack, re-roll a Wound roll of 1. If the " +
+      "target is within range of an objective marker, you can re-roll the Wound roll instead.",
+    "foesight-psychic":
+      "Each time this model makes an attack that targets a CHARACTER unit, you can re-roll " +
+      "the Hit roll.",
+    "fire-focus":
+      "In your Shooting phase, once this model has shot, pick one enemy unit that any of " +
+      "those attacks hit. Until the end of the turn, attacks against that unit made by " +
+      "friendly models that disembarked from this TRANSPORT this turn get +1 to their " +
+      "Armour Penetration. Each enemy unit can only be picked for this once per turn.",
     "dauntless-champions":
       "Each time a friendly PALADIN SQUAD unit is selected to fight, until it has " +
       "resolved its attacks: if an attack's Strength is lower than the target's " +
@@ -447,6 +506,158 @@ const DISPOSITIONS: Record<string, Record<string, string[]>> = {
   "grey-knights": { "warpbane-task-force": ["take-and-hold", "purge-the-foe"] },
 };
 
+/**
+ * Grey Knights Faction Pack v1.2 (Sep 30 2026) datasheet changes upstream
+ * lacks. Weapon stats: faction → overrides matched by weapon name (each
+ * character carries its own `storm-bolter-<unit>` copy) or by id, applied
+ * to every profile.
+ */
+const WEAPON_STATS: Record<
+  string,
+  { names?: string[]; ids?: string[]; stats: { S?: number; AP?: number } }[]
+> = {
+  "grey-knights": [
+    { names: ["Storm bolter"], stats: { S: 5, AP: -1 } },
+    { ids: ["close-combat-weapon"], stats: { S: 5 } },
+    { ids: ["combi-weapon"], stats: { S: 5, AP: -1 } },
+    { ids: ["hurricane-bolter-stormraven-gunship"], stats: { S: 5, AP: -1 } },
+  ],
+};
+
+/**
+ * Weapons one unit must stop sharing because a fix changes only its copy:
+ * the pack buffs the Stormraven's hurricane bolter but not the Land Raider
+ * Crusader's (both use upstream's `hurricane-bolter`). The clone takes the
+ * new id on every record of that unit; `fixedWargearAliases` heals saved lists.
+ */
+const WEAPON_SPLITS: { factionId: string; unitId: string; from: string; to: string }[] = [
+  {
+    factionId: "grey-knights",
+    unitId: "stormraven-gunship",
+    from: "hurricane-bolter",
+    to: "hurricane-bolter-stormraven-gunship",
+  },
+];
+
+/** Saved-list wargear ids a split retired on this unit: old id → new id. */
+export function fixedWargearAliases(
+  unitId: string,
+  factionId: string | null,
+): Record<string, string> {
+  return Object.fromEntries(
+    WEAPON_SPLITS.filter((s) => s.unitId === unitId && s.factionId === factionId).map(
+      (s) => [s.from, s.to],
+    ),
+  );
+}
+
+/** Unit profile, keyword and ability changes: faction → unit id. */
+const UNIT_FIXES: Record<
+  string,
+  Record<
+    string,
+    { T?: number; M?: string; OC?: string; addKeywords?: string[]; removeAbilities?: string[] }
+  >
+> = {
+  "grey-knights": {
+    ...Object.fromEntries(
+      [
+        "brother-captain",
+        "brotherhood-chaplain",
+        "brotherhood-librarian",
+        "brotherhood-terminator-squad",
+        "crowes-sanctifiers-brotherhood-terminator-squad",
+        "grand-master",
+        "grand-master-voldus",
+        "paladin-squad",
+      ].map((id) => [id, { T: 6 }]),
+    ),
+    ...Object.fromEntries(
+      [
+        "brotherhood-champion",
+        "brotherhood-techmarine",
+        "castellan-crowe",
+        "sanctifiers-castellan-crowe",
+        // The pack prints "Inceptor Squad"; GK has none — it means Interceptors.
+        "interceptor-squad",
+        "purgation-squad",
+        "purifier-squad",
+        "strike-squad",
+        "crowes-sanctifiers-strike-squad",
+      ].map((id) => [id, { T: 5 }]),
+    ),
+    "grand-master-in-nemesis-dreadknight": { T: 9 },
+    "nemesis-dreadknight": { T: 9 },
+    ...Object.fromEntries(
+      ["land-raider", "land-raider-crusader", "land-raider-redeemer", "razorback", "rhino"].map(
+        (id) => [id, { addKeywords: ["Frame"] }],
+      ),
+    ),
+    ...Object.fromEntries(
+      ["stormtalon-gunship", "stormhawk-interceptor"].map((id) => [
+        id,
+        { M: "-", OC: "-", removeAbilities: ["hover"] },
+      ]),
+    ),
+  },
+};
+
+function applyWeaponFixes(raw: RawData): boolean {
+  let changed = false;
+  for (const split of WEAPON_SPLITS) {
+    const src = raw.weapons.find((w) => w.id === split.from && w.faction_id === split.factionId);
+    if (!src || raw.weapons.some((w) => w.id === split.to)) continue;
+    raw.weapons = [...raw.weapons, { ...src, id: split.to }];
+    // Retarget every reference on this unit's own records (weapon_ids,
+    // wargear_costs, composition defaults, option swaps) by exact id.
+    const swap = <T>(rec: T): T =>
+      JSON.parse(JSON.stringify(rec).replaceAll(`"${split.from}"`, `"${split.to}"`));
+    const mine = (r: { unit_id?: string; id?: string; faction_id?: string | null }) =>
+      (r.unit_id ?? r.id) === split.unitId && r.faction_id === split.factionId;
+    raw.units = raw.units.map((u) => (mine(u) ? swap(u) : u));
+    raw.unitCompositions = raw.unitCompositions.map((c) => (mine(c) ? swap(c) : c));
+    raw.wargearOptions = raw.wargearOptions.map((o) => (mine(o) ? swap(o) : o));
+    changed = true;
+  }
+  raw.weapons = raw.weapons.map((w) => {
+    const fixes = (WEAPON_STATS[w.faction_id ?? ""] ?? []).filter(
+      (f) => f.names?.includes(w.name) || f.ids?.includes(w.id),
+    );
+    if (!fixes.length) return w;
+    changed = true;
+    const stats = Object.assign({}, ...fixes.map((f) => f.stats));
+    return {
+      ...w,
+      profiles: w.profiles.map((p) => ({ ...p, stats: { ...p.stats, ...stats } })),
+    } as typeof w;
+  });
+  return changed;
+}
+
+function applyUnitFixes(raw: RawData): boolean {
+  let changed = false;
+  raw.units = raw.units.map((u) => {
+    const fix = UNIT_FIXES[u.faction_id]?.[u.id];
+    if (!fix) return u;
+    changed = true;
+    const stats = Object.fromEntries(
+      (["T", "M", "OC"] as const).filter((k) => fix[k] != null).map((k) => [k, fix[k]]),
+    );
+    const kw = u.keywords ?? [];
+    const keywords = [...kw, ...(fix.addKeywords ?? []).filter((k) => !kw.includes(k))];
+    const ability_ids = (u.ability_ids ?? []).filter(
+      (id) => !fix.removeAbilities?.includes(id),
+    );
+    return {
+      ...u,
+      profiles: u.profiles.map((p) => ({ ...p, ...stats })),
+      keywords,
+      ability_ids,
+    } as typeof u;
+  });
+  return changed;
+}
+
 function applyPointsFixes(raw: RawData): boolean {
   let changed = false;
   raw.units = raw.units.map((u) => {
@@ -477,6 +688,8 @@ function applyPointsFixes(raw: RawData): boolean {
 export function applyDataFixes(raw: RawData): boolean {
   let changed = applyAbilityFixes(raw);
   if (applyPointsFixes(raw)) changed = true;
+  if (applyWeaponFixes(raw)) changed = true;
+  if (applyUnitFixes(raw)) changed = true;
   for (const fix of SQUADS) {
     const comp = raw.unitCompositions.find(
       (c) => c.unit_id === fix.unitId && c.faction_id === fix.factionId,
