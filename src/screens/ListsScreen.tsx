@@ -285,7 +285,7 @@ export default function ListsScreen() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="min-w-0 flex-1 truncate text-lg font-bold">Saved lists</h1>
+        <h1 className="min-w-0 flex-1 truncate text-lg font-bold">Lists</h1>
         <button
           type="button"
           onClick={() => {

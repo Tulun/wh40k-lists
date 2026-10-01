@@ -20,6 +20,7 @@ import type {
   UnitView,
 } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "./data";
+import { expectedKills, landedDamage, mean, statDistribution } from "./kills";
 import { byId } from "./lookup";
 
 export type CrunchPhase = "shooting" | "fight";
@@ -204,6 +205,8 @@ export interface WeaponOutput {
   profileName: string | null;
   count: number;
   damage: number;
+  /** Expected models slain by this line alone (overkill-aware). */
+  kills: number;
   /** This weapon line's own stage flow (its share of the unit totals). */
   flow: StageFlow;
 }
@@ -245,17 +248,22 @@ export interface TargetOutput {
  * Expected output of the combined unit against one target. For each weapon
  * line, phase-matching profiles are crunched with the chosen buff stack (a
  * dual-mode weapon fires its best profile per target — the choice a player
- * makes); damage sums across lines, kills = min(models, damage / W).
+ * makes — the one that kills most); damage sums across lines, and kills sum
+ * the lines' overkill-aware kills (see kills.ts), capped at the model count.
  */
 export function unitOutput(
   data: Data40k,
   members: CrunchMember[],
   factionId: string | null,
-  chosen: Buff[],
+  chosen: ConditionalBuff[],
   ctx: EngineContext,
   target: ResolvedTarget,
 ): TargetOutput {
   const wantMelee = ctx.phase === "fight";
+  const targetKeywords = (target.unitRaw.keywords ?? []).map((k) => String(k).toLowerCase());
+  const vsTarget = chosen
+    .filter((b) => targetMatches(b.vs ?? "all", targetKeywords))
+    .map(({ vs: _vs, ...buff }) => buff as Buff);
   const defensive = data.dataset.defensiveBuffsFor(
     { unitId: target.unitRaw.id, factionId: target.unitRaw.faction_id },
     ctx,
@@ -263,6 +271,8 @@ export function unitOutput(
   const weapons: WeaponOutput[] = [];
   const flow: StageFlow = { attacks: 0, hits: 0, wounds: 0, unsaved: 0, damage: 0, afterFnp: 0 };
   let damage = 0;
+  let kills = 0;
+  const W = Number(target.unitRaw.profiles[0]?.W) || 1;
 
   for (const member of members) {
     for (const line of member.lines) {
@@ -272,13 +282,14 @@ export function unitOutput(
       // sourced from a different weapon so e.g. one gun's Sustained Hits grant
       // doesn't buff the whole loadout.
       const stack = [
-        ...chosen.filter(
+        ...vsTarget.filter(
           (b) => b.source.kind !== "weapon-keyword" || b.source.weaponId === weapon.id,
         ),
         ...defensive,
       ];
       type Best = {
         damage: number;
+        kills: number;
         profileName: string | null;
         stages: { name: string; expected: number }[];
       };
@@ -300,9 +311,11 @@ export function unitOutput(
           data.dataset,
         );
         const dmg = out.stages.find((s) => s.name === "after-fnp")?.expected ?? 0;
-        if (!best || dmg > best.damage) {
+        const k = lineKills(profile.stats.D, out, ctx, W, target.modelCount);
+        if (!best || k > best.kills || (k === best.kills && dmg > best.damage)) {
           best = {
             damage: dmg,
+            kills: k,
             profileName: weapon.raw.profiles.length > 1 ? profile.name : null,
             stages: out.stages,
           };
@@ -311,6 +324,7 @@ export function unitOutput(
       if (!best) continue; // no profile for this phase
       const picked: Best = best;
       damage += picked.damage;
+      kills += picked.kills;
       const weaponFlow = flowFromStages(picked.stages);
       flow.attacks += weaponFlow.attacks;
       flow.hits += weaponFlow.hits;
@@ -324,47 +338,260 @@ export function unitOutput(
         profileName: picked.profileName,
         count: line.count,
         damage: picked.damage,
+        kills: picked.kills,
         flow: weaponFlow,
       });
     }
   }
 
   weapons.sort((a, b) => b.damage - a.damage);
-  const wounds = Number(target.unitRaw.profiles[0]?.W) || 1;
-  const kills = Math.min(target.modelCount, damage / wounds);
-  return { target, damage, kills, weapons, flow };
+  return { target, damage, kills: Math.min(target.modelCount, kills), weapons, flow };
 }
 
-/** Quick manual levers for effects the data can't express yet. */
-export interface ManualToggle {
+/**
+ * Overkill-aware kills for one crunched profile. Rebuilds the per-wound
+ * damage distribution from the engine's resolved modifiers (the engine itself
+ * only carries the mean), then splits its damage into the savable stream and
+ * the spilling mortal stream.
+ */
+export function lineKills(
+  dStat: unknown,
+  out: ReturnType<Data40k["crunch"]>,
+  ctx: EngineContext,
+  W: number,
+  models: number,
+): number {
+  const stage = (name: string) => out.stages.find((s) => s.name === name)?.expected ?? 0;
+  const r = out.resolved;
+  const melta = r.extraKeywords.find((k) => k.keywordRef.keyword_id === "melta");
+  const bonus =
+    r.damageMod.value +
+    (melta && ctx.withinHalfRange ? Number(melta.keywordRef.parameters?.value) || 0 : 0);
+  const reduction = r.damageReduction.value;
+  const fnp = (t: { threshold: number } | null) =>
+    t ? 1 - Math.max(0, Math.min(1, (7 - t.threshold) / 6)) : 1;
+  const pSurvive = fnp(r.feelNoPain);
+  const base = statDistribution(dStat);
+
+  // The engine's own mean damage per wound, to back out the mortal stream.
+  const before = Math.max(0, mean(base) + bonus);
+  const perWound = reduction > 0 ? Math.max(1, before - reduction) : before;
+  const unsaved = stage("unsaved");
+  const mortalDamage = Math.max(0, stage("after-fnp") - unsaved * perWound * pSurvive);
+
+  return expectedKills({
+    unsaved,
+    mortalDamage,
+    damage: landedDamage(base, { bonus, reduction, pSurvive }),
+    W,
+    models,
+  });
+}
+
+/**
+ * Manual modifiers for effects the data can't express yet (or the player just
+ * wants to try). Each is on/off, or carries an adjustable value — "+2 S",
+ * "Sustained Hits 2" — since plenty of abilities move a stat by more than 1.
+ */
+export interface ModifierDef {
   id: string;
   label: string;
-  buff: Buff;
+  group: "Stats" | "Rolls" | "Re-rolls" | "Keywords" | "Target";
+  /** Adjustable value range; absent = a plain on/off modifier. */
+  range?: { min: number; max: number; initial: number };
+  /** Chip text at a value; defaults to the label. */
+  format?: (value: number) => string;
+  /** Extra search terms ("AP", "pierce"). */
+  aliases?: string;
+  contribution: (value: number) => Buff["contribution"];
 }
 
-function manual(id: string, label: string, contribution: Buff["contribution"]): ManualToggle {
-  return { id, label, buff: { source: { kind: "manual", label }, contribution } };
-}
+const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+const keyword = (keyword_id: string, parameters?: Record<string, unknown>) => ({
+  type: "extra-keyword" as const,
+  keywordRef: parameters ? { keyword_id, parameters } : { keyword_id },
+});
 
-export const MANUAL_TOGGLES: ManualToggle[] = [
-  manual("hit-plus-1", "+1 to Hit", { type: "hit-mod", value: 1 }),
-  manual("wound-plus-1", "+1 to Wound", { type: "wound-mod", value: 1 }),
-  manual("rr1-hit", "RR1s Hit", { type: "reroll", roll: "hit", subset: "ones" }),
-  manual("rr-hit", "RR Hits", { type: "reroll", roll: "hit", subset: "all-failures" }),
-  manual("rr1-wound", "RR1s Wound", { type: "reroll", roll: "wound", subset: "ones" }),
-  manual("rr-wound", "RR Wounds", { type: "reroll", roll: "wound", subset: "all-failures" }),
-  manual("attacks-plus-1", "+1 A", { type: "attacks-mod", value: 1 }),
-  manual("strength-plus-1", "+1 S", { type: "strength-mod", value: 1 }),
-  manual("lethal-hits", "Lethal Hits", {
-    type: "extra-keyword",
-    keywordRef: { keyword_id: "lethal-hits" },
-  }),
-  manual("sustained-1", "Sustained 1", {
-    type: "extra-keyword",
-    keywordRef: { keyword_id: "sustained-hits", parameters: { value: 1 } },
-  }),
-  manual("dev-wounds", "Dev Wounds", {
-    type: "extra-keyword",
-    keywordRef: { keyword_id: "devastating-wounds" },
-  }),
+export const MODIFIERS: ModifierDef[] = [
+  {
+    id: "strength",
+    label: "Strength",
+    group: "Stats",
+    range: { min: 1, max: 10, initial: 1 },
+    format: (v) => `${signed(v)} S`,
+    contribution: (value) => ({ type: "strength-mod", value }),
+  },
+  {
+    id: "attacks",
+    label: "Attacks",
+    group: "Stats",
+    range: { min: 1, max: 10, initial: 1 },
+    format: (v) => `${signed(v)} A`,
+    contribution: (value) => ({ type: "attacks-mod", value }),
+  },
+  {
+    id: "ap",
+    label: "Armour Penetration",
+    group: "Stats",
+    aliases: "ap improve pierce",
+    range: { min: 1, max: 4, initial: 1 },
+    format: (v) => `AP improved by ${v}`,
+    // AP is signed against the save: −1 is one step more piercing.
+    contribution: (value) => ({ type: "ap-mod", value: -value }),
+  },
+  {
+    id: "damage",
+    label: "Damage",
+    group: "Stats",
+    range: { min: 1, max: 6, initial: 1 },
+    format: (v) => `${signed(v)} D`,
+    contribution: (value) => ({ type: "damage-mod", value }),
+  },
+  {
+    id: "hit",
+    label: "Hit roll",
+    group: "Rolls",
+    range: { min: -1, max: 1, initial: 1 },
+    format: (v) => `${signed(v)} to Hit`,
+    contribution: (value) => ({ type: "hit-mod", value }),
+  },
+  {
+    id: "wound",
+    label: "Wound roll",
+    group: "Rolls",
+    aliases: "lance",
+    range: { min: -1, max: 1, initial: 1 },
+    format: (v) => `${signed(v)} to Wound`,
+    contribution: (value) => ({ type: "wound-mod", value }),
+  },
+  {
+    id: "rr1-hit",
+    label: "Re-roll Hit rolls of 1",
+    group: "Re-rolls",
+    aliases: "rr1",
+    contribution: () => ({ type: "reroll", roll: "hit", subset: "ones" }),
+  },
+  {
+    id: "rr-hit",
+    label: "Re-roll Hit rolls",
+    group: "Re-rolls",
+    aliases: "rr full",
+    contribution: () => ({ type: "reroll", roll: "hit", subset: "all-failures" }),
+  },
+  {
+    id: "rr1-wound",
+    label: "Re-roll Wound rolls of 1",
+    group: "Re-rolls",
+    aliases: "rr1",
+    contribution: () => ({ type: "reroll", roll: "wound", subset: "ones" }),
+  },
+  {
+    id: "rr-wound",
+    label: "Re-roll Wound rolls",
+    group: "Re-rolls",
+    aliases: "rr full",
+    contribution: () => ({ type: "reroll", roll: "wound", subset: "all-failures" }),
+  },
+  {
+    id: "lethal-hits",
+    label: "Lethal Hits",
+    group: "Keywords",
+    contribution: () => keyword("lethal-hits"),
+  },
+  {
+    id: "sustained-hits",
+    label: "Sustained Hits",
+    group: "Keywords",
+    range: { min: 1, max: 3, initial: 1 },
+    format: (v) => `Sustained Hits ${v}`,
+    contribution: (value) => keyword("sustained-hits", { value }),
+  },
+  {
+    id: "dev-wounds",
+    label: "Devastating Wounds",
+    group: "Keywords",
+    aliases: "dev",
+    contribution: () => keyword("devastating-wounds"),
+  },
+  {
+    id: "twin-linked",
+    label: "Twin-linked",
+    group: "Keywords",
+    // Spelled out as its effect: the engine only expands catalog keywords
+    // printed on the profile, so an extra-keyword Twin-linked would be inert.
+    contribution: () => ({ type: "reroll", roll: "wound", subset: "all-failures" }),
+  },
+  {
+    id: "melta",
+    label: "Melta",
+    group: "Keywords",
+    range: { min: 1, max: 6, initial: 2 },
+    format: (v) => `Melta ${v}`,
+    contribution: (value) => keyword("melta", { value }),
+  },
+  {
+    id: "ignores-cover",
+    label: "Ignores Cover",
+    group: "Keywords",
+    contribution: () => keyword("ignores-cover"),
+  },
+  {
+    id: "target-toughness",
+    label: "Target Toughness",
+    group: "Target",
+    aliases: "t minus",
+    range: { min: 1, max: 4, initial: 1 },
+    format: (v) => `Target −${v} T`,
+    contribution: (value) => ({ type: "toughness-mod", value: -value }),
+  },
 ];
+
+/**
+ * Which targets a modifier applies against — 11e abilities often grant e.g.
+ * Lethal Hits only vs non-VEHICLE/MONSTER targets. The package's gate can only
+ * REQUIRE a keyword, so `unitOutput` filters these per target itself.
+ */
+export type TargetCondition = "all" | "vehicle-monster" | "not-vehicle-monster" | "infantry";
+
+export const TARGET_CONDITIONS: { id: TargetCondition; label: string }[] = [
+  { id: "all", label: "vs all" },
+  { id: "vehicle-monster", label: "vs VEH/MON" },
+  { id: "not-vehicle-monster", label: "vs non-VEH/MON" },
+  { id: "infantry", label: "vs INFANTRY" },
+];
+
+export function targetMatches(cond: TargetCondition, targetKeywords: string[]): boolean {
+  const has = (k: string) => targetKeywords.includes(k);
+  switch (cond) {
+    case "all":
+      return true;
+    case "vehicle-monster":
+      return has("vehicle") || has("monster");
+    case "not-vehicle-monster":
+      return !has("vehicle") && !has("monster");
+    case "infantry":
+      return has("infantry");
+  }
+}
+
+/** A buff that only applies against some targets (manual modifiers). */
+export type ConditionalBuff = Buff & { vs?: TargetCondition };
+
+/** One picked modifier: its value (0 for on/off ones) and target condition. */
+export interface PickedModifier {
+  value: number;
+  vs: TargetCondition;
+}
+export type ModifierState = Record<string, PickedModifier>;
+
+export function modifierLabel(def: ModifierDef, value: number): string {
+  return def.range && def.format ? def.format(value) : def.label;
+}
+
+export function modifierBuffs(state: ModifierState): ConditionalBuff[] {
+  return MODIFIERS.filter((m) => m.id in state).map((m) => {
+    const { value, vs } = state[m.id];
+    const label = modifierLabel(m, value);
+    return { source: { kind: "manual", label }, contribution: m.contribution(value), vs };
+  });
+}

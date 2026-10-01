@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { Unit } from "@alpaca-software/40kdc-data";
 import Dropdown from "../components/Dropdown";
+import ModifierPicker from "../components/ModifierPicker";
 import {
   FlowStrip,
   TargetTable,
@@ -18,20 +19,22 @@ import { loadoutDataMissing } from "../lib/list-edit";
 import { byId } from "../lib/lookup";
 import {
   DEFAULT_SITUATION,
-  MANUAL_TOGGLES,
   SITUATION_TOGGLES,
   crunchLevers,
   engineContext,
   memberFromCounts,
+  modifierBuffs,
   standardTargets,
   targetFromUnit,
   unitOutput,
   type CrunchMember,
   type CrunchPhase,
   type CrunchSituation,
+  type ModifierState,
   type TargetOutput,
 } from "../lib/crunch";
 import { useActiveList } from "../store/lists";
+import { useProfiles, type CrunchProfile } from "../store/profiles";
 
 /**
  * The UnitCrunch-style standalone calculator: load ANY attacker datasheet
@@ -58,6 +61,8 @@ interface AttackerState {
   /** Weapon/wargear id → squad-wide count (the editable loadout). */
   counts: Record<string, number>;
   leaderId: string | null;
+  /** The attached leader's own editable loadout (leader at minimum size). */
+  leaderCounts: Record<string, number>;
   detachmentId: string | null;
 }
 
@@ -102,10 +107,19 @@ function CrunchLab({ data }: { data: Data40k }) {
         models,
         counts: baseCounts(data, unit.raw, models),
         leaderId: null,
+        leaderCounts: {},
         detachmentId: null,
       };
     }
-    return { factionId, unitId: null, models: 1, counts: {}, leaderId: null, detachmentId: null };
+    return {
+      factionId,
+      unitId: null,
+      models: 1,
+      counts: {},
+      leaderId: null,
+      leaderCounts: {},
+      detachmentId: null,
+    };
   });
 
   const [defMode, setDefMode] = useState<"benchmarks" | "unit">(
@@ -127,7 +141,12 @@ function CrunchLab({ data }: { data: Data40k }) {
   const [sit, setSit] = useState<CrunchSituation>(DEFAULT_SITUATION);
   const [phaseTouched, setPhaseTouched] = useState(false);
   const [leverState, setLeverState] = useState<Record<string, boolean>>({});
-  const [manualState, setManualState] = useState<Record<string, boolean>>({});
+  const [manualState, setManualState] = useState<ModifierState>({});
+  const profiles = useProfiles((s) => s.profiles);
+  const saveProfile = useProfiles((s) => s.saveProfile);
+  const deleteProfile = useProfiles((s) => s.deleteProfile);
+  /** The saved profile currently loaded (edits keep it selected, for Update). */
+  const [profileId, setProfileId] = useState<string | null>(null);
 
   // Played factions first so the common picks sit on top of the long list.
   const factionOptions = useMemo(() => {
@@ -159,11 +178,18 @@ function CrunchLab({ data }: { data: Data40k }) {
 
   const pickAttackerUnit = (unitId: string | null) =>
     setAtk((s) => {
-      if (!unitId) return { ...s, unitId: null, counts: {}, leaderId: null };
+      if (!unitId) return { ...s, unitId: null, counts: {}, leaderId: null, leaderCounts: {} };
       const unit = byId(data.units, unitId, s.factionId);
       if (!unit) return s;
       const models = unit.raw.model_count?.min ?? 1;
-      return { ...s, unitId, models, counts: baseCounts(data, unit.raw, models), leaderId: null };
+      return {
+        ...s,
+        unitId,
+        models,
+        counts: baseCounts(data, unit.raw, models),
+        leaderId: null,
+        leaderCounts: {},
+      };
     });
 
   // Resizing resets the loadout to the new size's base — weapon edits don't
@@ -174,35 +200,30 @@ function CrunchLab({ data }: { data: Data40k }) {
       return unit ? { ...s, models, counts: baseCounts(data, unit.raw, models) } : s;
     });
 
-  // The editable loadout rows: every weapon the unit can field, stepper-bound
-  // by the package's loadout maths. Units without authored loadout data get
-  // free 0..models steppers instead of hard-locked ones.
-  const loadout = useMemo(() => {
-    if (!atkUnit) return null;
-    const raw = atkUnit.raw;
-    const missing = loadoutDataMissing(data, raw);
-    const { options, models: rows } = loadoutCtx(data, raw);
-    const bounds = missing ? null : data.weaponBounds(raw, atk.models, options, rows);
-    const ids = new Set<string>([...Object.keys(atk.counts), ...(bounds ? bounds.keys() : [])]);
-    const weaponRows = [...ids]
-      .flatMap((id) => {
-        const weapon = byId(data.weapons, id, atk.factionId);
-        if (!weapon) return []; // non-weapon wargear — nothing to crunch
-        const b = bounds?.get(id);
-        const count = atk.counts[id] ?? 0;
-        return [
-          {
-            id,
-            name: weapon.name,
-            count,
-            min: b?.min ?? 0,
-            max: b?.max ?? Math.max(atk.models, count),
-          },
-        ];
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-    return { missing, rows: weaponRows };
-  }, [data, atkUnit, atk.models, atk.counts, atk.factionId]);
+  const loadout = useMemo(
+    () => (atkUnit ? loadoutRows(data, atkUnit.raw, atk.models, atk.counts, atk.factionId) : null),
+    [data, atkUnit, atk.models, atk.counts, atk.factionId],
+  );
+  const leaderModels = leaderUnit?.raw.model_count?.min ?? 1;
+  const leaderLoadout = useMemo(
+    () =>
+      leaderUnit
+        ? loadoutRows(data, leaderUnit.raw, leaderModels, atk.leaderCounts, atk.factionId)
+        : null,
+    [data, leaderUnit, leaderModels, atk.leaderCounts, atk.factionId],
+  );
+
+  const pickLeader = (leaderId: string | null) =>
+    setAtk((s) => {
+      const leader = leaderId ? byId(data.units, leaderId, s.factionId) : undefined;
+      return {
+        ...s,
+        leaderId: leader ? leaderId : null,
+        leaderCounts: leader
+          ? baseCounts(data, leader.raw, leader.raw.model_count?.min ?? 1)
+          : {},
+      };
+    });
 
   const leaderOptions = useMemo(
     () =>
@@ -241,19 +262,18 @@ function CrunchLab({ data }: { data: Data40k }) {
       ),
     ];
     if (leaderUnit) {
-      const lModels = leaderUnit.raw.model_count?.min ?? 1;
       out.push(
         memberFromCounts(
           data,
           leaderUnit.id,
           leaderUnit.name,
-          new Map(Object.entries(baseCounts(data, leaderUnit.raw, lModels))),
+          new Map(Object.entries(atk.leaderCounts)),
           atk.factionId,
         ),
       );
     }
     return out;
-  }, [data, atkUnit, leaderUnit, atk.counts, atk.factionId]);
+  }, [data, atkUnit, leaderUnit, atk.counts, atk.leaderCounts, atk.factionId]);
 
   const hasPhase = useMemo(() => {
     const check = (wantMelee: boolean) =>
@@ -285,8 +305,7 @@ function CrunchLab({ data }: { data: Data40k }) {
     const fromLevers = levers.buffs
       .filter((l) => leverState[l.id] ?? l.enabled)
       .flatMap((l) => l.buffs);
-    const fromManual = MANUAL_TOGGLES.filter((t) => manualState[t.id]).map((t) => t.buff);
-    return [...fromLevers, ...fromManual];
+    return [...fromLevers, ...modifierBuffs(manualState)];
   }, [levers, leverState, manualState]);
 
   const benchmarkResults = useMemo(() => {
@@ -318,6 +337,70 @@ function CrunchLab({ data }: { data: Data40k }) {
     return leader == null ? null : main + leader;
   }, [data, atkUnit, atk.models, leaderUnit]);
 
+  const loadedProfile = profileId ? profiles[profileId] : undefined;
+
+  // The current attacker setup in saved-profile shape (minus id/name/stamp).
+  const snapshot =
+    atk.unitId != null
+      ? {
+          factionId: atk.factionId,
+          unitId: atk.unitId,
+          models: atk.models,
+          counts: atk.counts,
+          leaderId: atk.leaderId,
+          leaderCounts: atk.leaderCounts,
+          detachmentId: atk.detachmentId,
+          levers: leverState,
+          modifiers: manualState,
+        }
+      : null;
+  const profileEdited =
+    !!loadedProfile &&
+    !!snapshot &&
+    JSON.stringify(snapshot) !==
+      JSON.stringify({
+        factionId: loadedProfile.factionId,
+        unitId: loadedProfile.unitId,
+        models: loadedProfile.models,
+        counts: loadedProfile.counts,
+        leaderId: loadedProfile.leaderId,
+        leaderCounts: loadedProfile.leaderCounts,
+        detachmentId: loadedProfile.detachmentId,
+        levers: loadedProfile.levers,
+        modifiers: loadedProfile.modifiers,
+      });
+
+  const loadProfile = (id: string | null) => {
+    const p = id ? profiles[id] : undefined;
+    setProfileId(p ? p.id : null);
+    if (!p) return;
+    setAtk({
+      factionId: p.factionId,
+      unitId: p.unitId,
+      models: p.models,
+      counts: p.counts,
+      leaderId: p.leaderId,
+      leaderCounts: p.leaderCounts,
+      detachmentId: p.detachmentId,
+    });
+    setLeverState(p.levers);
+    setManualState(p.modifiers);
+    setPhaseTouched(false);
+  };
+
+  const profileOptions = Object.values(profiles)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((p) => ({
+      value: p.id,
+      label: p.name,
+      detail: data.factions.all.find((f) => f.id === p.factionId)?.name,
+      sub: profileSummary(data, p),
+    }));
+
+  const defaultProfileName = atkUnit
+    ? `${leaderUnit ? `${leaderUnit.name} + ` : ""}${atk.models > 1 ? `${atk.models} ` : ""}${atkUnit.name}`
+    : "";
+
   const chip = crunchChip;
   const atkMin = atkUnit?.raw.model_count?.min ?? 1;
   const atkMax = atkUnit?.raw.model_count?.max ?? atkMin;
@@ -328,7 +411,7 @@ function CrunchLab({ data }: { data: Data40k }) {
   return (
     <div className="space-y-3">
       <div className="sticky top-12 z-10 -mx-3 border-b border-edge bg-surface/95 px-3 py-1.5 backdrop-blur">
-        <h1 className="text-base font-bold leading-tight">💥 Crunch lab</h1>
+        <h1 className="text-base font-bold leading-tight">🧮 Math calculator</h1>
         <p className="text-[11px] text-ink-faint">
           Load an attacker and a defender, read the expected damage.
         </p>
@@ -340,6 +423,25 @@ function CrunchLab({ data }: { data: Data40k }) {
           <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
             ⚔ Attacker
           </p>
+          <ProfileBar
+            options={profileOptions}
+            loaded={loadedProfile ?? null}
+            edited={profileEdited}
+            canSave={!!snapshot}
+            defaultName={defaultProfileName}
+            onLoad={loadProfile}
+            onSave={(name, asNew) => {
+              if (!snapshot) return;
+              const id = !asNew && loadedProfile ? loadedProfile.id : crypto.randomUUID();
+              saveProfile({ id, name, ...snapshot });
+              setProfileId(id);
+            }}
+            onDelete={() => {
+              if (!loadedProfile) return;
+              deleteProfile(loadedProfile.id);
+              setProfileId(null);
+            }}
+          />
           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             <Dropdown
               value={atk.factionId}
@@ -351,6 +453,7 @@ function CrunchLab({ data }: { data: Data40k }) {
                   unitId: null,
                   counts: {},
                   leaderId: null,
+                  leaderCounts: {},
                   detachmentId: null,
                 }))
               }
@@ -393,7 +496,7 @@ function CrunchLab({ data }: { data: Data40k }) {
                     <Dropdown
                       value={atk.leaderId}
                       options={leaderOptions}
-                      onChange={(leaderId) => setAtk((s) => ({ ...s, leaderId }))}
+                      onChange={pickLeader}
                       placeholder="No attached leader"
                       clearable
                     />
@@ -411,31 +514,22 @@ function CrunchLab({ data }: { data: Data40k }) {
               )}
 
               {loadout && loadout.rows.length > 0 && (
-                <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-                    Loadout
-                  </p>
-                  <div className="space-y-1">
-                    {loadout.rows.map((row) => (
-                      <div key={row.id} className="flex items-center gap-2 text-xs">
-                        <span className="min-w-0 flex-1 truncate text-ink-dim">{row.name}</span>
-                        <Stepper
-                          value={row.count}
-                          min={row.min}
-                          max={row.max}
-                          onChange={(next) =>
-                            setAtk((s) => ({ ...s, counts: { ...s.counts, [row.id]: next } }))
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  {loadout.missing && (
-                    <p className="mt-1 text-[10px] italic text-ink-faint">
-                      No loadout data for this unit — counts are unclamped.
-                    </p>
-                  )}
-                </div>
+                <LoadoutEditor
+                  title={leaderUnit ? `Loadout — ${atkUnit.name}` : "Loadout"}
+                  loadout={loadout}
+                  onChange={(id, next) =>
+                    setAtk((s) => ({ ...s, counts: { ...s.counts, [id]: next } }))
+                  }
+                />
+              )}
+              {leaderUnit && leaderLoadout && leaderLoadout.rows.length > 0 && (
+                <LoadoutEditor
+                  title={`Loadout — ${leaderUnit.name}`}
+                  loadout={leaderLoadout}
+                  onChange={(id, next) =>
+                    setAtk((s) => ({ ...s, leaderCounts: { ...s.leaderCounts, [id]: next } }))
+                  }
+                />
               )}
             </>
           )}
@@ -592,7 +686,7 @@ function CrunchLab({ data }: { data: Data40k }) {
 
           <div>
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-              Situation &amp; extras
+              Situation
             </p>
             <div className="flex flex-wrap gap-1.5">
               {SITUATION_TOGGLES.map(({ key, label }) => (
@@ -605,17 +699,11 @@ function CrunchLab({ data }: { data: Data40k }) {
                   {label}
                 </button>
               ))}
-              {MANUAL_TOGGLES.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setManualState((s) => ({ ...s, [t.id]: !s[t.id] }))}
-                  className={chip(!!manualState[t.id])}
-                >
-                  {t.label}
-                </button>
-              ))}
             </div>
+            <p className="mb-1 mt-2.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+              Modifiers
+            </p>
+            <ModifierPicker value={manualState} onChange={setManualState} />
           </div>
 
           {defMode === "benchmarks" && benchmarkResults.length > 0 && (
@@ -640,6 +728,230 @@ function CrunchLab({ data }: { data: Data40k }) {
             save mods) apply automatically. Kills cap at the target's model count.
           </p>
         </>
+      )}
+    </div>
+  );
+}
+
+interface Loadout {
+  /** No authored loadout data: counts are free 0..models. */
+  missing: boolean;
+  rows: { id: string; name: string; count: number; min: number; max: number }[];
+}
+
+/**
+ * The editable loadout rows: every weapon the unit can field, stepper-bound
+ * by the package's loadout maths. Units without authored loadout data get
+ * free 0..models steppers instead of hard-locked ones.
+ */
+function loadoutRows(
+  data: Data40k,
+  raw: Unit,
+  models: number,
+  counts: Record<string, number>,
+  factionId: string | null,
+): Loadout {
+  const missing = loadoutDataMissing(data, raw);
+  const { options, models: rows } = loadoutCtx(data, raw);
+  const bounds = missing ? null : data.weaponBounds(raw, models, options, rows);
+  const ids = new Set<string>([...Object.keys(counts), ...(bounds ? bounds.keys() : [])]);
+  return {
+    missing,
+    rows: [...ids]
+      .flatMap((id) => {
+        const weapon = byId(data.weapons, id, factionId);
+        if (!weapon) return []; // non-weapon wargear — nothing to crunch
+        const b = bounds?.get(id);
+        const count = counts[id] ?? 0;
+        return [
+          {
+            id,
+            name: weapon.name,
+            count,
+            min: b?.min ?? 0,
+            max: b?.max ?? Math.max(models, count),
+          },
+        ];
+      })
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
+function LoadoutEditor({
+  title,
+  loadout,
+  onChange,
+}: {
+  title: string;
+  loadout: Loadout;
+  onChange: (weaponId: string, next: number) => void;
+}) {
+  return (
+    <div>
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+        {title}
+      </p>
+      <div className="space-y-1">
+        {loadout.rows.map((row) => (
+          <div key={row.id} className="flex items-center gap-2 text-xs">
+            <span className="min-w-0 flex-1 truncate text-ink-dim">{row.name}</span>
+            <Stepper
+              value={row.count}
+              min={row.min}
+              max={row.max}
+              onChange={(next) => onChange(row.id, next)}
+            />
+          </div>
+        ))}
+      </div>
+      {loadout.missing && (
+        <p className="mt-1 text-[10px] italic text-ink-faint">
+          No loadout data for this unit — counts are unclamped.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** "10× Paladin Squad + Brotherhood Librarian · 2 modifiers" */
+function profileSummary(data: Data40k, p: CrunchProfile): string {
+  const name = (id: string | null) =>
+    id ? (byId(data.units, id, p.factionId)?.name ?? id) : null;
+  const parts = [`${p.models}× ${name(p.unitId)}`];
+  if (p.leaderId) parts[0] += ` + ${name(p.leaderId)}`;
+  const mods = Object.keys(p.modifiers).length;
+  if (mods > 0) parts.push(`${mods} modifier${mods === 1 ? "" : "s"}`);
+  return parts.join(" · ");
+}
+
+/**
+ * Load / save / update / delete saved attacker profiles. Saving opens an
+ * inline name field; with a profile loaded, Save overwrites it (Update) and
+ * "Save as new" forks a copy.
+ */
+function ProfileBar({
+  options,
+  loaded,
+  edited,
+  canSave,
+  defaultName,
+  onLoad,
+  onSave,
+  onDelete,
+}: {
+  options: { value: string; label: string; detail?: string; sub?: string }[];
+  loaded: CrunchProfile | null;
+  edited: boolean;
+  canSave: boolean;
+  defaultName: string;
+  onLoad: (id: string | null) => void;
+  onSave: (name: string, asNew: boolean) => void;
+  onDelete: () => void;
+}) {
+  const [naming, setNaming] = useState<{ name: string; asNew: boolean } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const small =
+    "shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40";
+
+  if (naming) {
+    const commit = () => {
+      const name = naming.name.trim();
+      if (!name) return;
+      onSave(name, naming.asNew);
+      setNaming(null);
+    };
+    return (
+      <div className="flex gap-1.5">
+        <input
+          autoFocus
+          value={naming.name}
+          onChange={(e) => setNaming({ ...naming, name: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") setNaming(null);
+          }}
+          placeholder="Profile name"
+          className="min-w-0 flex-1 rounded-md border border-edge bg-panel px-3 py-1.5 text-xs"
+        />
+        <button type="button" onClick={commit} className={`${small} bg-accent text-surface`}>
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={() => setNaming(null)}
+          className={`${small} bg-panel text-ink-dim`}
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {options.length > 0 && (
+        <div className="min-w-40 flex-1">
+          <Dropdown
+            value={loaded?.id ?? null}
+            options={options}
+            onChange={(id) => {
+              setConfirmDelete(false);
+              onLoad(id);
+            }}
+            placeholder="Load a saved profile…"
+            searchable
+          />
+        </div>
+      )}
+      {loaded && edited && (
+        <button
+          type="button"
+          onClick={() => onSave(loaded.name, false)}
+          className={`${small} bg-accent text-surface`}
+        >
+          Update
+        </button>
+      )}
+      <button
+        type="button"
+        disabled={!canSave}
+        onClick={() =>
+          setNaming(
+            loaded
+              ? { name: `${loaded.name} (copy)`, asNew: true }
+              : { name: defaultName, asNew: true },
+          )
+        }
+        className={`${small} border border-accent/50 text-accent`}
+      >
+        {loaded ? "Save as new" : "Save as profile"}
+      </button>
+      {loaded &&
+        (confirmDelete ? (
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmDelete(false);
+              onDelete();
+            }}
+            className={`${small} bg-opponent/20 text-opponent`}
+          >
+            Delete “{loaded.name}”?
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label="Delete profile"
+            onClick={() => setConfirmDelete(true)}
+            className={`${small} bg-panel text-opponent`}
+          >
+            Delete
+          </button>
+        ))}
+      {loaded && edited && (
+        <span className="w-full text-[10px] italic text-ink-faint">
+          Edited since “{loaded.name}” was saved.
+        </span>
       )}
     </div>
   );

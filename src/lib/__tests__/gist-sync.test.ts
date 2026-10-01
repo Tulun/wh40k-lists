@@ -1,7 +1,7 @@
 /**
  * Gist sync against a mocked GitHub API: load/save/create plumbing, error
  * typing, the per-file pull/push divergence baselines held in the codex and
- * lists stores, and the per-list auto-merge.
+ * lists stores, and the per-list (and per-profile) auto-merge.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CodexDoc } from "../codex-model";
@@ -9,6 +9,7 @@ import { emptyCodexDoc } from "../codex-model";
 import {
   GIST_FILE,
   LISTS_FILE,
+  PROFILES_FILE,
   createRemoteGist,
   loadRemoteDoc,
   normalizeGistId,
@@ -18,6 +19,7 @@ import {
 } from "../gist-sync";
 import { useCodex } from "../../store/codex";
 import { useLists } from "../../store/lists";
+import { useProfiles, type CrunchProfile, type RemoteProfiles } from "../../store/profiles";
 import { useSyncUi } from "../../store/sync-ui";
 import type { RemoteLists, SavedList } from "../../store/schema";
 
@@ -46,6 +48,14 @@ function gistResponse(content: string, extraFiles: Record<string, string> = {}) 
   return new Response(JSON.stringify({ files }), { status: 200 });
 }
 
+function profile(id: string, name = id, updated = "T0"): CrunchProfile {
+  return { id, name, updated } as CrunchProfile;
+}
+
+function remoteProfiles(updated: string, profiles: Record<string, CrunchProfile>): RemoteProfiles {
+  return { version: 1, updated, profiles };
+}
+
 const initialState = useCodex.getState();
 const initialLists = useLists.getState();
 
@@ -61,6 +71,12 @@ beforeEach(() => {
     lists: {},
     slots: { mine: null, opponent: null },
     activeSlot: "mine",
+    updated: null,
+    dirty: false,
+    sync: { lastSynced: null, remoteUpdated: null, knownIds: [] },
+  });
+  useProfiles.setState({
+    profiles: {},
     updated: null,
     dirty: false,
     sync: { lastSynced: null, remoteUpdated: null, knownIds: [] },
@@ -419,5 +435,94 @@ describe("lists sync", () => {
     expect(Object.keys(pushedLists.lists).sort()).toEqual(["a", "z"]);
     expect(useCodex.getState().dirty).toBe(false);
     expect(useLists.getState().dirty).toBe(false);
+  });
+});
+
+describe("profiles sync", () => {
+  function connect() {
+    useCodex.setState({
+      sync: { gistId: CFG.gistId, token: CFG.token, lastSynced: null, remoteUpdated: "T0" },
+      dirty: false,
+    });
+  }
+  const codexJson = JSON.stringify(doc("T0"));
+  const gistWith = (remote: RemoteProfiles) =>
+    gistResponse(codexJson, { [PROFILES_FILE]: JSON.stringify(remote) });
+
+  it("a fresh device adopts the remote profiles", async () => {
+    connect();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(gistWith(remoteProfiles("P1", { p: profile("p", "Libby + 10 Paladins") }))),
+    );
+    expect((await pullRemote()).status).toBe("pulled");
+    const s = useProfiles.getState();
+    expect(s.profiles.p.name).toBe("Libby + 10 Paladins");
+    expect(s.dirty).toBe(false);
+    expect(s.sync.remoteUpdated).toBe("P1");
+  });
+
+  it("creates profiles.json on push when the gist has none yet", async () => {
+    connect();
+    useProfiles.getState().saveProfile(profile("p"));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(gistResponse(codexJson))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect((await pushLocal()).status).toBe("pushed");
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as { files: Record<string, { content: string }> };
+    expect(Object.keys(body.files)).toEqual([PROFILES_FILE]);
+    expect(Object.keys((JSON.parse(body.files[PROFILES_FILE].content) as RemoteProfiles).profiles)).toEqual(["p"]);
+    expect(useProfiles.getState().dirty).toBe(false);
+  });
+
+  it("merges per profile when both sides moved; deletions propagate, edits beat them", async () => {
+    connect();
+    useProfiles.setState({
+      profiles: {
+        mine: profile("mine", "new on this device", "T8"),
+        shared: profile("shared", "edited here", "T9"),
+        gone: profile("gone", "deleted elsewhere", "T2"),
+      },
+      updated: "T9",
+      dirty: true,
+      sync: { lastSynced: "T5", remoteUpdated: "P0", knownIds: ["shared", "gone"] },
+    });
+    const remote = remoteProfiles("P5", {
+      shared: profile("shared", "stale", "T3"),
+      theirs: profile("theirs", "new on the phone", "T7"),
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(gistWith(remote)));
+    await pullRemote();
+    const s = useProfiles.getState();
+    expect(Object.keys(s.profiles).sort()).toEqual(["mine", "shared", "theirs"]);
+    expect(s.profiles.shared.name).toBe("edited here");
+    expect(s.dirty).toBe(true);
+    expect(s.sync.remoteUpdated).toBe("P5");
+  });
+
+  it("push merges diverged profiles and sends the merge", async () => {
+    connect();
+    useProfiles.setState({
+      profiles: { a: profile("a", "a", "T9") },
+      updated: "T9",
+      dirty: true,
+      sync: { lastSynced: "T5", remoteUpdated: "P0", knownIds: ["a"] },
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(gistWith(remoteProfiles("P5", { z: profile("z", "z", "T7") })))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect((await pushLocal()).status).toBe("pushed");
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as { files: Record<string, { content: string }> };
+    const pushed = JSON.parse(body.files[PROFILES_FILE].content) as RemoteProfiles;
+    // `a` was known at the last sync but edited after it, so it survives z's side.
+    expect(Object.keys(pushed.profiles).sort()).toEqual(["a", "z"]);
+    expect(useProfiles.getState().dirty).toBe(false);
+    expect(useProfiles.getState().sync.knownIds.sort()).toEqual(["a", "z"]);
   });
 });

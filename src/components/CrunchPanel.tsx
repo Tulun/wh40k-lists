@@ -3,17 +3,19 @@ import type { StackableBuff } from "@alpaca-software/40kdc-data";
 import type { Data40k } from "../lib/data";
 import {
   DEFAULT_SITUATION,
-  MANUAL_TOGGLES,
   SITUATION_TOGGLES,
   crunchLevers,
   engineContext,
   memberFromRosterUnit,
+  modifierBuffs,
   standardTargets,
   unitOutput,
   type CrunchMember,
   type CrunchPhase,
   type CrunchSituation,
+  type ModifierState,
 } from "../lib/crunch";
+import ModifierPicker from "./ModifierPicker";
 import { effectiveAttachments, leadersAttachedTo } from "../lib/attachments";
 import type { DisplayEntry } from "../lib/dedupe";
 import type { SavedList } from "../store/schema";
@@ -37,7 +39,7 @@ export default function CrunchPanel({ data, list, entry }: Props) {
   const [sit, setSit] = useState<CrunchSituation>(DEFAULT_SITUATION);
   const [phaseTouched, setPhaseTouched] = useState(false);
   const [leverState, setLeverState] = useState<Record<string, boolean>>({});
-  const [manualState, setManualState] = useState<Record<string, boolean>>({});
+  const [manualState, setManualState] = useState<ModifierState>({});
 
   const inst =
     entry.instances[Math.min(instanceIdx, entry.instances.length - 1)];
@@ -116,10 +118,7 @@ export default function CrunchPanel({ data, list, entry }: Props) {
     const fromLevers = levers.buffs
       .filter((l) => leverState[l.id] ?? l.enabled)
       .flatMap((l) => l.buffs);
-    const fromManual = MANUAL_TOGGLES.filter((t) => manualState[t.id]).map(
-      (t) => t.buff,
-    );
-    return [...fromLevers, ...fromManual];
+    return [...fromLevers, ...modifierBuffs(manualState)];
   }, [levers, leverState, manualState]);
 
   const results = useMemo(() => {
@@ -222,18 +221,9 @@ export default function CrunchPanel({ data, list, entry }: Props) {
               {label}
             </button>
           ))}
-          {MANUAL_TOGGLES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() =>
-                setManualState((s) => ({ ...s, [t.id]: !s[t.id] }))
-              }
-              className={chip(!!manualState[t.id])}
-            >
-              {t.label}
-            </button>
-          ))}
+        </div>
+        <div className="mt-1.5">
+          <ModifierPicker value={manualState} onChange={setManualState} />
         </div>
       </div>
 

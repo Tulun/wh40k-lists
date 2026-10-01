@@ -25,7 +25,15 @@ export default function ExploreScreen() {
 
   return (
     <div className="space-y-3">
-      <h1 className="text-lg font-bold">Codexes</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="min-w-0 flex-1 truncate text-lg font-bold">Codexes</h1>
+        <Link
+          to="/editor"
+          className="rounded-md border border-accent/50 px-4 py-2 text-sm font-bold text-accent"
+        >
+          ✎ Editor
+        </Link>
+      </div>
       <p className="text-xs text-ink-dim">
         Datasheets for the 11th edition armies, list or no list. Handy for checking what a unit
         does.

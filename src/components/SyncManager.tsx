@@ -1,9 +1,9 @@
 /**
- * App-wide sync bootstrap + conflict banner. Mounted once in App so lists and
+ * App-wide sync bootstrap + conflict banner. Mounted once in App so lists, profiles and
  * codex data sync on every launch, not just when the editor is opened: pulls
  * the gist on startup and whenever the tab regains focus (throttled), and
- * starts the debounced auto-push. Lists divergence heals itself with a
- * per-list merge; only an unmergeable codex conflict renders here as a banner
+ * starts the debounced auto-push. Lists and profiles heal divergence with a
+ * per-item merge; only an unmergeable codex conflict renders here as a banner
  * on every screen.
  */
 import { useEffect } from "react";

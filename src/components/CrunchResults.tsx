@@ -1,6 +1,6 @@
 /**
  * Presentation pieces shared by the two damage views: the per-unit CrunchPanel
- * (roster entry vs standard targets) and the standalone Crunch lab (any
+ * (roster entry vs standard targets) and the standalone Math calculator (any
  * attacker vs any defender). One implementation so the flow strip, per-weapon
  * breakdown, and target-table rows stay identical everywhere.
  */

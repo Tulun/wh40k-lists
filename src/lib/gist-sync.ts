@@ -3,8 +3,9 @@
  * shared between devices (and writable by Claude via the `gh` CLI when
  * transcribing screenshots).
  *
- * The gist holds two files: `codex.json` (the hand-authored codex doc) and
- * `lists.json` (saved lists + slot assignments). Divergence detection is per
+ * The gist holds three files: `codex.json` (the hand-authored codex doc),
+ * `lists.json` (saved lists + slot assignments) and `profiles.json` (saved
+ * Math-calculator attacker profiles, merged per profile the same way as lists). Divergence detection is per
  * file, by each doc's own `updated` stamp. When both sides moved, lists heal
  * themselves: each list is an independent document, so they merge per id
  * (newest copy wins, deletions tracked via the known-ids baseline) and the
@@ -20,11 +21,18 @@ import type { CodexDoc } from "./codex-model";
 import { emptyCodexDoc } from "./codex-model";
 import { absorbForeignCodexWrites, useCodex } from "../store/codex";
 import { absorbForeignWrites, useLists } from "../store/lists";
+import {
+  absorbForeignProfileWrites,
+  useProfiles,
+  type CrunchProfile,
+  type RemoteProfiles,
+} from "../store/profiles";
 import { useSyncUi } from "../store/sync-ui";
 import type { ListsSyncState, RemoteLists, SavedList, Slot } from "../store/schema";
 
 export const GIST_FILE = "codex.json";
 export const LISTS_FILE = "lists.json";
+export const PROFILES_FILE = "profiles.json";
 const API = "https://api.github.com";
 
 export interface GistConfig {
@@ -142,6 +150,24 @@ function parseRemoteLists(content: string): RemoteLists | null {
   }
 }
 
+function parseRemoteProfiles(content: string): RemoteProfiles | null {
+  try {
+    const doc = JSON.parse(content) as RemoteProfiles;
+    if (doc.version !== 1 || typeof doc.updated !== "string" || typeof doc.profiles !== "object") {
+      return null;
+    }
+    return doc;
+  } catch {
+    return null;
+  }
+}
+
+function localProfilesSnapshot(): RemoteProfiles {
+  absorbForeignProfileWrites();
+  const s = useProfiles.getState();
+  return { version: 1, updated: s.updated ?? new Date().toISOString(), profiles: s.profiles };
+}
+
 /** Snapshot the local lists state in the remote-file shape. */
 function localListsSnapshot(): RemoteLists {
   absorbForeignWrites();
@@ -176,11 +202,13 @@ export async function createRemoteGist(
   token: string,
   doc: CodexDoc,
   lists?: RemoteLists,
+  profiles?: RemoteProfiles,
 ): Promise<Result<{ gistId: string }>> {
   const files: Record<string, { content: string }> = {
     [GIST_FILE]: { content: JSON.stringify(doc, null, 2) },
   };
   if (lists) files[LISTS_FILE] = { content: JSON.stringify(lists, null, 2) };
+  if (profiles) files[PROFILES_FILE] = { content: JSON.stringify(profiles, null, 2) };
   let res: Response;
   try {
     res = await fetch(`${API}/gists`, {
@@ -209,6 +237,45 @@ function listStamp(l: SavedList): string {
   return l.updated ?? l.importedAt ?? "";
 }
 
+/**
+ * Per-id merge of two collections of independent documents: the newer copy
+ * wins (remote on a tie); an id on one side only is a deletion when it was
+ * part of the last sync (though edits made since still beat the deletion) and
+ * a creation otherwise.
+ */
+export function mergeById<T>(
+  local: Record<string, T>,
+  remote: Record<string, T>,
+  stamp: (item: T) => string,
+  sync: { lastSynced: string | null; remoteUpdated: string | null; knownIds: string[] },
+): Record<string, T> {
+  const known = new Set(sync.knownIds);
+  const out: Record<string, T> = {};
+  const ids = [...new Set([...Object.keys(remote), ...Object.keys(local)])].sort();
+  for (const id of ids) {
+    const mine = local[id];
+    const theirs = remote[id];
+    if (mine && theirs) {
+      out[id] = stamp(mine) > stamp(theirs) ? mine : theirs;
+    } else if (mine) {
+      const editedSinceSync = sync.lastSynced !== null && stamp(mine) > sync.lastSynced;
+      if (!known.has(id) || editedSinceSync) out[id] = mine;
+    } else if (theirs) {
+      const editedSinceSync = sync.remoteUpdated !== null && stamp(theirs) > sync.remoteUpdated;
+      if (!known.has(id) || editedSinceSync) out[id] = theirs;
+    }
+  }
+  return out;
+}
+
+/** True when a merge kept exactly the remote copies. */
+function sameItems<T>(merged: Record<string, T>, remote: Record<string, T>): boolean {
+  const ids = Object.keys(merged);
+  return (
+    ids.length === Object.keys(remote).length && ids.every((id) => merged[id] === remote[id])
+  );
+}
+
 type LocalLists = {
   lists: Record<string, SavedList>;
   slots: Record<Slot, string | null>;
@@ -225,22 +292,7 @@ type LocalLists = {
  * side's pointer, then null, when the pointed-at list didn't survive.
  */
 export function mergeLists(local: LocalLists, remote: RemoteLists): Pick<RemoteLists, "lists" | "slots"> {
-  const known = new Set(local.sync.knownIds);
-  const lists: Record<string, SavedList> = {};
-  const ids = [...new Set([...Object.keys(remote.lists), ...Object.keys(local.lists)])].sort();
-  for (const id of ids) {
-    const mine = local.lists[id];
-    const theirs = remote.lists[id];
-    if (mine && theirs) {
-      lists[id] = listStamp(mine) > listStamp(theirs) ? mine : theirs;
-    } else if (mine) {
-      const editedSinceSync = local.sync.lastSynced !== null && listStamp(mine) > local.sync.lastSynced;
-      if (!known.has(id) || editedSinceSync) lists[id] = mine;
-    } else if (theirs) {
-      const editedSinceSync = local.sync.remoteUpdated !== null && listStamp(theirs) > local.sync.remoteUpdated;
-      if (!known.has(id) || editedSinceSync) lists[id] = theirs;
-    }
-  }
+  const lists = mergeById(local.lists, remote.lists, listStamp, local.sync);
   const sides =
     (local.updated ?? "") > remote.updated ? [local.slots, remote.slots] : [remote.slots, local.slots];
   const slots: Record<Slot, string | null> = { mine: null, opponent: null };
@@ -252,10 +304,8 @@ export function mergeLists(local: LocalLists, remote: RemoteLists): Pick<RemoteL
 
 /** True when the merge kept exactly the remote copy — nothing left to push. */
 function mergeEqualsRemote(merged: Pick<RemoteLists, "lists" | "slots">, remote: RemoteLists): boolean {
-  const ids = Object.keys(merged.lists);
   return (
-    ids.length === Object.keys(remote.lists).length &&
-    ids.every((id) => merged.lists[id] === remote.lists[id]) &&
+    sameItems(merged.lists, remote.lists) &&
     merged.slots.mine === remote.slots.mine &&
     merged.slots.opponent === remote.slots.opponent
   );
@@ -320,6 +370,60 @@ function reconcileLists(remoteContent: string | undefined): { status: ListsPullS
     return { status: "pulled" };
   }
   useLists.getState().adoptMerged(merged, remote.updated);
+  return { status: "merged" };
+}
+
+const profileStamp = (p: CrunchProfile) => p.updated ?? "";
+
+/**
+ * Reconcile local profiles against remote profiles.json — the same decision
+ * table as `reconcileLists`: unchanged → keep local, moved + clean → adopt,
+ * moved + dirty (or never synced with local content) → merge and queue a push.
+ */
+function reconcileProfiles(remoteContent: string | undefined): { status: ListsPullStatus } {
+  absorbForeignProfileWrites();
+  const state = useProfiles.getState();
+  const now = new Date().toISOString();
+  const hasLocal = Object.keys(state.profiles).length > 0;
+
+  if (remoteContent === undefined) {
+    if (!hasLocal) return { status: "up-to-date" };
+    if (!state.dirty || state.updated === null) {
+      useProfiles.setState({ updated: now, dirty: true });
+    }
+    return { status: "push-needed" };
+  }
+
+  const remote = parseRemoteProfiles(remoteContent);
+  if (!remote) return { status: "invalid" };
+  const remoteSynced = { ids: Object.keys(remote.profiles), localUpdated: remote.updated };
+
+  if (state.sync.remoteUpdated === null && !hasLocal) {
+    state.adoptRemote(remote);
+    useProfiles.getState().markSynced(now, remote.updated, remoteSynced);
+    return { status: "pulled" };
+  }
+  if (remote.updated === state.sync.remoteUpdated || remote.updated === state.updated) {
+    if (!state.dirty) {
+      useProfiles.getState().markSynced(now, remote.updated, {
+        ids: Object.keys(state.profiles),
+        localUpdated: state.updated,
+      });
+    }
+    return { status: "up-to-date" };
+  }
+  if (!state.dirty && state.sync.remoteUpdated !== null) {
+    state.adoptRemote(remote);
+    useProfiles.getState().markSynced(now, remote.updated, remoteSynced);
+    return { status: "pulled" };
+  }
+  const merged = mergeById(state.profiles, remote.profiles, profileStamp, state.sync);
+  if (sameItems(merged, remote.profiles)) {
+    state.adoptRemote(remote);
+    useProfiles.getState().markSynced(now, remote.updated, remoteSynced);
+    return { status: "pulled" };
+  }
+  useProfiles.getState().adoptMerged(merged, remote.updated);
   return { status: "merged" };
 }
 
@@ -391,12 +495,22 @@ async function doPullRemote(): Promise<PullResult> {
   if (lists.status === "invalid") {
     return { status: "error", error: { kind: "invalid", message: `${LISTS_FILE} is not a valid lists doc.` } };
   }
+  const profiles = reconcileProfiles(gist.files[PROFILES_FILE]);
+  if (profiles.status === "invalid") {
+    return {
+      status: "error",
+      error: { kind: "invalid", message: `${PROFILES_FILE} is not a valid profiles doc.` },
+    };
+  }
 
   if (codexStatus === "conflict") {
     useSyncUi.getState().setCodexConflict(remote);
     return { status: "conflict", remoteDoc: remote };
   }
-  if (codexStatus === "pulled" || lists.status === "pulled" || lists.status === "merged") {
+  if (
+    codexStatus === "pulled" ||
+    [lists.status, profiles.status].some((st) => st === "pulled" || st === "merged")
+  ) {
     return { status: "pulled" };
   }
   return { status: "up-to-date" };
@@ -415,11 +529,14 @@ export type PushResult =
 export async function pushLocal(): Promise<PushResult> {
   absorbForeignCodexWrites();
   absorbForeignWrites();
+  absorbForeignProfileWrites();
   const { sync, doc, dirty: codexDirty } = useCodex.getState();
   if (!sync.gistId || !sync.token) {
     return { status: "error", error: { kind: "invalid", message: "Sync is not configured." } };
   }
-  if (!codexDirty && !useLists.getState().dirty) return { status: "up-to-date" };
+  if (!codexDirty && !useLists.getState().dirty && !useProfiles.getState().dirty) {
+    return { status: "up-to-date" };
+  }
   const cfg = { gistId: sync.gistId, token: sync.token };
   const gist = await fetchGistFiles(cfg);
   if (!gist.ok) return { status: "error", error: gist.error };
@@ -477,6 +594,38 @@ export async function pushLocal(): Promise<PushResult> {
     }
   }
 
+  let profilesPushed: RemoteProfiles | undefined;
+  absorbForeignProfileWrites();
+  if (useProfiles.getState().dirty) {
+    const content = gist.files[PROFILES_FILE];
+    if (content !== undefined) {
+      const remote = parseRemoteProfiles(content);
+      if (!remote) {
+        return {
+          status: "error",
+          error: { kind: "invalid", message: `${PROFILES_FILE} is not a valid profiles doc.` },
+        };
+      }
+      const state = useProfiles.getState();
+      if (remote.updated !== state.sync.remoteUpdated && remote.updated !== state.updated) {
+        const merged = mergeById(state.profiles, remote.profiles, profileStamp, state.sync);
+        if (sameItems(merged, remote.profiles)) {
+          state.adoptRemote(remote);
+          useProfiles.getState().markSynced(new Date().toISOString(), remote.updated, {
+            ids: Object.keys(remote.profiles),
+            localUpdated: remote.updated,
+          });
+        } else {
+          useProfiles.getState().adoptMerged(merged, remote.updated);
+        }
+      }
+    }
+    if (useProfiles.getState().dirty) {
+      profilesPushed = localProfilesSnapshot();
+      files[PROFILES_FILE] = JSON.stringify(profilesPushed, null, 2);
+    }
+  }
+
   if (Object.keys(files).length > 0) {
     const saved = await saveRemoteFiles(cfg, files);
     if (!saved.ok) return { status: "error", error: saved.error };
@@ -489,6 +638,12 @@ export async function pushLocal(): Promise<PushResult> {
       useLists.getState().markSynced(now, listsPushed.updated, {
         ids: Object.keys(listsPushed.lists),
         localUpdated: listsPushed.updated,
+      });
+    }
+    if (profilesPushed) {
+      useProfiles.getState().markSynced(now, profilesPushed.updated, {
+        ids: Object.keys(profilesPushed.profiles),
+        localUpdated: profilesPushed.updated,
       });
     }
   }
@@ -543,6 +698,7 @@ export async function setUpSync(token: string, gistIdInput: string | null) {
     store.setSyncConfig({ gistId, token });
     // Lists reconcile first (adopt, or merge and queue a push).
     reconcileLists(gist.files[LISTS_FILE]);
+    reconcileProfiles(gist.files[PROFILES_FILE]);
     // Codex: adopt whichever side has content; remote wins when both do.
     const localEmpty = store.doc.updated === emptyCodexDoc().updated && !store.dirty;
     if (!localEmpty && remoteDoc.updated === emptyCodexDoc().updated) {
@@ -554,7 +710,9 @@ export async function setUpSync(token: string, gistIdInput: string | null) {
   }
   const hasLists = Object.keys(useLists.getState().lists).length > 0;
   const listsSeed = hasLists ? localListsSnapshot() : undefined;
-  const created = await createRemoteGist(token, store.doc, listsSeed);
+  const hasProfiles = Object.keys(useProfiles.getState().profiles).length > 0;
+  const profilesSeed = hasProfiles ? localProfilesSnapshot() : undefined;
+  const created = await createRemoteGist(token, store.doc, listsSeed, profilesSeed);
   if (!created.ok) return { status: "error" as const, error: created.error };
   store.setSyncConfig({ gistId: created.gistId, token });
   const now = new Date().toISOString();
@@ -563,6 +721,12 @@ export async function setUpSync(token: string, gistIdInput: string | null) {
     useLists.getState().markSynced(now, listsSeed.updated, {
       ids: Object.keys(listsSeed.lists),
       localUpdated: listsSeed.updated,
+    });
+  }
+  if (profilesSeed) {
+    useProfiles.getState().markSynced(now, profilesSeed.updated, {
+      ids: Object.keys(profilesSeed.profiles),
+      localUpdated: profilesSeed.updated,
     });
   }
   return { status: "created" as const, gistId: created.gistId };
@@ -575,7 +739,7 @@ async function pushLocalWithBaseline(remoteUpdated: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Debounced auto-push: any codex or lists mutation schedules a push a few
+// Debounced auto-push: any codex, lists or profiles mutation schedules a push a few
 // seconds out. Conflicts it hits land in the sync-ui store for the banner.
 
 let autoPushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -602,11 +766,19 @@ export function startAutoSync(): void {
     if (!sync.gistId || !sync.token) return;
     schedule();
   });
+  useProfiles.subscribe((state, prev) => {
+    if (!state.dirty || state.updated === prev.updated) return;
+    const { sync } = useCodex.getState();
+    if (!sync.gistId || !sync.token) return;
+    schedule();
+  });
   // A session killed between an edit and its debounced push (phone lock, tab
   // close) leaves dirty state that no mutation would ever re-schedule — catch
   // it up now. The startup pull runs first; pushLocal merges if remote moved.
   const { sync } = useCodex.getState();
-  if (sync.gistId && sync.token && (useCodex.getState().dirty || useLists.getState().dirty)) {
+  const anyDirty =
+    useCodex.getState().dirty || useLists.getState().dirty || useProfiles.getState().dirty;
+  if (sync.gistId && sync.token && anyDirty) {
     schedule();
   }
 }

@@ -3,19 +3,25 @@ import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 
 const LINKS = [
-  { to: "/", label: "Army glance", icon: "⌂" },
-  { to: "/lists", label: "Saved lists", icon: "☰" },
-  { to: "/import", label: "Import a list", icon: "＋" },
+  { to: "/", label: "Current Army", icon: "⌂" },
+  { to: "/lists", label: "Lists", icon: "☰" },
   { to: "/explore", label: "Codexes", icon: "🔍" },
   { to: "/missions", label: "Missions", icon: "🗺" },
-  { to: "/crunch", label: "Crunch lab", icon: "💥" },
-  { to: "/editor", label: "Codex editor", icon: "✎" },
+  { to: "/crunch", label: "Math calculator", icon: "🧮" },
 ];
+
+/** Screens without their own nav entry, lit under the section that links to them. */
+const SUB_SECTIONS: Record<string, string[]> = {
+  "/lists": ["/import"],
+  "/explore": ["/editor"],
+};
 
 /** Section-aware active check so nested routes keep their nav entry lit. */
 function isActive(pathname: string, to: string): boolean {
   if (to === "/") return pathname === "/" || pathname.startsWith("/unit/");
-  return pathname === to || pathname.startsWith(`${to}/`);
+  return [to, ...(SUB_SECTIONS[to] ?? [])].some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
 }
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
