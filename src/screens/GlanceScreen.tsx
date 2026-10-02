@@ -70,6 +70,8 @@ export default function GlanceScreen() {
   // Attached bricks first in their own section, then role sections — the
   // same layout the share export prints.
   const sections = organizeArmy(data, list);
+  // Each block acts on its own: a lone unit, or a leader + bodyguard brick.
+  const activations = sections.reduce((n, s) => n + s.blocks.length, 0);
 
   const q = query.trim().toLowerCase();
   const matches = (index: number) => {
@@ -91,6 +93,7 @@ export default function GlanceScreen() {
         roster={roster}
         listName={list.name}
         listId={list.id}
+        activations={activations}
         onShare={data ? share : undefined}
         copied={copied}
       />
@@ -245,6 +248,7 @@ function ArmyHeader({
   roster,
   listName,
   listId,
+  activations,
   onShare,
   copied,
 }: {
@@ -252,6 +256,7 @@ function ArmyHeader({
   roster: import("@alpaca-software/40kdc-data").Roster;
   listName: string;
   listId: string;
+  activations: number;
   onShare?: () => void;
   copied?: boolean;
 }) {
@@ -285,6 +290,10 @@ function ArmyHeader({
           </button>
         )}
         <span className="shrink-0 text-xs text-ink-dim">
+          <span title="Units that activate separately (attached characters count with their unit)">
+            {activations} activation{activations === 1 ? "" : "s"}
+          </span>
+          <span className="text-ink-faint"> · </span>
           {roster.points.total_computed}
           {roster.points.declared_limit
             ? `/${roster.points.declared_limit}`

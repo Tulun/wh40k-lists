@@ -1,9 +1,10 @@
 import type { Roster } from "@alpaca-software/40kdc-data";
+import { battleSizeLimit } from "../lib/lenient-import";
 import type { RoleHints } from "../lib/normalize";
 import type { Overrides } from "../lib/overrides";
 
 export const STORAGE_KEY = "40k-viewer";
-export const STORAGE_VERSION = 4;
+export const STORAGE_VERSION = 5;
 
 export type Slot = "mine" | "opponent";
 
@@ -89,6 +90,25 @@ export function migrate(state: unknown, fromVersion: number): PersistedState {
     // Best available baseline: if this device has synced before, everything it
     // holds now was part of that sync.
     s.sync.knownIds ??= s.sync.remoteUpdated !== null ? Object.keys(s.lists ?? {}) : [];
+  }
+  if (fromVersion < 5) {
+    // GW imports took the title's list total (1,995) as the points limit;
+    // re-read it from the battle-size line, or round a stray total up to the
+    // battle size it was built for when the source text has none.
+    const now = new Date().toISOString();
+    for (const list of Object.values(s.lists ?? {})) {
+      const points = list.roster.points;
+      const was = points.declared_limit;
+      if (was == null) continue;
+      const fixed =
+        battleSizeLimit(list.rawText) ??
+        (was % 250 === 0 ? was : ([1000, 2000, 3000].find((n) => n >= was) ?? was));
+      if (fixed === was) continue;
+      points.declared_limit = fixed;
+      list.updated = now;
+      s.updated = now;
+      s.dirty = true;
+    }
   }
   return s;
 }

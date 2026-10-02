@@ -80,6 +80,29 @@ interface LooseList {
  * the error the user sees still describes their actual paste.
  */
 export function importRosterLenient(data: Data40k, text: string): LenientImport {
+  const out = importRosterLenientRaw(data, text);
+  if (out.result.ok) {
+    const limit = battleSizeLimit(out.sourceText) ?? battleSizeLimit(text);
+    if (limit != null) out.result.roster.points.declared_limit = limit;
+  }
+  return out;
+}
+
+/** A battle-size line: `Strike Force (2,000 Points)`. */
+const BATTLE_SIZE_LINE =
+  /^\s*(?:combat patrol|incursion|strike force|onslaught)\s*\(\s*([\d,]+)\s*(?:pts?|points?)\s*\)\s*$/im;
+
+/**
+ * The game's points limit from the battle-size line. The GW app's title line
+ * (`My list (1,995 Points)`) is the list's total, which the strict adapter
+ * takes as the limit — the battle size is what the list is built against.
+ */
+export function battleSizeLimit(text: string): number | null {
+  const m = BATTLE_SIZE_LINE.exec(text);
+  return m ? Number.parseInt(m[1].replace(/,/g, ""), 10) : null;
+}
+
+function importRosterLenientRaw(data: Data40k, text: string): LenientImport {
   const strict = data.tryImportRoster(text);
   // A strict "success" can still be a misread: a header the adapter got wrong
   // leaves no faction, and a mangled unit layout leaves no units. Only a

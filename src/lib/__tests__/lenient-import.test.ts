@@ -185,3 +185,13 @@ describe("flattened GW app export (no title, blank lines or points parens)", () 
     ).toBeFalsy();
   });
 });
+
+describe("points limit from the battle size", () => {
+  it("reads Strike Force, not the GW title's list total", () => {
+    // Title says (1,995 Points); the battle-size line says 2,000.
+    const text = readFileSync(join(import.meta.dirname, "gw-11e-attached.txt"), "utf8");
+    const { result } = importRosterLenient(d, text);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.roster.points.declared_limit).toBe(2000);
+  });
+});
