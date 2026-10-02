@@ -331,3 +331,50 @@ describe("Faction Pack v1.2 datasheet fixes", () => {
     expect(abilityText(byId(d.abilities, strat.ability_id!, "grey-knights")!)).toContain('8"');
   });
 });
+
+describe("Leagues of Votann MFM v1.5 + Faction Pack v1.1", () => {
+  const F = "leagues-of-votann";
+  const unit = (id: string) => byId(d.units, id, F)!.raw;
+  const pts = (id: string) => unit(id).points!.map((p) => p.cost);
+  const ruleText = (rec: { ability_id?: string | null } | undefined) =>
+    abilityText(byId(d.abilities, rec!.ability_id!, F)!);
+
+  it("prices the MFM v1.5 changes", () => {
+    expect(pts("cthonian-beserks")).toEqual([90, 180]);
+    expect(pts("hekaton-land-fortress")).toEqual([250, 270]);
+    expect(pts("hernkyn-pioneers")).toEqual([85, 170, 95, 180]);
+    expect(pts("kapricus-defenders")).toEqual([75, 150, 95, 170]);
+    expect(pts("uthar-the-destined")).toEqual([100]);
+    // Only costs move — the ordinal steppers stay (Hekaton #1 250, #2+ 270).
+    expect(
+      unit("hekaton-land-fortress").points!.map((p) => [p.unit_count_min, p.unit_count_max]),
+    ).toEqual([[1, 1], [2, null]]);
+    const hearthband = d.detachments.all.find((x) => x.id === "hearthband")!;
+    expect(hearthband.force_dispositions).toEqual(["priority-assets", "reconnaissance"]);
+  });
+
+  it("gives every Votann stratagem and enhancement rules text", () => {
+    const dets = new Set(
+      d.detachments.all.filter((x) => x.faction_id === F).map((x) => x.id),
+    );
+    dets.delete("bane-slayers-bulwark"); // box-set detachment, not in the codex or pack
+    const strats = d.stratagems.all.filter((s) => dets.has(s.detachment_id ?? ""));
+    const enhs = d.enhancements.all.filter((e) => dets.has(e.detachment_id ?? ""));
+    expect(strats.length).toBeGreaterThan(50);
+    for (const s of strats) expect(ruleText(s)).toMatch(/^When: .*\nTarget: .*\nEffect: /);
+    for (const e of enhs) expect(ruleText(e)).toMatch(/only\. /);
+  });
+
+  it("applies the pack's rules updates", () => {
+    const strat = (id: string) => ruleText(d.stratagems.all.find((x) => x.id === id));
+    expect(strat("claimstaker-reflex-persecution-prospect")).toContain('within 8"');
+    expect(strat("materialisation-matrices-hearthguard-covenant")).not.toContain("?");
+    expect(unit("hekaton-land-fortress").keywords).toContain("Frame");
+    expect(unit("sagitaur").keywords).toContain("Frame");
+    const ab = (u: string, id: string) =>
+      abilityText(byId(d.units, u, F)!.abilities.find((a) => a.id === id)!);
+    expect(ab("buri-aegnirssen", "unhinged-vengeance")).toContain("D6+2");
+    expect(ab("hernkyn-yaegirs", "pragmatic-hunters")).toContain('8"');
+    expect(ab("memnyr-strategist", "predictive-guidance")).toMatch(/battle round.*1CP less/);
+  });
+});

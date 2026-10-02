@@ -43,10 +43,18 @@ export default function UnitListPane({
 
   // Keep the open datasheet visible in the pane's own scrollbox — matters when
   // landing directly on a unit deep in the list. "nearest" leaves the scroll
-  // alone once it's already on screen.
+  // alone once it's already on screen. Scrolls only the pane's own box —
+  // scrollIntoView would also drag the window down past the datasheet top.
   const selectedRef = useRef<HTMLAnchorElement>(null);
   useEffect(() => {
-    selectedRef.current?.scrollIntoView({ block: "nearest" });
+    const el = selectedRef.current;
+    let box = el?.parentElement;
+    while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
+    if (!el || !box) return;
+    const r = el.getBoundingClientRect();
+    const b = box.getBoundingClientRect();
+    if (r.top < b.top) box.scrollTop += r.top - b.top;
+    else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
   }, [selectedId]);
 
   const q = query.trim().toLowerCase();

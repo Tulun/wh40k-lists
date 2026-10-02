@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ResolvedRef } from "@alpaca-software/40kdc-data";
 import AbilityBlock from "../components/AbilityBlock";
@@ -23,6 +24,12 @@ const ref = (id: string, name: string): ResolvedRef => ({
 export default function DatasheetScreen() {
   const { factionId, unitId } = useParams();
   const data = useDataset();
+
+  // Every datasheet opens at its top — the window otherwise keeps the
+  // previous sheet's scroll when hopping between units.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [factionId, unitId]);
 
   if (!data) {
     return <p className="py-16 text-center text-xs text-ink-faint">Loading dataset…</p>;

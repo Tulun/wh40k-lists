@@ -15,6 +15,7 @@
  * 1 trooper becomes the Ancient (banner + gun, or banner keeping the bolter).
  */
 import type { RawData, WargearOption } from "@alpaca-software/40kdc-data";
+import { VOTANN_ABILITY_TEXT, VOTANN_RULE_TEXT } from "./data-fixes-votann";
 
 type CompositionModel = RawData["unitCompositions"][number]["models"][number];
 type AbilityRecord = RawData["abilities"][number];
@@ -98,7 +99,8 @@ const EYE_OF_THE_AUGURIUM =
   "Intervention Stratagem even if another unit has already used it this phase. If it " +
   "is, that use costs 1CP less and doesn't stop other units using that Stratagem this phase.";
 
-const RULE_TEXT: Record<string, { text: string; effect?: Effect }> = {
+const RULE_TEXT: Record<string, { text: string; effect?: Effect; override?: boolean }> = {
+  ...VOTANN_RULE_TEXT,
   "sixty-sixth-seal-banishers": {
     text:
       "GREY KNIGHTS model only. In your Shooting phase, attacks made by models in " +
@@ -257,6 +259,7 @@ const RULE_TEXT: Record<string, { text: string; effect?: Effect }> = {
  * Aegis, Ancient's Banner), so a rewording must not leak. Paraphrased prose.
  */
 const ABILITY_TEXT: Record<string, Record<string, string>> = {
+  "leagues-of-votann": VOTANN_ABILITY_TEXT,
   "grey-knights": {
     "champion-of-the-order-of-purifiers-psychic":
       "While this model is leading a unit, Purifying Flame weapons equipped by models in " +
@@ -443,7 +446,20 @@ function applyAbilityFixes(raw: RawData): boolean {
     abilityType: string,
   ): T => {
     const fix = RULE_TEXT[rec.id];
-    if (!fix || rec.ability_id) return rec; // upstream linked one — defer to it
+    if (!fix) return rec;
+    if (rec.ability_id) {
+      const linked = raw.abilities.find((a) => a.ability_id === rec.ability_id);
+      if (linked && !fix.override) return rec; // upstream linked one — defer to it
+      if (linked) {
+        // Keep upstream's effect for the cruncher; only the prose is replaced.
+        raw.abilities = raw.abilities.map((a) =>
+          a === linked ? ({ ...a, leak_text: fix.text } as AbilityRecord) : a,
+        );
+        changed = true;
+        return rec;
+      }
+      // Linked to a record upstream never shipped — synthesize it below.
+    }
     const det = raw.detachments.find((d) => d.id === rec.detachment_id);
     const record = {
       ability_id: rec.id,
@@ -470,7 +486,7 @@ function applyAbilityFixes(raw: RawData): boolean {
 }
 
 /**
- * Grey Knights points per MFM v1.5 (Sep 30 2026) where upstream still ships
+ * MFM v1.5 points (GK Sep 30 2026, Votann Oct 2 2026) where upstream still ships
  * v1.4: each unit's tier costs in upstream tier order (sizes and ordinal bands
  * are unchanged, only the costs moved). Skipped if upstream reshapes the
  * tiers — then re-check against the MFM rather than guess.
@@ -494,6 +510,14 @@ const POINTS: Record<string, Record<string, number[]>> = {
     "purifier-squad": [145, 290, 155, 300],
     "strike-squad": [125, 250],
   },
+  // MFM v1.5 (checked Oct 2 2026; upstream ships v1.4).
+  "leagues-of-votann": {
+    "cthonian-beserks": [90, 180],
+    "hekaton-land-fortress": [250, 270],
+    "hernkyn-pioneers": [85, 170, 95, 180],
+    "kapricus-defenders": [75, 150, 95, 170],
+    "uthar-the-destined": [100],
+  },
 };
 
 /** MFM per-copy wargear surcharges upstream lacks: faction → unit → item → pts. */
@@ -504,6 +528,7 @@ const WARGEAR_COSTS: Record<string, Record<string, Record<string, number>>> = {
 /** Force dispositions per MFM where upstream is behind: faction → detachment. */
 const DISPOSITIONS: Record<string, Record<string, string[]>> = {
   "grey-knights": { "warpbane-task-force": ["take-and-hold", "purge-the-foe"] },
+  "leagues-of-votann": { hearthband: ["priority-assets", "reconnaissance"] },
 };
 
 /**
@@ -599,6 +624,11 @@ const UNIT_FIXES: Record<
         { M: "-", OC: "-", removeAbilities: ["hover"] },
       ]),
     ),
+  },
+  // Leagues of Votann Faction Pack v1.1 (22 Jul 2026).
+  "leagues-of-votann": {
+    "hekaton-land-fortress": { addKeywords: ["Frame"] },
+    sagitaur: { addKeywords: ["Frame"] },
   },
 };
 
