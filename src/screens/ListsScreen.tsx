@@ -7,6 +7,7 @@ import { loadMergedData } from "../lib/data";
 import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
 import { blankSavedList } from "../lib/list-edit";
 import { byId } from "../lib/lookup";
+import { organizeArmy } from "../lib/organize";
 import { shareText } from "../lib/share";
 import { useLists } from "../store/lists";
 import type { SavedList, Slot } from "../store/schema";
@@ -151,6 +152,13 @@ export default function ListsScreen() {
       })
       .join(" + ");
 
+  /** "14 units, 11 activations" — an attached brick acts as one. */
+  const unitSummary = (list: SavedList) => {
+    const units = list.roster.units.length;
+    const acts = organizeArmy(data, list).reduce((n, s) => n + s.blocks.length, 0);
+    return `${units} unit${units === 1 ? "" : "s"}, ${acts} activation${acts === 1 ? "" : "s"}`;
+  };
+
   const renderCard = (list: SavedList) => (
     <li key={list.id} className="min-w-0 rounded-lg border border-edge bg-panel/50 px-3 py-2">
       <div className="flex items-center gap-2">
@@ -189,6 +197,7 @@ export default function ListsScreen() {
         className="mt-0.5 block w-full text-left text-[11px] text-ink-faint"
       >
         {new Date(list.importedAt).toLocaleDateString()}
+        {` · ${unitSummary(list)}`}
         {detachmentSummary(list) && ` · ${detachmentSummary(list)}`}
       </button>
       <div className="mt-2 flex gap-2">
