@@ -12,7 +12,7 @@ import type { Data40k } from "../lib/data";
 import { dedupeRoster, unitKey, type DisplayEntry } from "../lib/dedupe";
 import { abilityText, fnpFromAbilityNames } from "../lib/describe";
 import { armyRules, byId } from "../lib/lookup";
-import { organizeArmy } from "../lib/organize";
+import { activationsLabel, countActivations, organizeArmy } from "../lib/organize";
 import { shareText } from "../lib/share";
 import {
   armyStratagems,
@@ -71,7 +71,7 @@ export default function GlanceScreen() {
   // same layout the share export prints.
   const sections = organizeArmy(data, list);
   // Each block acts on its own: a lone unit, or a leader + bodyguard brick.
-  const activations = sections.reduce((n, s) => n + s.blocks.length, 0);
+  const activations = activationsLabel(countActivations(sections, list));
 
   const q = query.trim().toLowerCase();
   const matches = (index: number) => {
@@ -256,7 +256,7 @@ function ArmyHeader({
   roster: import("@alpaca-software/40kdc-data").Roster;
   listName: string;
   listId: string;
-  activations: number;
+  activations: string;
   onShare?: () => void;
   copied?: boolean;
 }) {
@@ -290,8 +290,8 @@ function ArmyHeader({
           </button>
         )}
         <span className="shrink-0 text-xs text-ink-dim">
-          <span title="Units that activate separately (attached characters count with their unit)">
-            {activations} activation{activations === 1 ? "" : "s"}
+          <span title="Units that activate separately (attached characters count with their unit; bracket counts splittable units like Kommandos as two)">
+            {activations}
           </span>
           <span className="text-ink-faint"> · </span>
           {roster.points.total_computed}

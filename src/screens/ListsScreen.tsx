@@ -7,7 +7,7 @@ import { loadMergedData } from "../lib/data";
 import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
 import { blankSavedList } from "../lib/list-edit";
 import { byId } from "../lib/lookup";
-import { organizeArmy } from "../lib/organize";
+import { activationsLabel, countActivations, organizeArmy } from "../lib/organize";
 import { shareText } from "../lib/share";
 import { useLists } from "../store/lists";
 import type { SavedList, Slot } from "../store/schema";
@@ -152,11 +152,11 @@ export default function ListsScreen() {
       })
       .join(" + ");
 
-  /** "14 units, 11 activations" — an attached brick acts as one. */
+  /** "14 units, 11 activations (12)" — a brick acts as one; Kommandos may split. */
   const unitSummary = (list: SavedList) => {
     const units = list.roster.units.length;
-    const acts = organizeArmy(data, list).reduce((n, s) => n + s.blocks.length, 0);
-    return `${units} unit${units === 1 ? "" : "s"}, ${acts} activation${acts === 1 ? "" : "s"}`;
+    const acts = activationsLabel(countActivations(organizeArmy(data, list), list));
+    return `${units} unit${units === 1 ? "" : "s"}, ${acts}`;
   };
 
   const renderCard = (list: SavedList) => (

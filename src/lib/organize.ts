@@ -87,3 +87,36 @@ export function organizeArmy(data: Data40k | null, list: SavedList): ArmySection
   }
   return sections.filter((s) => s.blocks.length > 0);
 }
+
+/** Units that can split into two at deployment, with the size that allows it. */
+const SPLITTABLE: Record<string, number> = { kommandos: 10 };
+
+export interface Activations {
+  /** Blocks acting separately: lone units and leader + bodyguard bricks. */
+  count: number;
+  /** The count if every splittable unit splits; equals `count` when none can. */
+  split: number;
+}
+
+export function countActivations(sections: ArmySection[], list: SavedList): Activations {
+  const units = list.roster.units;
+  let count = 0;
+  let extra = 0;
+  for (const s of sections) {
+    for (const b of s.blocks) {
+      count += 1;
+      const canSplit = b.indices.some((i) => {
+        const min = SPLITTABLE[units[i].ref.id ?? ""];
+        return min != null && units[i].model_count >= min;
+      });
+      if (canSplit) extra += 1;
+    }
+  }
+  return { count, split: count + extra };
+}
+
+/** "11 activations" or "11 activations (12)" when units can split. */
+export function activationsLabel({ count, split }: Activations): string {
+  const base = `${count} activation${count === 1 ? "" : "s"}`;
+  return split > count ? `${base} (${split})` : base;
+}

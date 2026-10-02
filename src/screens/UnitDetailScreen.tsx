@@ -203,6 +203,18 @@ export default function UnitDetailScreen() {
             <span className="ml-1.5 text-sm text-accent">×{entry.count}</span>
           )}
         </h1>
+        {raw && unitFaction && (
+          <Link
+            to={`/explore/${unitFaction}/${raw.id}`}
+            state={backState(
+              `/unit/${encodeURIComponent(entry.key)}${instParam != null ? `?i=${instParam}` : ""}`,
+              unit?.name ?? entry.name,
+            )}
+            className="shrink-0 rounded-md bg-panel px-2.5 py-1 text-xs font-semibold text-ink-dim"
+          >
+            Datasheet
+          </Link>
+        )}
         {data && (
           <button
             type="button"
