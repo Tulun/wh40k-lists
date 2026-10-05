@@ -326,6 +326,13 @@ const ABILITY_TEXT: Record<string, Record<string, string>> = {
       'While a friendly GREY KNIGHTS unit is wholly within 6" of this model, models ' +
       "in that unit have Feel No Pain 6+ against mortal wounds.",
   },
+  "agents-of-the-imperium": {
+    "tactical-instinct": "This unit's attacks have [SUSTAINED HITS 1].",
+    "unstoppable-champion":
+      "Once per battle, per army: at the end of a phase in which this model was " +
+      "destroyed, roll one D6. On a 2+, set it back up unengaged, as close as possible " +
+      "to where it was destroyed, with 3 wounds remaining.",
+  },
 };
 
 /**
@@ -365,6 +372,36 @@ const ABILITY_EFFECTS: Record<string, { factionId: string; effect: Effect }> = {
           target: "unit",
           modifier: { threshold: 6, scope: "mortal" },
         },
+      },
+    } as Effect,
+  },
+  // Watch Captain Artemis (GW app, Oct 2026): unconditional Sustained Hits 1
+  // (upstream: Lethal Hits while leading) and back with 3 wounds, not 1.
+  "tactical-instinct": {
+    factionId: "agents-of-the-imperium",
+    effect: {
+      type: "keyword-grant",
+      target: "unit",
+      modifier: { keywords: ["Sustained Hits 1"] },
+    } as Effect,
+  },
+  "unstoppable-champion": {
+    factionId: "agents-of-the-imperium",
+    effect: {
+      type: "conditional",
+      condition: {
+        operator: "and",
+        operands: [
+          { type: "timing-is", parameters: { timing: "end-of-phase" } },
+          { type: "timing-is", parameters: { timing: "once-per-battle" } },
+        ],
+      },
+      effect: {
+        type: "dice-gated",
+        dice: "D6",
+        threshold: 2,
+        comparison: "gte",
+        on_success: { type: "resurrection", target: "self", modifier: { wounds_remaining: 3 } },
       },
     } as Effect,
   },
@@ -486,7 +523,7 @@ function applyAbilityFixes(raw: RawData): boolean {
 }
 
 /**
- * MFM v1.5 points (GK Sep 30 2026, Votann Oct 2 2026) where upstream still ships
+ * MFM v1.5 points (GK Sep 30 2026, Votann Oct 2 2026, Agents Oct 4 2026) where upstream still ships
  * v1.4: each unit's tier costs in upstream tier order (sizes and ordinal bands
  * are unchanged, only the costs moved). Skipped if upstream reshapes the
  * tiers — then re-check against the MFM rather than guess.
@@ -518,6 +555,26 @@ const POINTS: Record<string, Record<string, number[]>> = {
     "kapricus-defenders": [75, 150, 95, 170],
     "uthar-the-destined": [100],
   },
+  // MFM v1.5 (checked Oct 4 2026; upstream ships v1.4).
+  "agents-of-the-imperium": {
+    "aquila-kill-team": [110, 210],
+    "deathwatch-kill-team": [115, 220],
+    "watch-captain-artemis": [75],
+    "watch-master": [105],
+  },
+};
+
+/**
+ * MFM v1.5 allied costs (the "every model has the IMPERIUM keyword" table)
+ * where upstream's `allied_points` still ship v1.4: same shape as POINTS.
+ */
+const ALLIED_POINTS: Record<string, Record<string, number[]>> = {
+  "agents-of-the-imperium": {
+    "aquila-kill-team": [110, 210],
+    "deathwatch-kill-team": [115, 220],
+    "watch-captain-artemis": [75],
+    "watch-master": [105],
+  },
 };
 
 /** MFM per-copy wargear surcharges upstream lacks: faction → unit → item → pts. */
@@ -539,13 +596,19 @@ const DISPOSITIONS: Record<string, Record<string, string[]>> = {
  */
 const WEAPON_STATS: Record<
   string,
-  { names?: string[]; ids?: string[]; stats: { S?: number; AP?: number } }[]
+  { names?: string[]; ids?: string[]; stats: { A?: number; S?: number; AP?: number } }[]
 > = {
   "grey-knights": [
     { names: ["Storm bolter"], stats: { S: 5, AP: -1 } },
     { ids: ["close-combat-weapon"], stats: { S: 5 } },
     { ids: ["combi-weapon"], stats: { S: 5, AP: -1 } },
     { ids: ["hurricane-bolter-stormraven-gunship"], stats: { S: 5, AP: -1 } },
+  ],
+  // Watch Captain Artemis per the GW app (Oct 2026); only he carries these
+  // Agents weapon records.
+  "agents-of-the-imperium": [
+    { ids: ["hellfire-extremis"], stats: { A: 3 } },
+    { ids: ["master-crafted-power-weapon"], stats: { S: 6 } },
   ],
 };
 
@@ -630,6 +693,10 @@ const UNIT_FIXES: Record<
     "hekaton-land-fortress": { addKeywords: ["Frame"] },
     sagitaur: { addKeywords: ["Frame"] },
   },
+  // GW app datasheet (Oct 2026).
+  "agents-of-the-imperium": {
+    "watch-captain-artemis": { T: 5 },
+  },
 };
 
 function applyWeaponFixes(raw: RawData): boolean {
@@ -695,6 +762,13 @@ function applyPointsFixes(raw: RawData): boolean {
     const costs = POINTS[u.faction_id]?.[u.id];
     if (costs && u.points?.length === costs.length) {
       next = { ...next, points: u.points.map((p, i) => ({ ...p, cost: costs[i] })) };
+    }
+    const allied = ALLIED_POINTS[u.faction_id]?.[u.id];
+    if (allied && u.allied_points?.length === allied.length) {
+      next = {
+        ...next,
+        allied_points: u.allied_points.map((p, i) => ({ ...p, cost: allied[i] })),
+      };
     }
     const gear = WARGEAR_COSTS[u.faction_id]?.[u.id];
     if (gear) {
