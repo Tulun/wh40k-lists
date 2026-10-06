@@ -29,7 +29,8 @@ import {
   sortStratagems,
   stratagemsForUnit,
 } from "../lib/stratagems";
-import { useActiveList, useLists } from "../store/lists";
+import { useViewedList } from "../hooks/useViewedList";
+import { useLists } from "../store/lists";
 import type { SavedList } from "../store/schema";
 
 const ROLE_HINT_LABEL: Record<string, string> = {
@@ -63,7 +64,7 @@ export function coreTagOf(
 export default function UnitDetailScreen() {
   const { entryKey } = useParams();
   const [searchParams] = useSearchParams();
-  const list = useActiveList();
+  const { list, withList } = useViewedList();
   const data = useDataset();
   const [copied, setCopied] = useState(false);
   // `?i=<rosterIndex>` narrows a multi-squad entry to that one squad — the
@@ -105,7 +106,7 @@ export default function UnitDetailScreen() {
     return (
       <p className="py-16 text-center text-sm text-ink-dim">
         Unit not found in the active list.{" "}
-        <Link to="/" className="underline">
+        <Link to={withList("/")} className="underline">
           Back to army
         </Link>
       </p>
@@ -185,7 +186,7 @@ export default function UnitDetailScreen() {
     <div className="space-y-4">
       <div className="sticky top-12 z-10 -mx-3 flex items-center gap-1 border-b border-edge bg-surface/95 px-1 py-1.5 backdrop-blur">
         <Link
-          to="/"
+          to={withList("/")}
           aria-label="Back to army"
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-lg text-accent hover:bg-panel active:bg-panel"
         >
@@ -207,7 +208,7 @@ export default function UnitDetailScreen() {
           <Link
             to={`/explore/${unitFaction}/${raw.id}`}
             state={backState(
-              `/unit/${encodeURIComponent(entry.key)}${instParam != null ? `?i=${instParam}` : ""}`,
+              withList(`/unit/${encodeURIComponent(entry.key)}${instParam != null ? `?i=${instParam}` : ""}`),
               unit?.name ?? entry.name,
             )}
             className="shrink-0 rounded-md bg-panel px-2.5 py-1 text-xs font-semibold text-ink-dim"
@@ -286,9 +287,9 @@ export default function UnitDetailScreen() {
 
       {unit && (
         <Link
-          to={`/unit/${encodeURIComponent(entry.key)}/crunch${instParam != null ? `?i=${instParam}` : ""}`}
+          to={withList(`/unit/${encodeURIComponent(entry.key)}/crunch${instParam != null ? `?i=${instParam}` : ""}`)}
           state={backState(
-            `/unit/${encodeURIComponent(entry.key)}${instParam != null ? `?i=${instParam}` : ""}`,
+            withList(`/unit/${encodeURIComponent(entry.key)}${instParam != null ? `?i=${instParam}` : ""}`),
             unit.name,
           )}
           className="flex min-h-11 items-center justify-between rounded-lg border border-edge px-3 py-2 text-sm font-semibold hover:bg-panel active:bg-panel"
@@ -390,7 +391,7 @@ export default function UnitDetailScreen() {
       )}
 
       <Link
-        to="/"
+        to={withList("/")}
         className="block pt-2 text-center text-xs text-ink-faint underline"
       >
         ← back to army

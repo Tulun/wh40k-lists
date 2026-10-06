@@ -19,10 +19,13 @@ import {
   sortStratagems,
   stratagemsByDetachment,
 } from "../lib/stratagems";
-import { useActiveList, useLists } from "../store/lists";
+import { useViewedList } from "../hooks/useViewedList";
+import { useLists } from "../store/lists";
 
 export default function GlanceScreen() {
-  const list = useActiveList();
+  const { list, previewing, withList } = useViewedList();
+  const assignSlot = useLists((s) => s.assignSlot);
+  const setActiveSlot = useLists((s) => s.setActiveSlot);
   const activeSlot = useLists((s) => s.activeSlot);
   const data = useDataset();
   const [query, setQuery] = useState("");
@@ -88,11 +91,27 @@ export default function GlanceScreen() {
 
   return (
     <div className="space-y-3">
+      {previewing && (
+        <div className="flex items-center gap-2 rounded-lg border border-edge bg-panel px-3 py-2 text-xs text-ink-dim">
+          <span className="flex-1">Viewing a saved list — not your active army.</span>
+          <button
+            type="button"
+            onClick={() => {
+              assignSlot("mine", list.id);
+              setActiveSlot("mine");
+            }}
+            className="shrink-0 rounded-md bg-accent/20 px-2.5 py-1 font-semibold text-accent"
+          >
+            ★ Make active
+          </button>
+        </div>
+      )}
       <ArmyHeader
         data={data}
         roster={roster}
         listName={list.name}
         listId={list.id}
+        backTo={withList("/")}
         activations={activations}
         onShare={data ? share : undefined}
         copied={copied}
@@ -112,7 +131,7 @@ export default function GlanceScreen() {
             return (
               <Link
                 key={e.key}
-                to={`/unit/${encodeURIComponent(e.key)}?i=${e.instances[0].rosterIndex}`}
+                to={withList(`/unit/${encodeURIComponent(e.key)}?i=${e.instances[0].rosterIndex}`)}
                 className="rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs text-accent"
               >
                 ✦ {enhancementName(data, e, roster.faction_id)} → {e.name}
@@ -150,7 +169,7 @@ export default function GlanceScreen() {
           return (
             <Link
               key={index}
-              to={`/unit/${encodeURIComponent(unitKey(ru))}?i=${index}`}
+              to={withList(`/unit/${encodeURIComponent(unitKey(ru))}?i=${index}`)}
               className={`block min-h-11 px-3 py-2 hover:bg-panel active:bg-panel ${isLed && !q ? "pl-6" : ""}`}
             >
               <div className="flex items-center gap-2">
@@ -248,6 +267,7 @@ function ArmyHeader({
   roster,
   listName,
   listId,
+  backTo,
   activations,
   onShare,
   copied,
@@ -256,6 +276,7 @@ function ArmyHeader({
   roster: import("@alpaca-software/40kdc-data").Roster;
   listName: string;
   listId: string;
+  backTo: string;
   activations: string;
   onShare?: () => void;
   copied?: boolean;
@@ -273,7 +294,7 @@ function ArmyHeader({
         </span>
         <Link
           to={`/lists/${listId}/edit`}
-          state={backState("/", listName)}
+          state={backState(backTo, listName)}
           className="rounded-md bg-panel px-2.5 py-1 text-xs font-semibold text-ink-dim"
         >
           Edit
@@ -345,7 +366,7 @@ function ArmyHeader({
             <Link
               key={detachment.ref.id ?? `${detachment.ref.raw_name}-${i}`}
               to={`/explore/${roster.faction_id}/detachment/${entity.id}`}
-              state={backState("/", listName)}
+              state={backState(backTo, listName)}
               className="block hover:bg-panel active:bg-panel"
             >
               {header}

@@ -37,7 +37,6 @@ function writeTab(id: string) {
 export default function ListsScreen() {
   const lists = useLists((s) => s.lists);
   const slots = useLists((s) => s.slots);
-  const activeSlot = useLists((s) => s.activeSlot);
   const assignSlot = useLists((s) => s.assignSlot);
   const setActiveSlot = useLists((s) => s.setActiveSlot);
   const deleteList = useLists((s) => s.deleteList);
@@ -134,11 +133,11 @@ export default function ListsScreen() {
     navigate("/");
   }
 
-  /** Tap the card → view that army. Uses its slot if it has one. */
+  /** Tap the card → view that army without making it active (the ☆ does that). */
   function open(list: SavedList) {
-    const slot =
-      slots.mine === list.id ? "mine" : slots.opponent === list.id ? "opponent" : activeSlot;
-    use(slot, list.id);
+    if (slots.mine === list.id) setActiveSlot("mine");
+    else if (slots.opponent === list.id) setActiveSlot("opponent");
+    navigate(`/?list=${encodeURIComponent(list.id)}`);
   }
 
   /** "Dread Mob (Take & Hold, Recon)" for each detachment on the list. */

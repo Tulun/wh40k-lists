@@ -3,10 +3,12 @@ import Sidebar from "./components/Sidebar";
 import SlotToggle from "./components/SlotToggle";
 import PoweredBy from "./components/PoweredBy";
 import SyncManager from "./components/SyncManager";
-import { useActiveList, useLists } from "./store/lists";
+import { useViewedList } from "./hooks/useViewedList";
+import { useLists } from "./store/lists";
 
 export default function App() {
-  const active = useActiveList();
+  // A saved list opened read-only (?list=) stands in for the active army.
+  const { list: active, withList } = useViewedList();
   const { pathname } = useLocation();
   // Mid-edit, the list being edited is the one whose name and running total
   // matter — not the starred army the rest of the app centres on.
@@ -28,7 +30,7 @@ export default function App() {
             </div>
             {shown && pathname !== "/import" && (
               <Link
-                to="/"
+                to={withList("/")}
                 aria-label="Back to army glance"
                 className="-my-1 flex min-w-0 shrink items-baseline justify-end gap-1.5 rounded-md px-1.5 py-1 text-right text-xs hover:bg-panel active:bg-panel"
               >

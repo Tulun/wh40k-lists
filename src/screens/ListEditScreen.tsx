@@ -764,13 +764,16 @@ function UnitRow({
         {isCharacter && !(allyRule?.cannot_be_warlord && !u.is_warlord) && (
           <button
             type="button"
-            title="Warlord"
+            title={u.is_warlord ? "Warlord (tap to unset)" : "Make Warlord"}
+            aria-pressed={!!u.is_warlord}
             onClick={() => apply(setWarlord(content, index, !u.is_warlord))}
             className={`rounded-md px-2 py-1 text-xs ${
-              u.is_warlord ? "bg-accent/20 text-accent" : "bg-panel text-ink-faint"
+              u.is_warlord
+                ? "bg-accent/20 font-semibold text-accent"
+                : "bg-panel text-ink-faint opacity-60"
             }`}
           >
-            ⭐ Warlord
+            {u.is_warlord ? "★ Warlord" : "☆ Warlord"}
           </button>
         )}
 

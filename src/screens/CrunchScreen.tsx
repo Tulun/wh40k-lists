@@ -5,7 +5,7 @@ import CrunchPanel from "../components/CrunchPanel";
 import { useDataset } from "../hooks/useDataset";
 import { dedupeRoster, narrowEntry } from "../lib/dedupe";
 import { completeRosterWargear } from "../lib/wargear-modes";
-import { useActiveList } from "../store/lists";
+import { useViewedList } from "../hooks/useViewedList";
 
 /**
  * Standalone damage-output view for one roster entry. Reached from the unit's
@@ -15,7 +15,7 @@ import { useActiveList } from "../store/lists";
 export default function CrunchScreen() {
   const { entryKey } = useParams();
   const [searchParams] = useSearchParams();
-  const list = useActiveList();
+  const { list, withList } = useViewedList();
   const data = useDataset();
   const instParam = searchParams.get("i");
 
@@ -32,12 +32,12 @@ export default function CrunchScreen() {
   if (!list || !entry) {
     return (
       <p className="py-16 text-center text-sm text-ink-dim">
-        Unit not found in the active list. <Link to="/" className="underline">Back to army</Link>
+        Unit not found in the active list. <Link to={withList("/")} className="underline">Back to army</Link>
       </p>
     );
   }
 
-  const unitUrl = `/unit/${encodeURIComponent(entry.key)}${instParam != null ? `?i=${instParam}` : ""}`;
+  const unitUrl = withList(`/unit/${encodeURIComponent(entry.key)}${instParam != null ? `?i=${instParam}` : ""}`);
   const unit = data
     ? data.resolveRosterUnit(
         list.roster.units[entry.instances[0].rosterIndex],
