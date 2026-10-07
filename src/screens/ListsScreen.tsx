@@ -102,7 +102,8 @@ export default function ListsScreen() {
   for (const list of tabLists) dispoCounts.set(dispoOf(list), (dispoCounts.get(dispoOf(list)) ?? 0) + 1);
   const dispos = [...dispoCounts.keys()].sort((a, b) => dispoOrder(a) - dispoOrder(b));
   const dispo = dispoFilter && dispoCounts.has(dispoFilter) ? dispoFilter : null;
-  // "All" keeps the per-disposition subheaders; a picked chip shows one flat grid.
+  // "All" keeps the per-disposition subheaders (even just one); a picked chip
+  // shows one flat grid.
   const sections = (dispo ? [dispo] : dispos).map((id) => ({
     id,
     lists: tabLists.filter((l) => dispoOf(l) === id),
@@ -357,7 +358,9 @@ export default function ListsScreen() {
       <div className="space-y-3">
         {sections.map((section) => (
           <div key={section.id}>
-            {!dispo && dispos.length > 1 && (
+            {/* Shown even for a single disposition, so the grid always says
+                which one it is; a picked chip already names it. */}
+            {!dispo && (
               <div className="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">
                 {dispoLabel(section.id)}
               </div>

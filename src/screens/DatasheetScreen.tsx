@@ -11,6 +11,7 @@ import WeaponTable from "../components/WeaponTable";
 import { useDataset } from "../hooks/useDataset";
 import type { MergedWeapon } from "../lib/dedupe";
 import { abilityText, pointsTierLabels, wargearOptionText } from "../lib/describe";
+import { isSquadChoiceOption } from "../lib/squad-weapons";
 import { byId } from "../lib/lookup";
 
 const ref = (id: string, name: string): ResolvedRef => ({
@@ -167,7 +168,12 @@ export default function DatasheetScreen() {
             {wargearOptions.length > 0 && (
               <ul className="list-disc space-y-1.5 pl-4">
                 {wargearOptions.map((o) => {
-                  const t = wargearOptionText(o, gearName, raw.wargear_budgets ?? []);
+                  const t = wargearOptionText(
+                    o,
+                    gearName,
+                    raw.wargear_budgets ?? [],
+                    isSquadChoiceOption(raw, o),
+                  );
                   return (
                     <li key={o.id}>
                       {t.text}

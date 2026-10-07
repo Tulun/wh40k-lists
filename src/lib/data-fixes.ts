@@ -788,9 +788,64 @@ function applyPointsFixes(raw: RawData): boolean {
   return changed;
 }
 
+/**
+ * Option records reshaped to the 11e datasheets (BSData wh40k-11e). Squad-wide
+ * choices also need an entry in squad-weapons.ts so the editor keeps them
+ * uniform. Each fix matches the exact upstream record and skips otherwise.
+ */
+function applyOptionFixes(raw: RawData): boolean {
+  const F = "leagues-of-votann";
+  let changed = false;
+  // Beserks: the mole grenade launcher is an add-on (its own per-5 record)
+  // carried alongside the squad's axe or maul — drop the bundled
+  // "axe → launcher + maul" swap, which also mixed mauls into an axe squad.
+  const before = raw.wargearOptions.length;
+  raw.wargearOptions = raw.wargearOptions.filter(
+    (o) =>
+      !(
+        o.faction_id === F &&
+        o.unit_id === "cthonian-beserks" &&
+        o.replaces?.[0] === "heavy-plasma-axe" &&
+        o.replacement?.includes("mole-grenade-launcher")
+      ),
+  );
+  if (raw.wargearOptions.length !== before) changed = true;
+
+  // Yaegirs: revolver + knife is the squad's alternative to bolt shotguns;
+  // APM launcher and magna-coil rifle are one special weapon between them,
+  // not part of an "up to 9" pool.
+  const y = raw.wargearOptions.find(
+    (o) =>
+      o.faction_id === F &&
+      o.unit_id === "hernkyn-yaegirs" &&
+      o.model_constraint?.model_name === "Hernkyn Yaegir" &&
+      o.replacement_choice?.length === 3,
+  );
+  if (y) {
+    const squad = y.replacement_choice!.find((b) => b.includes("plasma-knife"));
+    const special = y.replacement_choice!.filter((b) => !b.includes("plasma-knife"));
+    if (squad && special.length === 2) {
+      const { replacement_choice: _choices, ...plain } = y;
+      const split: WargearOption[] = [
+        { ...plain, id: `${y.id}-squad`, replacement: squad } as WargearOption,
+        {
+          ...y,
+          id: `${y.id}-special`,
+          replacement_choice: special as never,
+          model_constraint: { model_name: "Hernkyn Yaegir", max_count: 1 },
+        } as WargearOption,
+      ];
+      raw.wargearOptions = raw.wargearOptions.flatMap((o) => (o === y ? split : [o]));
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 /** Apply every fix whose records are present; returns true when anything changed. */
 export function applyDataFixes(raw: RawData): boolean {
   let changed = applyAbilityFixes(raw);
+  if (applyOptionFixes(raw)) changed = true;
   if (applyPointsFixes(raw)) changed = true;
   if (applyWeaponFixes(raw)) changed = true;
   if (applyUnitFixes(raw)) changed = true;

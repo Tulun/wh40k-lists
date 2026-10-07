@@ -28,6 +28,7 @@ import { BATTLELINE_GRANT_RE, LEADS_GRANT_RE } from "./codex-model";
 import { abilityText } from "./describe";
 import type { RoleHints } from "./normalize";
 import { byId } from "./lookup";
+import { hasSquadChoices, isSquadChoiceOption } from "./squad-weapons";
 import { groupLoadoutSpread } from "./group-loadout";
 import { completeRosterWargear } from "./wargear-modes";
 import type { SavedList } from "../store/schema";
@@ -324,6 +325,16 @@ export function setModelCount(
   index: number,
   count: number,
 ): ListContent {
+  // Squad-wide weapon choices re-cover every model at the new size.
+  return withSquadBase(data, content, index, (c) => setModelCountRaw(data, c, index, count));
+}
+
+function setModelCountRaw(
+  data: Data40k,
+  content: ListContent,
+  index: number,
+  count: number,
+): ListContent {
   const next = clone(content);
   const u = next.roster.units[index];
   const oldCount = u.model_count;
@@ -612,6 +623,21 @@ export function applyWargearOption(
   branchIndex: number,
   delta: 1 | -1,
 ): ListContent {
+  const op = (c: ListContent) => applyOptionRaw(data, c, index, optionId, branchIndex, delta);
+  const unit = unitEntity(data, content.roster.units[index].ref, content.roster.faction_id);
+  const option = unit && loadoutCtx(data, unit).options.find((o) => o.id === optionId);
+  if (unit && option && isSquadChoiceOption(unit, option)) return op(content);
+  return withSquadBase(data, content, index, op);
+}
+
+function applyOptionRaw(
+  data: Data40k,
+  content: ListContent,
+  index: number,
+  optionId: string,
+  branchIndex: number,
+  delta: 1 | -1,
+): ListContent {
   const next = clone(content);
   const u = next.roster.units[index];
   const unit = unitEntity(data, u.ref, next.roster.faction_id);
@@ -635,6 +661,124 @@ export function applyWargearOption(
     data, unit, u.model_count, options, models, wargearCounts(u), next.roster.faction_id,
   );
   return finalize(data, next, [u.ref.id]);
+}
+
+/** A squad-wide choice and the branch the squad is on (-1 = still the datasheet default). */
+export interface SquadChoiceState {
+  state: WargearOptionState;
+  branch: number;
+}
+
+/** The unit's squad-wide weapon choices (squad-weapons.ts) and where each stands. */
+export function squadChoiceStates(
+  data: Data40k,
+  rosterUnit: RosterUnit,
+  unit: Unit,
+): SquadChoiceState[] {
+  if (!hasSquadChoices(unit)) return [];
+  return wargearOptionStates(data, rosterUnit, unit)
+    .filter((s) => isSquadChoiceOption(unit, s.option))
+    .map((state) => {
+      let branch = -1;
+      let most = 0;
+      state.branches.forEach((b, i) => {
+        if (b.applied > most) {
+          most = b.applied;
+          branch = i;
+        }
+      });
+      return { state, branch };
+    });
+}
+
+/** Give back every take of one squad option — the squad returns to its default weapon. */
+function clearSquad(data: Data40k, content: ListContent, index: number, optionId: string): ListContent {
+  const unit = unitEntity(data, content.roster.units[index].ref, content.roster.faction_id);
+  if (!unit) return content;
+  const st = wargearOptionStates(data, content.roster.units[index], unit).find(
+    (s) => s.option.id === optionId,
+  );
+  let cur = content;
+  st?.branches.forEach((b, bi) => {
+    for (let i = 0; i < b.applied; i++) cur = applyOptionRaw(data, cur, index, optionId, bi, -1);
+  });
+  return cur;
+}
+
+/**
+ * Take one squad option's branch for every model it covers: its cap, less the
+ * models whose default already went to another swap on the same model type
+ * (the gauntlet Beserks, the APM Yaegir) — so a flat-count loadout never
+ * reaches into a different model's copy (the Yaegir Theyn's shotgun).
+ * Expects the squad to be on its default weapon.
+ */
+function fillSquad(
+  data: Data40k,
+  content: ListContent,
+  index: number,
+  optionId: string,
+  branch: number,
+): ListContent {
+  const unit = unitEntity(data, content.roster.units[index].ref, content.roster.faction_id);
+  if (!unit) return content;
+  const states = wargearOptionStates(data, content.roster.units[index], unit);
+  const me = states.find((s) => s.option.id === optionId);
+  if (!me) return content;
+  const model = me.option.model_constraint?.model_name;
+  const mine = new Set(me.option.replaces ?? []);
+  const elsewhere = states
+    .filter(
+      (s) =>
+        s !== me &&
+        s.option.model_constraint?.model_name === model &&
+        (s.option.replaces ?? []).some((id) => mine.has(id)),
+    )
+    .reduce((n, s) => n + s.totalApplied, 0);
+  let cur = content;
+  for (let i = 0; i < me.cap - elsewhere; i++) {
+    const next = applyOptionRaw(data, cur, index, optionId, branch, 1);
+    if (next === cur) break;
+    cur = next;
+  }
+  return cur;
+}
+
+/**
+ * Run `op` with every squad-wide choice reset to the datasheet default, then
+ * re-apply each choice across the squad — so other swaps and size changes see
+ * the default weapon to trade, and the squad stays uniform afterwards.
+ * Returns `content` unchanged when `op` refuses.
+ */
+function withSquadBase(
+  data: Data40k,
+  content: ListContent,
+  index: number,
+  op: (content: ListContent) => ListContent,
+): ListContent {
+  const u = content.roster.units[index];
+  const unit = unitEntity(data, u.ref, content.roster.faction_id);
+  if (!unit || !hasSquadChoices(unit)) return op(content);
+  const picks = squadChoiceStates(data, u, unit).filter((p) => p.branch >= 0);
+  if (picks.length === 0) return op(content);
+  let based = content;
+  for (const p of picks) based = clearSquad(data, based, index, p.state.option.id);
+  const out = op(based);
+  if (out === based) return content;
+  let res = out;
+  for (const p of picks) res = fillSquad(data, res, index, p.state.option.id, p.branch);
+  return res;
+}
+
+/** Switch a squad-wide choice: `branch` of the option for the whole squad, or -1 for the default. */
+export function setSquadWeapon(
+  data: Data40k,
+  content: ListContent,
+  index: number,
+  optionId: string,
+  branch: number,
+): ListContent {
+  const cleared = clearSquad(data, content, index, optionId);
+  return branch < 0 ? cleared : fillSquad(data, cleared, index, optionId, branch);
 }
 
 export function setEnhancement(
@@ -761,6 +905,30 @@ export function repriceAll(data: Data40k, content: ListContent): ListContent {
   // in the codex (Nazdreg's melee Kustom Blasta X).
   next.roster = completeRosterWargear(data, next.roster);
   return finalize(data, next, next.roster.units.map((u) => u.ref.id));
+}
+
+/**
+ * `repriceAll`, or null when nothing would change — so callers only write
+ * (and bump the sync stamp) for lists whose stored costs are actually stale,
+ * e.g. a list scanned under last quarter's MFM.
+ */
+export function repriceIfStale(data: Data40k, content: ListContent): ListContent | null {
+  const repriced = repriceAll(data, content);
+  const before = content.roster;
+  const changed =
+    repriced.roster.points.total_computed !== before.points.total_computed ||
+    repriced.roster.units.some((u, i) => {
+      const old = before.units[i];
+      return (
+        u.points !== old.points ||
+        u.enhancement_points !== old.enhancement_points ||
+        u.wargear.length !== old.wargear.length ||
+        u.wargear.some(
+          (w, j) => w.ref.id !== old.wargear[j].ref.id || w.count !== old.wargear[j].count,
+        )
+      );
+    });
+  return changed ? repriced : null;
 }
 
 /**

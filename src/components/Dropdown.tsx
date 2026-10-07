@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export interface DropdownOption {
   value: string;
@@ -40,6 +40,20 @@ export default function Dropdown({
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLUListElement>(null);
+  const [alignRight, setAlignRight] = useState(false);
+
+  // A trigger near the right edge would push the (content-width) panel off
+  // screen — anchor it to the trigger's right edge instead. Measured before
+  // paint so it never flashes in the wrong place.
+  useLayoutEffect(() => {
+    if (!open) {
+      setAlignRight(false);
+      return;
+    }
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (rect && rect.right > document.documentElement.clientWidth - 8) setAlignRight(true);
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -89,9 +103,12 @@ export default function Dropdown({
       </button>
 
       {open && (
+        // Grows past a narrow trigger ("+ detachment") so labels don't run into
+        // the right-aligned detail; capped so it never leaves the viewport.
         <ul
+          ref={panelRef}
           role="listbox"
-          className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-md border border-edge bg-panel shadow-lg shadow-black/50"
+          className={`absolute ${alignRight ? "right-0" : "left-0"} z-20 mt-1 max-h-64 w-max min-w-full max-w-[min(18rem,calc(100vw-2rem))] overflow-y-auto rounded-md border border-edge bg-panel shadow-lg shadow-black/50`}
         >
           {searchable && (
             <li className="sticky top-0 border-b border-edge bg-panel p-1.5">

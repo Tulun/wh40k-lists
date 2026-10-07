@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import type { RosterUnit, Unit } from "@alpaca-software/40kdc-data";
 import Dropdown from "../components/Dropdown";
@@ -22,10 +22,11 @@ import {
   nextSize,
   removeDetachment,
   removeUnit,
-  repriceAll,
   setEnhancement,
   setFaction,
   setModelCount,
+  setSquadWeapon,
+  squadChoiceStates,
   setForceDisposition,
   setLeaderAttachment,
   setRawModelCount,
@@ -78,38 +79,6 @@ export default function ListEditScreen() {
     () => (data && list ? legalityIssues(data, list.roster, list.attachments) : []),
     [data, list],
   );
-
-  // Opening the editor snaps stored costs to the dataset (imports sometimes
-  // roll an upgrade's cost into the printed unit cost, e.g. Deffkoptas at 170).
-  useEffect(() => {
-    if (!list || !data) return;
-    const repriced = repriceAll(data, {
-      roster: list.roster,
-      roleHints: list.roleHints,
-      attachments: list.attachments,
-    });
-    const changed =
-      repriced.roster.points.total_computed !== list.roster.points.total_computed ||
-      repriced.roster.units.some((u, i) => {
-        const old = list.roster.units[i];
-        return (
-          u.points !== old.points ||
-          u.enhancement_points !== old.enhancement_points ||
-          u.wargear.length !== old.wargear.length ||
-          u.wargear.some(
-            (w, j) => w.ref.id !== old.wargear[j].ref.id || w.count !== old.wargear[j].count,
-          )
-        );
-      });
-    if (changed) {
-      updateListContent(list.id, {
-        ...repriced,
-        rawText: data.exportRoster(repriced.roster, "roster-json"),
-      });
-    }
-    // Run once per list per dataset build — not on every store write.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list?.id, data]);
 
   if (!list) {
     return (
@@ -1104,6 +1073,29 @@ function WargearEditor({
   // swaps yet — offer free steppers (0..squad size) until options are recorded.
   const freeform = !locked && loadoutDataMissing(data, unit);
   const optionStates = locked || freeform ? [] : wargearOptionStates(data, u, unit);
+  // Squad-wide choices (every model the same weapon) render as one picker;
+  // while the squad is switched, other swaps trade the squad's weapon instead
+  // of the datasheet default, so their labels follow it.
+  const squads = locked || freeform ? [] : squadChoiceStates(data, u, unit);
+  const squadById = new Map(squads.map((sq) => [sq.state.option.id, sq]));
+  const squadSwapped = new Map<string, string[]>();
+  for (const sq of squads) {
+    if (sq.branch < 0) continue;
+    for (const id of sq.state.option.replaces ?? []) {
+      squadSwapped.set(id, sq.state.branches[sq.branch].ids);
+    }
+  }
+  // "ranged " / "melee " when a unit has both kinds of squad choice (Hearthguard).
+  const squadKind = (replaces: string[]) => {
+    const types = new Set(squads.map((sq) => typeOfWeapon(sq.state.option.replaces?.[0])));
+    if (types.size < 2) return "";
+    const t = typeOfWeapon(replaces[0]);
+    return t ? `${t} ` : "";
+  };
+  function typeOfWeapon(id: string | undefined) {
+    return id ? (byId(data.weapons, id, factionId)?.raw.type ?? null) : null;
+  }
+  const carriedName = (id: string) => (squadSwapped.get(id) ?? [id]).map(nameOf).join(" + ");
   // Gear the datasheet can't carry at all (stale import matches) is listed
   // separately with a remove button, and kept out of the whole-model check —
   // otherwise it only surfaces as an opaque "cannot be assigned" error.
@@ -1276,12 +1268,58 @@ function WargearEditor({
             // stable height instead of reflowing as options are taken. One-of
             // groups get a "One of:" blurb, so siblings read as exclusive.
             const rows = optionStates.flatMap((s) => {
-              const replaces = (s.option.replaces ?? []).map(nameOf).join(" + ");
-              const swapAvailable = (s.option.replaces ?? []).every(
-                (id) => (counts.get(id) ?? 0) > 0,
-              );
-              const canUp = s.totalApplied < s.cap && swapAvailable;
+              const squad = squadById.get(s.option.id);
+              if (squad) {
+                const picks = [
+                  { label: (s.option.replaces ?? []).map(nameOf).join(" + "), branch: -1 },
+                  ...s.branches.map((b, bi) => ({
+                    label: b.ids.map(nameOf).join(" + "),
+                    branch: bi,
+                  })),
+                ];
+                return [
+                  {
+                    who: s.option.model_constraint?.model_name ?? "",
+                    node: (
+                      <div key={s.option.id} className="py-0.5">
+                        <p className="text-[10px] italic text-ink-faint">
+                          Squad {squadKind(s.option.replaces ?? [])}weapon — every model the same:
+                        </p>
+                        <div className="mt-0.5 flex flex-wrap gap-1">
+                          {picks.map((pk) => {
+                            const on = squad.branch === pk.branch;
+                            return (
+                              <button
+                                key={pk.branch}
+                                type="button"
+                                aria-pressed={on}
+                                onClick={() =>
+                                  !on &&
+                                  apply(setSquadWeapon(data, content, index, s.option.id, pk.branch))
+                                }
+                                className={`rounded-md border px-2 py-1 text-left text-xs leading-snug ${
+                                  on
+                                    ? "border-accent/60 bg-accent/10 text-accent"
+                                    : "border-edge bg-panel hover:bg-surface active:bg-surface"
+                                }`}
+                              >
+                                {pk.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ),
+                  },
+                ];
+              }
+              const replaces = (s.option.replaces ?? []).map(carriedName).join(" + ");
               const branchRows = s.branches.map((b, bi) => {
+                // Dry-run the take: it accounts for squad-wide weapons, shared
+                // budgets and a source weapon already spent on another swap.
+                const canUp =
+                  s.totalApplied < s.cap &&
+                  applyWargearOption(data, content, index, s.option.id, bi, 1) !== content;
                 const dimmed = b.applied === 0 && !canUp;
                 const added = b.ids.map(nameOf).join(" + ");
                 const label = replaces ? `${replaces} → ${added}` : `Add ${added}`;

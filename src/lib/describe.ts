@@ -149,6 +149,8 @@ export function wargearOptionText(
   option: WargearOptionLike,
   nameOf: (id: string) => string,
   budgets: readonly WargearBudgetLike[] = [],
+  /** A squad-wide choice (squad-weapons.ts): every model swaps, or none does. */
+  squadWide = false,
 ): WargearOptionText {
   // countOne: additions spell out "1 Kombi-rokkit"; the replaced side reads as
   // a possessive ("their Kustom Shoota"), so a lone copy goes uncounted there.
@@ -176,7 +178,10 @@ export function wargearOptionText(
   // An "any number" record whose additions draw on a shared budget is really
   // capped by it ("for every 5 models, up to 2 Purifiers…").
   const budget = budgets.find((b) => branches.some((br) => br.some((id) => b.items.includes(id))));
-  if (budget && (!mc || mc.any_number)) {
+  if (squadWide) {
+    subject = who === "model" ? "All models in this unit can" : `All ${who} models can`;
+    suffix = " (the whole squad swaps together)";
+  } else if (budget && (!mc || mc.any_number)) {
     // The budget counts every item a take adds (Purifiers: gun AND close
     // combat weapon, 8 per 10), so scale to swaps and reduce: 2 per 5.
     const spent = (br: readonly string[]) =>

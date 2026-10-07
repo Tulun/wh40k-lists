@@ -3,6 +3,7 @@ import Sidebar from "./components/Sidebar";
 import SlotToggle from "./components/SlotToggle";
 import PoweredBy from "./components/PoweredBy";
 import SyncManager from "./components/SyncManager";
+import ListRepricer from "./components/ListRepricer";
 import { useViewedList } from "./hooks/useViewedList";
 import { useLists } from "./store/lists";
 
@@ -44,6 +45,7 @@ export default function App() {
         <main className="flex-1 px-3 pb-6 pt-3">
           <div className="mx-auto w-full max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl">
             <SyncManager />
+            <ListRepricer />
             <Outlet />
           </div>
         </main>

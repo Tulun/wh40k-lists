@@ -18,6 +18,7 @@
  */
 import type { LoadoutGroup, Unit, WargearOption } from "@alpaca-software/40kdc-data";
 import { optionCap } from "@alpaca-software/40kdc-data";
+import { isSquadChoiceOption } from "./squad-weapons";
 
 type LoadoutModel = NonNullable<Parameters<typeof optionCap>[2]>[number];
 
@@ -285,7 +286,7 @@ function solveAssignment(
  * back to unit-wide rendering).
  */
 export function groupLoadoutSpread(
-  _unit: Unit,
+  unit: Unit,
   modelCount: number,
   options: readonly WargearOption[],
   models: readonly LoadoutModel[] | undefined,
@@ -300,6 +301,13 @@ export function groupLoadoutSpread(
   // datasheet reader expects. Only when no such partition exists (a genuine
   // multi-swap model, e.g. a sergeant taking both a pistol and a melee swap)
   // does the second pass admit stacked candidates.
+  // A squad-wide weapon choice (squad-weapons.ts) is every model's, not a
+  // special — it doesn't count toward that one-option allowance, so a maul
+  // Beserk can still be the one carrying the mole launcher.
+  const squadWide = new Set(
+    options.flatMap((o, i) => (isSquadChoiceOption(unit, o) ? [i] : [])),
+  );
+  const specials = (c: Candidate) => c.usedOptions.filter((i) => !squadWide.has(i)).length;
   for (const maxOptionsPerModel of [1, Infinity]) {
     for (const rowN of candidateRowCounts(models, n, bag)) {
       const fixedModels = models.map((model, i) => ({ ...model, min: rowN[i], max: rowN[i] }));
@@ -310,9 +318,10 @@ export function groupLoadoutSpread(
         if (count <= 0) continue;
         const base = toMultiset(models[i].default_weapon_ids ?? []);
         const candidates = enumerateRowCandidates(base, models[i].name ?? null, options)
-          .filter((c) => c.usedOptions.length <= maxOptionsPerModel)
+          .filter((c) => specials(c) <= maxOptionsPerModel)
           .sort(
             (a, b) =>
+              specials(a) - specials(b) ||
               a.usedOptions.length - b.usedOptions.length ||
               a.key.localeCompare(b.key) ||
               a.usedOptions.join(",").localeCompare(b.usedOptions.join(",")),
