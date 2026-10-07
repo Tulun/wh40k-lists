@@ -15,6 +15,7 @@ import EditorHomeScreen from "./screens/EditorHomeScreen";
 import ListEditScreen from "./screens/ListEditScreen";
 import ListsScreen from "./screens/ListsScreen";
 import MissionsScreen from "./screens/MissionsScreen";
+import NewListScreen from "./screens/NewListScreen";
 import SyncSetupScreen from "./screens/SyncSetupScreen";
 import UnitDetailScreen from "./screens/UnitDetailScreen";
 
@@ -29,6 +30,7 @@ export const router = createHashRouter([
       { path: "unit/:entryKey/crunch", element: <CrunchScreen /> },
       { path: "crunch", element: <CrunchLabScreen /> },
       { path: "lists", element: <ListsScreen /> },
+      { path: "lists/new", element: <NewListScreen /> },
       { path: "lists/:listId/edit", element: <ListEditScreen /> },
       { path: "missions", element: <MissionsScreen /> },
       { path: "sync-setup", element: <SyncSetupScreen /> },

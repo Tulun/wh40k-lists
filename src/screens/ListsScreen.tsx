@@ -5,14 +5,12 @@ import { useDataset } from "../hooks/useDataset";
 import { DISPOSITION_SHORT, DISPOSITIONS } from "../lib/codex-model";
 import { loadMergedData } from "../lib/data";
 import { OPPONENT_SLOT_ENABLED } from "../lib/flags";
-import { blankSavedList } from "../lib/list-edit";
 import { byId } from "../lib/lookup";
 import { activationsLabel, countActivations, organizeArmy } from "../lib/organize";
 import { shareText } from "../lib/share";
 import { useLists } from "../store/lists";
 import type { SavedList, Slot } from "../store/schema";
 
-declare const __DATA_PKG_VERSION__: string;
 
 /** Remembered army tab (per device — a viewing convenience, never synced). */
 const TAB_KEY = "40k-viewer-lists-tab";
@@ -294,19 +292,12 @@ export default function ListsScreen() {
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h1 className="min-w-0 flex-1 truncate text-lg font-bold">Lists</h1>
-        <button
-          type="button"
-          onClick={() => {
-            const list = blankSavedList(__DATA_PKG_VERSION__);
-            // Start the new list in the army being browsed.
-            if (tab && tab !== NONE) list.roster.faction_id = tab;
-            saveList(list);
-            navigate(`/lists/${list.id}/edit`);
-          }}
+        <Link
+          to="/lists/new"
           className="rounded-md border border-accent/50 px-4 py-2 text-sm font-bold text-accent"
         >
           + New
-        </button>
+        </Link>
         <Link to="/import" className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-surface">
           + Import
         </Link>
