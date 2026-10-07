@@ -40,13 +40,15 @@ export const REPLACE_FACTION_IDS: readonly string[] = [
 
 /**
  * Factions listed on the Explore (Codexes) screen: the transcribed codexes
- * plus the upstream factions kept current by hand (Grey Knights, MFM-synced
- * via data-fixes.ts, and the Imperial Agents they ally in).
+ * plus the upstream factions kept current by hand (Grey Knights and Leagues
+ * of Votann, MFM-synced via data-fixes.ts, and the Imperial Agents that ally
+ * into Grey Knights).
  */
 export const CODEX_LIST_FACTION_IDS: readonly string[] = [
   ...REPLACE_FACTION_IDS,
   "agents-of-the-imperium",
   "grey-knights",
+  "leagues-of-votann",
 ];
 
 /**
