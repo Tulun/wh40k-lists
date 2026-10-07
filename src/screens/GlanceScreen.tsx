@@ -13,7 +13,7 @@ import { dedupeRoster, unitKey, type DisplayEntry } from "../lib/dedupe";
 import { abilityText, fnpFromAbilityNames } from "../lib/describe";
 import { armyRules, byId } from "../lib/lookup";
 import { activationsLabel, countActivations, organizeArmy } from "../lib/organize";
-import { shareText } from "../lib/share";
+import { shareText, wargearSummary } from "../lib/share";
 import {
   armyStratagems,
   sortStratagems,
@@ -197,6 +197,11 @@ export default function GlanceScreen() {
                   <span className="text-accent/80"> · ✦ {enhName}</span>
                 )}
               </div>
+              {data && ru.wargear.length > 0 && (
+                <div className="mt-0.5 text-[11px] leading-snug text-ink-dim">
+                  {wargearSummary(data, ru, roster.faction_id)}
+                </div>
+              )}
             </Link>
           );
         };

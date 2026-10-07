@@ -3,7 +3,7 @@
  * format the package ships — header block (name, faction, detachments, points,
  * warlord, enhancements), then one line per unit with points and wargear.
  */
-import type { Roster } from "@alpaca-software/40kdc-data";
+import type { Roster, RosterUnit, RosterWargear } from "@alpaca-software/40kdc-data";
 import type { SavedList } from "../store/schema";
 import type { Data40k } from "./data";
 import { byId } from "./lookup";
@@ -35,19 +35,7 @@ export function shareText(data: Data40k, list: SavedList): string {
   // the datasheet doesn't rank (wargear items, unresolved text) sort by name
   // behind the ranked ones.
   roster.units.forEach((u) => {
-    const view = u.ref.id ? data.resolveRosterUnit(u, data.dataset, roster.faction_id) : null;
-    if (!view) return;
-    const rank = new Map(view.weapons.map((w, i) => [w.id, i]));
-    const nameOf = (ref: (typeof u.wargear)[number]["ref"]) =>
-      byId(data.weapons, ref.id, roster.faction_id)?.name ??
-      byId(data.wargear, ref.id, roster.faction_id)?.name ??
-      ref.raw_name;
-    u.wargear = [...u.wargear].sort((a, b) => {
-      const ra = (a.ref.id != null ? rank.get(a.ref.id) : undefined) ?? Infinity;
-      const rb = (b.ref.id != null ? rank.get(b.ref.id) : undefined) ?? Infinity;
-      if (ra !== rb) return ra - rb;
-      return nameOf(a.ref).localeCompare(nameOf(b.ref));
-    });
+    u.wargear = wargearInDatasheetOrder(data, u, roster.faction_id);
   });
   // The shared army layout: attached bricks first in their own section, then
   // loose units in role sections — and since CharN slots are assigned in
@@ -60,6 +48,45 @@ export function shareText(data: Data40k, list: SavedList): string {
   roster.units = order.map((i) => roster.units[i]);
   const out = data.exportRoster(roster, "newrecruit-wtc-compact");
   return spaceUnitBlocks(remarkCharacters(out, data, roster), labels);
+}
+
+/**
+ * A unit's wargear bag in datasheet weapon order; lines the datasheet doesn't
+ * rank (wargear items, unresolved text) sort by name behind the ranked ones.
+ */
+export function wargearInDatasheetOrder(
+  data: Data40k,
+  u: RosterUnit,
+  factionId: string | null,
+): RosterWargear[] {
+  const view = u.ref.id ? data.resolveRosterUnit(u, data.dataset, factionId) : null;
+  if (!view) return u.wargear;
+  const rank = new Map(view.weapons.map((w, i) => [w.id, i]));
+  return [...u.wargear].sort((a, b) => {
+    const ra = (a.ref.id != null ? rank.get(a.ref.id) : undefined) ?? Infinity;
+    const rb = (b.ref.id != null ? rank.get(b.ref.id) : undefined) ?? Infinity;
+    if (ra !== rb) return ra - rb;
+    return wargearName(data, a.ref, factionId).localeCompare(wargearName(data, b.ref, factionId));
+  });
+}
+
+export function wargearName(
+  data: Data40k,
+  ref: RosterWargear["ref"],
+  factionId: string | null,
+): string {
+  return (
+    byId(data.weapons, ref.id, factionId)?.name ??
+    byId(data.wargear, ref.id, factionId)?.name ??
+    ref.raw_name
+  );
+}
+
+/** "8× Heavy plasma axe · 1× Mole grenade launcher" — a unit's loadout at a glance. */
+export function wargearSummary(data: Data40k, u: RosterUnit, factionId: string | null): string {
+  return wargearInDatasheetOrder(data, u, factionId)
+    .map((w) => `${w.count}× ${wargearName(data, w.ref, factionId)}`)
+    .join(" · ");
 }
 
 /**
