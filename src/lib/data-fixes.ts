@@ -839,6 +839,73 @@ function applyOptionFixes(raw: RawData): boolean {
       changed = true;
     }
   }
+
+  // Imperial Agents: one-model allowances upstream ships as `any_number` (or
+  // lumped into one pool). Each split keeps the record's swap and narrows it.
+  const A = "agents-of-the-imperium";
+  const one = { max_count: 1 };
+  const reshape = (
+    unitId: string,
+    optionId: string,
+    split: (o: WargearOption) => Partial<WargearOption>[],
+  ) => {
+    const o = raw.wargearOptions.find(
+      (x) => x.faction_id === A && x.unit_id === unitId && x.id === optionId,
+    );
+    if (!o) return;
+    const parts = split(o);
+    if (parts.length === 0) return;
+    const records = parts.map((part, i) => {
+      const { replacement: _r, replacement_choice: _rc, ...rest } = o;
+      return {
+        ...rest,
+        ...part,
+        id: parts.length > 1 ? `${o.id}-fix-${i + 1}` : o.id,
+        model_constraint: { model_name: o.model_constraint?.model_name, ...part.model_constraint },
+      } as WargearOption;
+    });
+    raw.wargearOptions = raw.wargearOptions.flatMap((x) => (x === o ? records : [x]));
+    changed = true;
+  };
+  const branches = (o: WargearOption) => o.replacement_choice ?? (o.replacement ? [o.replacement] : []);
+  const pick = (o: WargearOption, ids: string[]) =>
+    branches(o).filter((b) => b.length === 1 && ids.includes(b[0]));
+  // Sisters: 1 Battle Sister takes a special or heavy weapon, another a
+  // special weapon only — so never two heavies.
+  reshape("sisters-of-battle-squad", "sisters-of-battle-squad-wgo-mfm-1", (o) => {
+    const special = pick(o, [
+      "meltagun-sisters-of-battle-squad",
+      "artificer-crafted-storm-bolter",
+      "ministorum-flamer",
+    ]);
+    if (branches(o).length !== 6 || special.length !== 3) return [];
+    return [
+      { replacement_choice: branches(o) as never, model_constraint: one },
+      { replacement_choice: special as never, model_constraint: one },
+    ];
+  });
+  // Terminators: the narthecium is its own one-model swap, not a fourth heavy.
+  reshape("grey-knights-terminator-squad", "grey-knights-terminator-squad-wgo-mfm-1", (o) => {
+    const heavy = pick(o, ["psilencer", "psycannon", "incinerator"]);
+    if (heavy.length !== 3 || pick(o, ["narthecium"]).length !== 1) return [];
+    return [
+      { replacement_choice: heavy as never, model_constraint: one },
+      { replacement: ["narthecium"] as never, model_constraint: one },
+    ];
+  });
+  reshape("grey-knights-terminator-squad", "grey-knights-terminator-squad-wgo-mfm-2", (o) => [
+    { replacement: o.replacement, model_constraint: one },
+  ]);
+  // One Voidsman carries the rotor cannon.
+  reshape("voidsmen-at-arms", "voidsmen-at-arms-wgo-mfm-1", (o) => [
+    { replacement: o.replacement, model_constraint: one },
+  ]);
+  // One Sanctifier with the second hand flamer, one with the simulacrum.
+  reshape("sanctifiers", "sanctifiers-wgo-mfm-3", (o) =>
+    branches(o).length === 2
+      ? branches(o).map((b) => ({ replacement: b as never, model_constraint: one }))
+      : [],
+  );
   return changed;
 }
 

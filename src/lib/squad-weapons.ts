@@ -22,6 +22,11 @@ interface SquadChoiceKey {
 // 11e datasheets, cross-checked against BSData wh40k-11e ("Squad weapon
 // choice", "All models must be equipped with the same weapon").
 const SQUAD_WEAPON_CHOICES: Record<string, Record<string, SquadChoiceKey[]>> = {
+  // Sergeant included — the whole squad matches (codex overlay ids).
+  "adeptus-astartes": {
+    "aggressor-squad": [{ replaces: ["aggressor-squad--flamestorm-gauntlets"] }],
+    "inceptor-squad": [{ replaces: ["inceptor-squad--assault-bolters"] }],
+  },
   "leagues-of-votann": {
     "cthonian-beserks": [{ replaces: ["heavy-plasma-axe"] }],
     "brokhyr-thunderkyn": [{ replaces: ["bolt-cannon"] }],

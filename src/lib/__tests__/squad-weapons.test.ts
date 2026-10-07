@@ -19,6 +19,8 @@ import {
   type ListContent,
 } from "../list-edit";
 import { byId } from "../lookup";
+import { isSquadChoiceOption } from "../squad-weapons";
+import type { WargearOption } from "@alpaca-software/40kdc-data";
 
 const d = mergedData(data40k as never, emptyCodexDoc());
 const F = "leagues-of-votann";
@@ -105,5 +107,44 @@ describe("squad-wide weapon choices", () => {
     const n = c.roster.units[0].model_count;
     expect(counts(c)["volkanite-disintegrator"]).toBe(n - 1);
     expect(counts(c)["etacarn-plasma-gun"]).toBe(1); // the Hesyr's
+  });
+
+  it("Space Marine Aggressors and Inceptors are squad-wide (codex overlay ids)", () => {
+    const opt = (unit_id: string, from: string, to: string[]) =>
+      ({ id: "x", unit_id, faction_id: "adeptus-astartes", replaces: [from], replacement: to,
+        model_constraint: { any_number: true } }) as unknown as WargearOption;
+    const sm = (id: string) => ({ id, faction_id: "adeptus-astartes" });
+    expect(isSquadChoiceOption(sm("aggressor-squad"), opt("aggressor-squad",
+      "aggressor-squad--flamestorm-gauntlets",
+      ["aggressor-squad--auto-boltstorm-gauntlets", "aggressor-squad--fragstorm-grenade-launcher"]))).toBe(true);
+    expect(isSquadChoiceOption(sm("inceptor-squad"), opt("inceptor-squad",
+      "inceptor-squad--assault-bolters", ["inceptor-squad--plasma-exterminators"]))).toBe(true);
+  });
+});
+
+describe("Imperial Agents one-model allowances", () => {
+  const A = "agents-of-the-imperium";
+  const states = (id: string) => {
+    const c = addUnit(d, setFaction({ roster: blankSavedList("t").roster, roleHints: {}, attachments: {} }, A), id);
+    return wargearOptionStates(d, c.roster.units[0], byId(d.units, id, A)!.raw);
+  };
+  const capOf = (id: string, item: string) =>
+    states(id)
+      .filter((s) => s.branches.some((b) => b.ids.includes(item)))
+      .map((s) => s.cap);
+
+  it("Sisters: one special-or-heavy slot plus one special-only slot", () => {
+    expect(capOf("sisters-of-battle-squad", "multi-melta")).toEqual([1]);
+    expect(capOf("sisters-of-battle-squad", "meltagun-sisters-of-battle-squad")).toEqual([1, 1]);
+  });
+  it("Terminators: 1 heavy, 1 narthecium, 1 banner", () => {
+    expect(capOf("grey-knights-terminator-squad", "psycannon")).toEqual([1]);
+    expect(capOf("grey-knights-terminator-squad", "narthecium")).toEqual([1]);
+    expect(capOf("grey-knights-terminator-squad", "ancients-banner")).toEqual([1]);
+  });
+  it("Voidsmen: 1 rotor cannon; Sanctifiers: 1 extra hand flamer, 1 simulacrum", () => {
+    expect(capOf("voidsmen-at-arms", "voidsman-rotor-cannon")).toEqual([1]);
+    expect(capOf("sanctifiers", "simulacrum-imperialis")).toEqual([1]);
+    expect(capOf("sanctifiers", "close-combat-weapon")).toEqual([1, 1]);
   });
 });
