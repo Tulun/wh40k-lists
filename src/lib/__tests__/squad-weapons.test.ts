@@ -67,24 +67,49 @@ describe("squad-wide weapon choices", () => {
     expect(states.some((s) => s.branches.some((b) => b.ids.length === 2))).toBe(false);
   });
 
-  it("Yaegirs: revolver + knife is squad-wide; APM and magna-coil share one slot", () => {
+  it("Yaegirs: revolver + knife is squad-wide; one APM and one magna-coil", () => {
     let c = start("hernkyn-yaegirs");
-    const special = optionTo(c, "apm-launcher");
-    expect(special.cap).toBe(1);
-    expect(special.branches.map((b) => b.ids)).toEqual([["magna-coil-rifle"], ["apm-launcher"]]);
-    c = applyWargearOption(d, c, 0, special.option.id, 1, 1);
-    // The slot is spent — the editor's stepper disables both branches.
-    expect(optionTo(c, "apm-launcher")).toMatchObject({ cap: 1, totalApplied: 1 });
+    for (const item of ["apm-launcher", "magna-coil-rifle"]) {
+      const st = optionTo(c, item);
+      expect(st.cap).toBe(1);
+      expect(st.branches.map((b) => b.ids)).toEqual([[item]]);
+      c = applyWargearOption(d, c, 0, st.option.id, 0, 1);
+      expect(optionTo(c, item)).toMatchObject({ cap: 1, totalApplied: 1 });
+    }
 
     c = setSquadWeapon(d, c, 0, squad(c).state.option.id, 0);
-    // 8 troopers switch; the APM Yaegir keeps its launcher, the Theyn keeps
-    // his shotgun (his swap is separate).
+    // 7 troopers switch; the APM and magna-coil Yaegirs keep their guns, the
+    // Theyn keeps his shotgun (his swap is separate).
     expect(counts(c)).toMatchObject({
       "apm-launcher": 1,
-      "bolt-revolver": 8,
-      "plasma-knife": 8,
+      "magna-coil-rifle": 1,
+      "bolt-revolver": 7,
+      "plasma-knife": 7,
       "bolt-shotgun": 1,
     });
+  });
+
+  it("Pioneers: heavy per 3 models, one each of comms/scanner/searchlight, one add-on per model", () => {
+    let c = start("hernkyn-pioneers");
+    expect(c.roster.units[0].model_count).toBe(3);
+    const take = (item: string) => {
+      const st = optionTo(c, item);
+      const b = st.branches.findIndex((x) => x.ids.includes(item));
+      c = applyWargearOption(d, c, 0, st.option.id, b, 1);
+    };
+    take("multiwave-comms-array");
+    take("panspectral-scanner");
+    expect(counts(c)).toMatchObject({ "multiwave-comms-array": 1, "panspectral-scanner": 1 });
+    expect(optionTo(c, "multiwave-comms-array")).toMatchObject({ cap: 1, totalApplied: 1 });
+    take("hylas-rotary-cannon");
+    expect(counts(c)["hylas-rotary-cannon"]).toBe(1);
+    // All 3 models now carry an add-on: no searchlight, no second heavy.
+    expect(optionTo(c, "rollbar-searchlight").cap).toBe(0);
+    expect(optionTo(c, "ion-beamer")).toMatchObject({ cap: 1, totalApplied: 1 });
+
+    c = setModelCount(d, c, 0, 6);
+    expect(optionTo(c, "ion-beamer").cap).toBe(2);
+    expect(optionTo(c, "rollbar-searchlight").cap).toBe(1);
   });
 
   it("Thunderkyn switch the whole squad between the three guns", () => {

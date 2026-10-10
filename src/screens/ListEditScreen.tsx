@@ -1351,7 +1351,16 @@ function WargearEditor({
                 {
                   who: s.option.model_constraint?.model_name ?? "",
                   node: (
-                    <div key={s.option.id}>
+                    <div
+                      key={s.option.id}
+                      // Close off a "One of:" group so the rows after it
+                      // don't read as more members of it.
+                      className={
+                        branchRows.length > 1
+                          ? "mb-1 border-b border-dashed border-edge/60 pb-1 last:mb-0 last:border-0 last:pb-0"
+                          : undefined
+                      }
+                    >
                       {branchRows.length > 1 && (
                         <p className="pt-0.5 text-[10px] italic text-ink-faint">
                           {s.cap === 1 ? "One of:" : `Up to ${s.cap} of:`}

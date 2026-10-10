@@ -812,8 +812,8 @@ function applyOptionFixes(raw: RawData): boolean {
   if (raw.wargearOptions.length !== before) changed = true;
 
   // Yaegirs: revolver + knife is the squad's alternative to bolt shotguns;
-  // APM launcher and magna-coil rifle are one special weapon between them,
-  // not part of an "up to 9" pool.
+  // the APM launcher and magna-coil rifle are one each (on different
+  // models), not part of an "up to 9" pool.
   const y = raw.wargearOptions.find(
     (o) =>
       o.faction_id === F &&
@@ -828,14 +828,64 @@ function applyOptionFixes(raw: RawData): boolean {
       const { replacement_choice: _choices, ...plain } = y;
       const split: WargearOption[] = [
         { ...plain, id: `${y.id}-squad`, replacement: squad } as WargearOption,
-        {
-          ...y,
-          id: `${y.id}-special`,
-          replacement_choice: special as never,
-          model_constraint: { model_name: "Hernkyn Yaegir", max_count: 1 },
-        } as WargearOption,
+        ...special.map(
+          (b) =>
+            ({
+              ...plain,
+              id: `${y.id}-${b[0]}`,
+              replacement: b,
+              model_constraint: { model_name: "Hernkyn Yaegir", max_count: 1 },
+            }) as WargearOption,
+        ),
       ];
       raw.wargearOptions = raw.wargearOptions.flatMap((o) => (o === y ? split : [o]));
+      changed = true;
+    }
+  }
+
+  // Pioneers: upstream lumps five add-ons into one record, so the flat
+  // 1-per-unit budgets cap the whole record and the first pick locks out the
+  // rest. Per the datasheet: a HYLas or ion beamer for every 3 models, plus
+  // one each of comms array, scanner and searchlight, each on a different
+  // model without a heavy weapon (the extra budget: one add-on per model).
+  const p = raw.wargearOptions.find(
+    (o) =>
+      o.faction_id === F &&
+      o.unit_id === "hernkyn-pioneers" &&
+      o.replacement_choice?.length === 5 &&
+      !o.replaces?.length,
+  );
+  const pu = raw.units.find((u) => u.faction_id === F && u.id === "hernkyn-pioneers");
+  if (p && pu) {
+    const heavy = ["hylas-rotary-cannon", "ion-beamer"];
+    const kit = ["multiwave-comms-array", "panspectral-scanner", "rollbar-searchlight"];
+    const flat = p.replacement_choice!.map((b) => b[0]);
+    if ([...heavy, ...kit].every((id) => flat.includes(id))) {
+      const { replacement_choice: _choices, ...plain } = p;
+      const split: WargearOption[] = [
+        { ...p, id: `${p.id}-heavy`, replacement_choice: heavy.map((id) => [id]) as never },
+        ...kit.map(
+          (id) =>
+            ({
+              ...plain,
+              id: `${p.id}-${id}`,
+              replacement: [id],
+              model_constraint: { max_count: 1 },
+            }) as WargearOption,
+        ),
+      ];
+      raw.wargearOptions = raw.wargearOptions.flatMap((o) => (o === p ? split : [o]));
+      raw.units = raw.units.map((u) =>
+        u === pu
+          ? ({
+              ...u,
+              wargear_budgets: [
+                ...(u.wargear_budgets ?? []),
+                { items: [...heavy, ...kit], count: 1, per_models: 1 },
+              ],
+            } as typeof u)
+          : u,
+      );
       changed = true;
     }
   }
